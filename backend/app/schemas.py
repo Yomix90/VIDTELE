@@ -299,3 +299,160 @@ class AdminStatsResponse(BaseModel):
 class MessageResponse(BaseModel):
     message: str
     detail: Optional[str] = None
+
+
+# =============================================================
+# Nouveaux Schémas StreamAdmin (Séries, Saisons, Épisodes, Films)
+# =============================================================
+
+class GenreResponse(BaseModel):
+    id: int
+    slug: str
+    name_fr: str
+    name_ar: Optional[str] = None
+    icon: Optional[str] = None
+    order_index: int = 0
+
+    model_config = ConfigDict(from_attributes=True)
+
+
+class EpisodeResponse(BaseModel):
+    id: int
+    season_id: int
+    number: int
+    title_fr: Optional[str] = None
+    title_ar: Optional[str] = None
+    synopsis_fr: Optional[str] = None
+    duration_sec: Optional[int] = None
+    thumbnail_path: Optional[str] = None
+    telegram_video_id: Optional[int] = None
+    order_index: int = 0
+    created_at: datetime
+
+    model_config = ConfigDict(from_attributes=True)
+
+
+class EpisodeCreate(BaseModel):
+    number: int = Field(..., ge=0)
+    title_fr: Optional[str] = None
+    title_ar: Optional[str] = None
+    synopsis_fr: Optional[str] = None
+    duration_sec: Optional[int] = None
+    thumbnail_path: Optional[str] = None
+    telegram_video_id: Optional[int] = None
+
+
+class SeasonResponse(BaseModel):
+    id: int
+    series_id: int
+    number: int
+    title_fr: Optional[str] = None
+    title_ar: Optional[str] = None
+    poster_path: Optional[str] = None
+    order_index: int = 0
+    episode_count: int = 0
+
+    model_config = ConfigDict(from_attributes=True)
+
+
+class SeasonDetailResponse(SeasonResponse):
+    episodes: list[EpisodeResponse] = []
+
+
+class SeasonCreate(BaseModel):
+    number: int = Field(..., ge=0)
+    title_fr: Optional[str] = None
+    title_ar: Optional[str] = None
+    poster_path: Optional[str] = None
+
+
+class SeriesResponse(BaseModel):
+    id: int
+    slug: str
+    title_fr: str
+    title_ar: Optional[str] = None
+    synopsis_fr: Optional[str] = None
+    year_start: Optional[int] = None
+    rating: Optional[float] = None
+    status: str = "ongoing"
+    poster_path: Optional[str] = None
+    banner_path: Optional[str] = None
+    is_featured: bool = False
+    visibility: str = "draft"
+    seasons_count: int = 0
+    episodes_count: int = 0
+    created_at: datetime
+
+    model_config = ConfigDict(from_attributes=True)
+
+
+class SeriesDetailResponse(SeriesResponse):
+    seasons: list[SeasonDetailResponse] = []
+
+
+class SeriesCreate(BaseModel):
+    title_fr: str = Field(..., min_length=1, max_length=255)
+    title_ar: Optional[str] = None
+    synopsis_fr: Optional[str] = None
+    synopsis_ar: Optional[str] = None
+    year_start: Optional[int] = None
+    rating: Optional[float] = None
+    status: str = "ongoing"
+    poster_path: Optional[str] = None
+    banner_path: Optional[str] = None
+    visibility: str = "draft"
+    is_featured: bool = False
+
+
+class MovieResponse(BaseModel):
+    id: int
+    slug: str
+    title_fr: str
+    title_ar: Optional[str] = None
+    synopsis_fr: Optional[str] = None
+    year: Optional[int] = None
+    duration_sec: Optional[int] = None
+    rating: Optional[float] = None
+    poster_path: Optional[str] = None
+    banner_path: Optional[str] = None
+    is_featured: bool = False
+    visibility: str = "draft"
+    telegram_video_id: Optional[int] = None
+    created_at: datetime
+
+    model_config = ConfigDict(from_attributes=True)
+
+
+class MovieCreate(BaseModel):
+    title_fr: str = Field(..., min_length=1, max_length=255)
+    title_ar: Optional[str] = None
+    synopsis_fr: Optional[str] = None
+    year: Optional[int] = None
+    duration_sec: Optional[int] = None
+    rating: Optional[float] = None
+    poster_path: Optional[str] = None
+    banner_path: Optional[str] = None
+    telegram_video_id: Optional[int] = None
+    visibility: str = "draft"
+    is_featured: bool = False
+
+
+class HomeRowResponse(BaseModel):
+    id: int
+    row_type: str
+    title_fr: str
+    title_ar: Optional[str] = None
+    limit_items: int = 20
+    is_active: bool = True
+    order_index: int = 0
+
+    model_config = ConfigDict(from_attributes=True)
+
+
+class HomeRowCreate(BaseModel):
+    row_type: str
+    title_fr: str
+    title_ar: Optional[str] = None
+    limit_items: int = 20
+    is_active: bool = True
+    order_index: int = 0
