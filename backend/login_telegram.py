@@ -67,10 +67,16 @@ async def main():
     print_banner()
     api_id, api_hash = check_or_prompt_credentials()
 
-    session_path = Path(__file__).resolve().parent / SESSION_NAME
+    session_name = SESSION_NAME
+    if Path(session_name).is_absolute():
+        session_path = Path(session_name)
+    else:
+        session_path = Path(__file__).resolve().parent / session_name
+    session_path.parent.mkdir(parents=True, exist_ok=True)
+
     client = TelegramClient(str(session_path), api_id, api_hash)
 
-    print(f"\n[*] Connexion aux serveurs Telegram avec la session '{SESSION_NAME}'...")
+    print(f"\n[*] Connexion aux serveurs Telegram avec la session '{session_path}'...")
     await client.connect()
 
     if not await client.is_user_authorized():
@@ -91,6 +97,20 @@ async def main():
     print(f"[SUCCÈS] Connecté avec succès en tant que : {me.first_name} (@{me.username or 'sans_username'})")
     print(f"Session enregistrée dans : {session_path}.session")
     print("=" * 70)
+
+    # Export pour Dokploy (StringSession)
+    try:
+        from telethon.sessions import StringSession
+        string_session = StringSession.save(client.session)
+        print("\n" + "=" * 70)
+        print("          POUR DÉPLOIEMENT DOKPLOY / DOCKER (FACULTATIF)")
+        print("=" * 70)
+        print("Vous pouvez définir cette variable d'environnement dans l'interface Dokploy :")
+        print(f"TELEGRAM_STRING_SESSION={string_session}")
+        print("(Permet à VidTele de tourner sans avoir à copier le fichier .session)")
+        print("=" * 70)
+    except Exception as e:
+        pass
 
     # Aide pour trouver le Channel ID
     print("\n[*] Recherche de vos canaux Telegram pour vous aider à trouver votre CHANNEL_ID :")

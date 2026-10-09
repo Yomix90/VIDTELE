@@ -20,6 +20,7 @@ class Settings(BaseSettings):
     TELEGRAM_API_ID: int = 0
     TELEGRAM_API_HASH: str = ""
     TELEGRAM_SESSION_NAME: str = "vidtele_session"
+    TELEGRAM_STRING_SESSION: str = ""
     TELEGRAM_CHANNEL_ID: int = 0
 
     # Stockage et Cache Disque
@@ -54,3 +55,13 @@ settings = Settings()
 # Création automatique des répertoires de stockage s'ils n'existent pas
 Path(settings.CACHE_DIR).mkdir(parents=True, exist_ok=True)
 Path(settings.THUMBNAILS_DIR).mkdir(parents=True, exist_ok=True)
+
+# Assurer l'existence du dossier de la base de données SQLite
+if "sqlite" in settings.DATABASE_URL:
+    db_clean = settings.DATABASE_URL.replace("sqlite+aiosqlite:///", "").replace("sqlite:///", "")
+    if db_clean and not db_clean.startswith(":memory:"):
+        db_path = Path(db_clean)
+        if not db_path.is_absolute():
+            db_path = Path(__file__).resolve().parent.parent / db_path
+        db_path.parent.mkdir(parents=True, exist_ok=True)
+

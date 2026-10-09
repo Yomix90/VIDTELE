@@ -1,29 +1,37 @@
 # Python & Backend
 backend/venv/
-backend/__pycache__/
-backend/*/__pycache__/
-backend/*/*/__pycache__/
-backend/*.pyc
-backend/*.pyo
+backend/.venv/
+.venv/
+**/__pycache__/
+**/*.pyc
+**/*.pyo
+**/*.pyd
 backend/cache/
 backend/thumbnails/
-backend/vidtele.db
-backend/vidtele.db-journal
-backend/vidtele_session.session
-backend/vidtele_session.session-journal
+backend/data/
+data/
+*.db
+*.db-*
+*.sqlite*
+*.session
+*.session-*
 backend/.env
+.env
 
-# Flutter & Mobile
+# Flutter & Mobile Android/iOS
 mobile/.dart_tool/
 mobile/.flutter-plugins
 mobile/.flutter-plugins-dependencies
 mobile/.packages
 mobile/build/
+mobile/android/build/
+mobile/android/.gradle/
+mobile/android/local.properties
+**/build/
+**/.gradle/
 mobile/.pub-cache/
 mobile/.pub/
 mobile/*.lock
-mobile/android/.gradle/
-mobile/android/local.properties
 
 # OS & IDE
 .vscode/

@@ -1,0 +1,34 @@
+# Git & CI
+.git
+.github
+
+# Flutter Mobile (ne doit pas être inclus dans l'image Docker backend)
+mobile/
+
+# Python Virtual Environments & Caches
+backend/venv/
+backend/.venv/
+**/__pycache__/
+**/*.pyc
+**/*.pyo
+**/*.pyd
+
+# Données locales de test et sessions privées
+backend/.env
+.env
+backend/*.session
+backend/*.session-journal
+backend/*.db
+backend/*.db-journal
+backend/*.sqlite*
+backend/cache/
+backend/thumbnails/
+backend/data/
+data/
+
+# IDE & OS
+.idea/
+.vscode/
+*.DS_Store
+Thumbs.db
+*.log

@@ -6,6 +6,7 @@ import logging
 from pathlib import Path
 from typing import Optional
 from telethon import TelegramClient
+from telethon.sessions import StringSession
 from telethon.errors import FloodWaitError
 from app.config import settings
 
@@ -19,7 +20,12 @@ class TelegramManager:
         self._client: Optional[TelegramClient] = None
         self._is_started: bool = False
         self._channel_entity = None
-        self._session_path = Path(__file__).resolve().parent.parent / settings.TELEGRAM_SESSION_NAME
+        session_name = settings.TELEGRAM_SESSION_NAME
+        if Path(session_name).is_absolute():
+            self._session_path = Path(session_name)
+        else:
+            self._session_path = Path(__file__).resolve().parent.parent / session_name
+        self._session_path.parent.mkdir(parents=True, exist_ok=True)
 
     @property
     def client(self) -> Optional[TelegramClient]:
@@ -35,7 +41,9 @@ class TelegramManager:
         )
 
     def session_exists(self) -> bool:
-        """Vérifie si le fichier .session existe sur le disque."""
+        """Vérifie si une session est disponible (StringSession ou fichier .session)."""
+        if bool(settings.TELEGRAM_STRING_SESSION):
+            return True
         session_file = Path(f"{self._session_path}.session")
         return session_file.exists()
 
@@ -47,15 +55,22 @@ class TelegramManager:
 
         if not self.session_exists():
             logger.warning(
-                f"Fichier de session '{self._session_path}.session' introuvable. "
-                "Exécutez 'python login_telegram.py' pour initialiser la session."
+                f"Fichier de session '{self._session_path}.session' introuvable et TELEGRAM_STRING_SESSION non configuré. "
+                "Exécutez 'python login_telegram.py' ou renseignez TELEGRAM_STRING_SESSION pour initialiser la session."
             )
             return False
 
         try:
             logger.info("Connexion au réseau Telegram MTProto...")
+            if settings.TELEGRAM_STRING_SESSION:
+                session = StringSession(settings.TELEGRAM_STRING_SESSION.strip())
+                logger.info("Utilisation de la session en mémoire TELEGRAM_STRING_SESSION (Dokploy / Sans fichier).")
+            else:
+                session = str(self._session_path)
+                logger.info(f"Utilisation du fichier de session sur disque : '{self._session_path}.session'")
+
             self._client = TelegramClient(
-                str(self._session_path),
+                session,
                 settings.TELEGRAM_API_ID,
                 settings.TELEGRAM_API_HASH,
                 # Optimisations de téléchargement par blocs

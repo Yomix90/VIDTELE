@@ -1,0 +1,17 @@
+venv/
+.venv/
+**/__pycache__/
+**/*.pyc
+**/*.pyo
+**/*.pyd
+.env
+*.session
+*.session-journal
+*.db
+*.db-journal
+cache/
+thumbnails/
+data/
+.idea/
+.vscode/
+*.log

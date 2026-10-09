@@ -179,13 +179,29 @@ flutter run
 
 ---
 
-## 🌐 Déploiement en Production sur VPS (Ubuntu / Debian)
+---
+
+## 🐳 Déploiement sur VPS via Dokploy (Recommandé)
+
+VidTele est 100% préconfiguré pour **Dokploy** via Docker Compose ou Dockerfile avec gestion automatique du SSL Traefik et des volumes persistants.
+
+1. **Connecter GitHub à Dokploy** : Liez votre compte `Yomix90` et le dépôt `Yomix90/VIDTELE`.
+2. **Créer un service Compose** : Sélectionnez le dépôt, la branche `master`, et le fichier `docker-compose.yml`.
+3. **Configurer les variables d'environnement** : Copiez le contenu de `.env.example` dans l'interface Dokploy.
+4. **Session Telegram** :
+   - Utilisez `TELEGRAM_STRING_SESSION` (obtenue via `python backend/export_session_string.py`) pour une initialisation instantanée sans fichier !
+   - Ou lancez `python login_telegram.py` directement dans le Web Terminal de Dokploy.
+5. **Consultez le guide complet** : [DOKPLOY.md](file:///c:/Users/USF/Desktop/VIDTELE/DOKPLOY.md) pour les instructions détaillées pas à pas.
+
+---
+
+## 🌐 Déploiement Manuel sur VPS (Ubuntu / Debian - Nginx & Systemd)
 
 Un script tout-en-un est fourni dans le dossier `deploy/` :
 
 ```bash
 # 1. Cloner ou transférer le projet sur le VPS dans /var/www/vidtele
-sudo git clone <url_de_votre_depot> /var/www/vidtele
+sudo git clone https://github.com/Yomix90/VIDTELE.git /var/www/vidtele
 
 # 2. Renseigner vos variables d'environnement
 sudo cp /var/www/vidtele/backend/.env.example /var/www/vidtele/backend/.env
