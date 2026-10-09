@@ -1,0 +1,29 @@
+# Framework API & Serveur ASGI
+fastapi>=0.115.0
+uvicorn[standard]>=0.30.0
+python-multipart>=0.0.12
+
+# Base de données asynchrone
+sqlalchemy[asyncio]>=2.0.30
+greenlet>=3.1.0
+aiosqlite>=0.20.0
+
+# Configuration & Validation
+pydantic>=2.9.0
+pydantic-settings>=2.5.0
+
+# Sécurité & Authentification
+pyjwt[crypto]>=2.9.0
+bcrypt>=4.2.0
+
+# Client Telegram MTProto
+telethon>=1.36.0
+
+# Gestion asynchrone des fichiers & Cache
+aiofiles>=24.1.0
+
+# Templates pour le Dashboard Web Admin
+jinja2>=3.1.4
+
+# Client HTTP asynchrone (tests & requêtes)
+httpx>=0.28.0

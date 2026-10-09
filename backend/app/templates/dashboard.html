@@ -1,0 +1,570 @@
+{% extends "base.html" %}
+
+{% block content %}
+<div class="row mb-3">
+    <div class="col-12 d-flex justify-content-between align-items-center flex-wrap gap-2">
+        <h2 class="fw-bold m-0" id="txt-page-title">Tableau de Bord</h2>
+        <div class="d-flex gap-2">
+            <button class="btn btn-primary d-flex align-items-center gap-2" id="btn-sync" onclick="triggerSync()">
+                <i class="bi bi-arrow-repeat" id="sync-icon"></i>
+                <span id="txt-btn-sync">Synchroniser Telegram</span>
+            </button>
+            <button class="btn btn-outline-danger btn-sm d-flex align-items-center gap-1" onclick="purgeCache()">
+                <i class="bi bi-trash"></i>
+                <span id="txt-btn-cache">Vider le Cache</span>
+            </button>
+        </div>
+    </div>
+</div>
+
+<!-- Alertes d'état -->
+<div id="alert-container"></div>
+
+<!-- Cartes Statistiques Clés -->
+<div class="row g-3 mb-4">
+    <div class="col-12 col-sm-6 col-xl-3">
+        <div class="card stat-card p-3 shadow-sm border-start border-4 border-info">
+            <div class="d-flex justify-content-between align-items-center">
+                <div>
+                    <div class="text-secondary small fw-semibold text-uppercase" id="lbl-videos">Vidéos Indexées</div>
+                    <div class="fs-3 fw-bold text-info" id="stat-videos">{{ stats.total_videos }}</div>
+                </div>
+                <div class="bg-info bg-opacity-10 p-3 rounded-circle text-info fs-3">
+                    <i class="bi bi-collection-play"></i>
+                </div>
+            </div>
+        </div>
+    </div>
+
+    <div class="col-12 col-sm-6 col-xl-3">
+        <div class="card stat-card p-3 shadow-sm border-start border-4 border-primary">
+            <div class="d-flex justify-content-between align-items-center">
+                <div>
+                    <div class="text-secondary small fw-semibold text-uppercase" id="lbl-views">Total Vues</div>
+                    <div class="fs-3 fw-bold text-primary" id="stat-views">{{ stats.total_views }}</div>
+                </div>
+                <div class="bg-primary bg-opacity-10 p-3 rounded-circle text-primary fs-3">
+                    <i class="bi bi-eye"></i>
+                </div>
+            </div>
+        </div>
+    </div>
+
+    <div class="col-12 col-sm-6 col-xl-3">
+        <div class="card stat-card p-3 shadow-sm border-start border-4 border-success">
+            <div class="d-flex justify-content-between align-items-center">
+                <div>
+                    <div class="text-secondary small fw-semibold text-uppercase" id="lbl-users">Utilisateurs Actifs</div>
+                    <div class="fs-3 fw-bold text-success" id="stat-users">{{ stats.active_users }} / {{ stats.total_users }}</div>
+                </div>
+                <div class="bg-success bg-opacity-10 p-3 rounded-circle text-success fs-3">
+                    <i class="bi bi-people"></i>
+                </div>
+            </div>
+        </div>
+    </div>
+
+    <div class="col-12 col-sm-6 col-xl-3">
+        <div class="card stat-card p-3 shadow-sm border-start border-4 border-warning">
+            <div class="d-flex justify-content-between align-items-center">
+                <div>
+                    <div class="text-secondary small fw-semibold text-uppercase" id="lbl-streams">Lectures Simultanées</div>
+                    <div class="fs-3 fw-bold text-warning" id="stat-streams">{{ stats.streams.current_active }} / {{ stats.streams.max_global }}</div>
+                </div>
+                <div class="bg-warning bg-opacity-10 p-3 rounded-circle text-warning fs-3">
+                    <i class="bi bi-broadcast"></i>
+                </div>
+            </div>
+        </div>
+    </div>
+</div>
+
+<!-- Jauge Espace Disque Cache -->
+<div class="card p-3 mb-4 shadow-sm">
+    <div class="d-flex justify-content-between align-items-center mb-2">
+        <span class="fw-semibold" id="lbl-cache-disk"><i class="bi bi-hdd me-2"></i>Espace Disque Cache Vidéos</span>
+        <span class="badge bg-secondary" id="badge-cache-size">{{ stats.cache.total_gb }} Go / {{ stats.cache.max_gb }} Go ({{ stats.cache.percent_used }}%)</span>
+    </div>
+    <div class="progress" style="height: 12px; background-color: #0f172a;">
+        <div class="progress-bar {% if stats.cache.percent_used > 80 %}bg-danger{% elif stats.cache.percent_used > 50 %}bg-warning{% else %}bg-info{% endif %}" 
+             role="progressbar" 
+             style="width: {{ stats.cache.percent_used }}%;" 
+             aria-valuenow="{{ stats.cache.percent_used }}" 
+             aria-valuemin="0" 
+             aria-valuemax="100">
+        </div>
+    </div>
+</div>
+
+<!-- Onglets Principaux (Utilisateurs & Invitations) -->
+<ul class="nav nav-tabs mb-3" id="adminTab" role="tablist">
+    <li class="nav-item" role="presentation">
+        <button class="nav-link active" id="users-tab" data-bs-toggle="tab" data-bs-target="#tab-users" type="button" role="tab">
+            <i class="bi bi-people me-1"></i> <span id="tab-title-users">Gestion Utilisateurs</span>
+        </button>
+    </li>
+    <li class="nav-item" role="presentation">
+        <button class="nav-link" id="invites-tab" data-bs-toggle="tab" data-bs-target="#tab-invites" type="button" role="tab">
+            <i class="bi bi-ticket-perforated me-1"></i> <span id="tab-title-invites">Codes d'Invitation</span>
+        </button>
+    </li>
+</ul>
+
+<div class="tab-content" id="adminTabContent">
+    <!-- Onglet 1: Utilisateurs -->
+    <div class="tab-pane fade show active" id="tab-users" role="tabpanel">
+        <div class="card p-3 shadow-sm">
+            <div class="d-flex justify-content-between align-items-center mb-3">
+                <h5 class="m-0 fw-bold" id="txt-users-list">Liste des Comptes</h5>
+                <button class="btn btn-outline-success btn-sm" data-bs-toggle="modal" data-bs-target="#modalCreateUser">
+                    <i class="bi bi-person-plus me-1"></i> <span id="txt-btn-add-user">Créer un utilisateur</span>
+                </button>
+            </div>
+            <div class="table-responsive">
+                <table class="table table-dark table-hover align-middle">
+                    <thead>
+                        <tr>
+                            <th>ID</th>
+                            <th id="th-username">Nom d'utilisateur</th>
+                            <th id="th-role">Rôle</th>
+                            <th id="th-status">Statut</th>
+                            <th id="th-streams">Max Flux</th>
+                            <th id="th-created">Créé le</th>
+                            <th id="th-actions">Actions</th>
+                        </tr>
+                    </thead>
+                    <tbody id="users-tbody">
+                        {% for u in users %}
+                        <tr>
+                            <td>{{ u.id }}</td>
+                            <td class="fw-semibold">{{ u.username }}</td>
+                            <td>
+                                <span class="badge {% if u.role == 'admin' %}bg-danger{% else %}bg-primary{% endif %}">
+                                    {{ u.role }}
+                                </span>
+                            </td>
+                            <td>
+                                {% if u.is_active %}
+                                <span class="badge bg-success">Actif</span>
+                                {% else %}
+                                <span class="badge bg-secondary">Désactivé</span>
+                                {% endif %}
+                            </td>
+                            <td>{{ u.max_concurrent_streams }}</td>
+                            <td>{{ u.created_at.strftime('%d/%m/%Y %H:%M') }}</td>
+                            <td>
+                                <div class="btn-group btn-group-sm">
+                                    <button class="btn btn-outline-warning" onclick="toggleUserActive({{ u.id }}, {{ 'false' if u.is_active else 'true' }})">
+                                        <i class="bi bi-power"></i>
+                                    </button>
+                                    {% if u.id != current_user.id %}
+                                    <button class="btn btn-outline-danger" onclick="deleteUser({{ u.id }})">
+                                        <i class="bi bi-trash"></i>
+                                    </button>
+                                    {% endif %}
+                                </div>
+                            </td>
+                        </tr>
+                        {% endfor %}
+                    </tbody>
+                </table>
+            </div>
+        </div>
+    </div>
+
+    <!-- Onglet 2: Invitations -->
+    <div class="tab-pane fade" id="tab-invites" role="tabpanel">
+        <div class="card p-3 shadow-sm">
+            <div class="d-flex justify-content-between align-items-center mb-3">
+                <h5 class="m-0 fw-bold" id="txt-invites-list">Codes d'Invitation Disponibles</h5>
+                <button class="btn btn-outline-info btn-sm" onclick="createInvite()">
+                    <i class="bi bi-plus-circle me-1"></i> <span id="txt-btn-new-invite">Générer un code</span>
+                </button>
+            </div>
+            <div class="table-responsive">
+                <table class="table table-dark table-hover align-middle">
+                    <thead>
+                        <tr>
+                            <th id="th-code">Code</th>
+                            <th id="th-inv-status">État</th>
+                            <th id="th-expires">Expire le</th>
+                            <th id="th-copy">Action</th>
+                        </tr>
+                    </thead>
+                    <tbody id="invites-tbody">
+                        {% for inv in invites %}
+                        <tr>
+                            <td><code class="fs-6 text-info">{{ inv.code }}</code></td>
+                            <td>
+                                {% if inv.is_used %}
+                                <span class="badge bg-secondary">Utilisé</span>
+                                {% else %}
+                                <span class="badge bg-success">Disponible</span>
+                                {% endif %}
+                            </td>
+                            <td>{{ inv.expires_at.strftime('%d/%m/%Y') if inv.expires_at else 'Illimité' }}</td>
+                            <td>
+                                <div class="btn-group btn-group-sm">
+                                    <button class="btn btn-outline-light" onclick="copyToClipboard('{{ inv.code }}')">
+                                        <i class="bi bi-clipboard"></i> Copier
+                                    </button>
+                                    <button class="btn btn-outline-danger" onclick="deleteInvite({{ inv.id }})">
+                                        <i class="bi bi-trash"></i>
+                                    </button>
+                                </div>
+                            </td>
+                        </tr>
+                        {% endfor %}
+                    </tbody>
+                </table>
+            </div>
+        </div>
+    </div>
+</div>
+
+<!-- Modal Création Utilisateur -->
+<div class="modal fade" id="modalCreateUser" tabindex="-1">
+    <div class="modal-dialog">
+        <div class="modal-content bg-dark text-light border-secondary">
+            <div class="modal-header border-secondary">
+                <h5 class="modal-title" id="modal-title-user">Créer un Nouvel Utilisateur</h5>
+                <button type="button" class="btn-close btn-close-white" data-bs-dismiss="modal"></button>
+            </div>
+            <div class="modal-body">
+                <div class="mb-3">
+                    <label class="form-label">Nom d'utilisateur</label>
+                    <input type="text" class="form-control" id="new-username" required>
+                </div>
+                <div class="mb-3">
+                    <label class="form-label">Mot de passe</label>
+                    <input type="password" class="form-control" id="new-password" required>
+                </div>
+                <div class="mb-3">
+                    <label class="form-label">Rôle</label>
+                    <select class="form-select" id="new-role">
+                        <option value="user" selected>Utilisateur standard</option>
+                        <option value="admin">Administrateur</option>
+                    </select>
+                </div>
+                <div class="mb-3">
+                    <label class="form-label">Nombre max de flux simultanés</label>
+                    <input type="number" class="form-control" id="new-streams" value="2" min="1" max="10">
+                </div>
+            </div>
+            <div class="modal-footer border-secondary">
+                <button type="button" class="btn btn-secondary" data-bs-dismiss="modal">Annuler</button>
+                <button type="button" class="btn btn-primary" onclick="submitCreateUser()">Enregistrer</button>
+            </div>
+        </div>
+    </div>
+</div>
+
+<!-- Modal Connexion Administrateur (affiché si token manquant ou 401) -->
+<div class="modal fade" id="modalAdminLogin" data-bs-backdrop="static" data-bs-keyboard="false" tabindex="-1">
+    <div class="modal-dialog">
+        <div class="modal-content bg-dark text-light border-secondary">
+            <div class="modal-header border-secondary">
+                <h5 class="modal-title"><i class="bi bi-shield-lock me-2 text-info"></i>Connexion Administrateur</h5>
+            </div>
+            <div class="modal-body">
+                <p class="text-secondary small">Veuillez vous authentifier pour administrer le serveur et déclencher la synchronisation.</p>
+                <div class="mb-3">
+                    <label class="form-label">Identifiant</label>
+                    <input type="text" class="form-control" id="login-username" value="admin" required>
+                </div>
+                <div class="mb-3">
+                    <label class="form-label">Mot de passe</label>
+                    <input type="password" class="form-control" id="login-password" value="AdminSecurePass2026!" required>
+                </div>
+                <div id="login-error" class="text-danger small mb-2 d-none"></div>
+            </div>
+            <div class="modal-footer border-secondary">
+                <button type="button" class="btn btn-primary w-100" onclick="submitAdminLogin()">Se connecter</button>
+            </div>
+        </div>
+    </div>
+</div>
+{% endblock %}
+
+{% block scripts %}
+<script>
+    // Dictionnaire bilingue FR / AR
+    const translations = {
+        fr: {
+            dir: 'ltr',
+            langLabel: 'العربية',
+            title: 'Tableau de Bord',
+            syncBtn: 'Synchroniser Telegram',
+            cacheBtn: 'Vider le Cache',
+            lblVideos: 'Vidéos Indexées',
+            lblViews: 'Total Vues',
+            lblUsers: 'Utilisateurs Actifs',
+            lblStreams: 'Lectures Simultanées',
+            tabUsers: 'Gestion Utilisateurs',
+            tabInvites: "Codes d'Invitation",
+            addUserBtn: 'Créer un utilisateur',
+            genInviteBtn: 'Générer un code',
+            copied: 'Code copié dans le presse-papier !'
+        },
+        ar: {
+            dir: 'rtl',
+            langLabel: 'Français',
+            title: 'لوحة التحكم',
+            syncBtn: 'مزامنة تيليجرام',
+            cacheBtn: 'إفراغ الذاكرة المؤقتة',
+            lblVideos: 'مقاطع الفيديو المفهرسة',
+            lblViews: 'إجمالي المشاهدات',
+            lblUsers: 'المستخدمون النشطون',
+            lblStreams: 'البث المتزامن',
+            tabUsers: 'إدارة المستخدمين',
+            tabInvites: 'رموز الدعوة',
+            addUserBtn: 'إضافة مستخدم جديد',
+            genInviteBtn: 'إنشاء رمز دعوة',
+            copied: 'تم نسخ الرمز إلى الحافظة!'
+        }
+    };
+
+    let currentLang = 'fr';
+
+    function toggleLanguage() {
+        currentLang = currentLang === 'fr' ? 'ar' : 'fr';
+        applyLanguage(currentLang);
+    }
+
+    function applyLanguage(lang) {
+        const t = translations[lang];
+        document.getElementById('html-root').setAttribute('dir', t.dir);
+        document.getElementById('html-root').setAttribute('lang', lang);
+        document.getElementById('lang-label').innerText = t.langLabel;
+        document.getElementById('txt-page-title').innerText = t.title;
+        document.getElementById('txt-btn-sync').innerText = t.syncBtn;
+        document.getElementById('txt-btn-cache').innerText = t.cacheBtn;
+        document.getElementById('lbl-videos').innerText = t.lblVideos;
+        document.getElementById('lbl-views').innerText = t.lblViews;
+        document.getElementById('lbl-users').innerText = t.lblUsers;
+        document.getElementById('lbl-streams').innerText = t.lblStreams;
+        document.getElementById('tab-title-users').innerText = t.tabUsers;
+        document.getElementById('tab-title-invites').innerText = t.tabInvites;
+        document.getElementById('txt-btn-add-user').innerText = t.addUserBtn;
+        document.getElementById('txt-btn-new-invite').innerText = t.genInviteBtn;
+    }
+
+    // Gestion de l'authentification Admin
+    function getAdminToken() {
+        return localStorage.getItem('vidtele_admin_token') || '';
+    }
+
+    function getAuthHeaders() {
+        const token = getAdminToken();
+        const headers = { 'Content-Type': 'application/json' };
+        if (token) {
+            headers['Authorization'] = 'Bearer ' + token;
+        }
+        return headers;
+    }
+
+    function showLoginModal() {
+        const modalEl = document.getElementById('modalAdminLogin');
+        if (modalEl) {
+            const modal = new bootstrap.Modal(modalEl);
+            modal.show();
+        }
+    }
+
+    async function submitAdminLogin() {
+        const username = document.getElementById('login-username').value.trim();
+        const password = document.getElementById('login-password').value;
+        const errDiv = document.getElementById('login-error');
+
+        try {
+            const res = await fetch('/api/auth/login', {
+                method: 'POST',
+                headers: { 'Content-Type': 'application/json' },
+                body: JSON.stringify({ username, password })
+            });
+            const data = await res.json();
+            if (res.ok && data.role === 'admin') {
+                localStorage.setItem('vidtele_admin_token', data.access_token);
+                location.reload();
+            } else {
+                errDiv.textContent = data.detail || 'Identifiants administrateur incorrects';
+                errDiv.classList.remove('d-none');
+            }
+        } catch (e) {
+            errDiv.textContent = 'Erreur réseau';
+            errDiv.classList.remove('d-none');
+        }
+    }
+
+    // Vérifier l'authentification au chargement
+    window.addEventListener('DOMContentLoaded', () => {
+        if (!getAdminToken()) {
+            showLoginModal();
+        }
+    });
+
+    function showAlert(message, type = 'success') {
+        const container = document.getElementById('alert-container');
+        container.innerHTML = `
+            <div class="alert alert-${type} alert-dismissible fade show" role="alert">
+                ${message}
+                <button type="button" class="btn-close" data-bs-dismiss="alert"></button>
+            </div>
+        `;
+    }
+
+    async function triggerSync() {
+        const icon = document.getElementById('sync-icon');
+        icon.classList.add('bi-spin');
+        try {
+            const res = await fetch('/api/admin/sync', {
+                method: 'POST',
+                headers: getAuthHeaders()
+            });
+            const data = await res.json();
+            if (res.ok) {
+                showAlert(`Synchronisation terminée : ${data.added} ajoutée(s), ${data.updated} mise(s) à jour.`);
+                setTimeout(() => location.reload(), 1500);
+            } else if (res.status === 401) {
+                showLoginModal();
+            } else {
+                showAlert(`Erreur : ${data.detail || 'Échec de synchronisation'}`, 'danger');
+            }
+        } catch (e) {
+            showAlert(`Erreur de connexion réseau`, 'danger');
+        } finally {
+            icon.classList.remove('bi-spin');
+        }
+    }
+
+    async function purgeCache() {
+        if (!confirm('Voulez-vous vraiment vider le cache des vidéos locales ?')) return;
+        try {
+            const res = await fetch('/api/admin/cache', {
+                method: 'DELETE',
+                headers: getAuthHeaders()
+            });
+            const data = await res.json();
+            if (res.ok) {
+                showAlert(data.message || 'Cache vidé avec succès !');
+                setTimeout(() => location.reload(), 1200);
+            } else if (res.status === 401) {
+                showLoginModal();
+            }
+        } catch (e) {
+            showAlert('Erreur lors de la purge', 'danger');
+        }
+    }
+
+    async function createInvite() {
+        try {
+            const res = await fetch('/api/admin/invites', {
+                method: 'POST',
+                headers: getAuthHeaders(),
+                body: JSON.stringify({ expires_in_days: 7 })
+            });
+            const data = await res.json();
+            if (res.ok) {
+                showAlert(`Code généré avec succès : <strong>${data.code}</strong>`);
+                setTimeout(() => location.reload(), 1200);
+            } else if (res.status === 401) {
+                showLoginModal();
+            }
+        } catch (e) {
+            showAlert("Erreur lors de la création de l'invitation", 'danger');
+        }
+    }
+
+    async function deleteInvite(id) {
+        if (!confirm('Supprimer ce code d\'invitation ?')) return;
+        try {
+            const res = await fetch(`/api/admin/invites/${id}`, {
+                method: 'DELETE',
+                headers: getAuthHeaders()
+            });
+            if (res.status === 401) {
+                showLoginModal();
+            } else {
+                location.reload();
+            }
+        } catch (e) {
+            showAlert('Erreur de suppression', 'danger');
+        }
+    }
+
+    async function toggleUserActive(userId, newStatus) {
+        try {
+            const res = await fetch(`/api/admin/users/${userId}`, {
+                method: 'PUT',
+                headers: getAuthHeaders(),
+                body: JSON.stringify({ is_active: newStatus })
+            });
+            if (res.status === 401) {
+                showLoginModal();
+            } else {
+                location.reload();
+            }
+        } catch (e) {
+            showAlert('Erreur de mise à jour', 'danger');
+        }
+    }
+
+    async function deleteUser(userId) {
+        if (!confirm('Voulez-vous vraiment supprimer cet utilisateur ?')) return;
+        try {
+            const res = await fetch(`/api/admin/users/${userId}`, {
+                method: 'DELETE',
+                headers: getAuthHeaders()
+            });
+            if (res.status === 401) {
+                showLoginModal();
+            } else {
+                location.reload();
+            }
+        } catch (e) {
+            showAlert('Erreur de suppression', 'danger');
+        }
+    }
+
+    async function submitCreateUser() {
+        const username = document.getElementById('new-username').value.trim();
+        const password = document.getElementById('new-password').value;
+        const role = document.getElementById('new-role').value;
+        const maxStreams = parseInt(document.getElementById('new-streams').value);
+
+        if (!username || !password) {
+            alert('Veuillez remplir tous les champs');
+            return;
+        }
+
+        try {
+            const res = await fetch('/api/admin/users', {
+                method: 'POST',
+                headers: getAuthHeaders(),
+                body: JSON.stringify({
+                    username: username,
+                    password: password,
+                    role: role,
+                    max_concurrent_streams: maxStreams
+                })
+            });
+            const data = await res.json();
+            if (res.ok) {
+                showAlert(`Utilisateur '${data.username}' créé avec succès !`);
+                setTimeout(() => location.reload(), 1000);
+            } else if (res.status === 401) {
+                showLoginModal();
+            } else {
+                alert(`Erreur : ${data.detail}`);
+            }
+        } catch (e) {
+            alert('Erreur réseau');
+        }
+    }
+
+    function copyToClipboard(text) {
+        navigator.clipboard.writeText(text);
+        showAlert(translations[currentLang].copied, 'info');
+    }
+</script>
+{% endblock %}

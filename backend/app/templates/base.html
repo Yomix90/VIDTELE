@@ -1,0 +1,107 @@
+<!DOCTYPE html>
+<html lang="fr" id="html-root">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>{% block title %}VidTele - Administration{% endblock %}</title>
+    <!-- Bootstrap 5 CSS -->
+    <link id="bootstrap-css" rel="stylesheet" href="https://cdn.jsdelivr.net/npm/bootstrap@5.3.3/dist/css/bootstrap.min.css">
+    <!-- Bootstrap Icons -->
+    <link rel="stylesheet" href="https://cdn.jsdelivr.net/npm/bootstrap-icons@1.11.3/font/bootstrap-icons.min.css">
+    <style>
+        :root {
+            --bs-primary: #0284c7;
+            --bs-primary-rgb: 2, 132, 199;
+        }
+        body {
+            background-color: #0f172a;
+            color: #f1f5f9;
+            font-family: system-ui, -apple-system, 'Segoe UI', Roboto, sans-serif;
+            min-height: 100vh;
+        }
+        .card {
+            background-color: #1e293b;
+            border: 1px solid #334155;
+            color: #f8fafc;
+            border-radius: 12px;
+        }
+        .table {
+            color: #f8fafc;
+        }
+        .table-dark {
+            --bs-table-bg: #1e293b;
+            --bs-table-striped-bg: #273549;
+            --bs-table-border-color: #334155;
+        }
+        .navbar {
+            background-color: #1e293b !important;
+            border-bottom: 1px solid #334155;
+        }
+        .stat-card {
+            transition: transform 0.2s;
+        }
+        .stat-card:hover {
+            transform: translateY(-3px);
+        }
+        .nav-tabs .nav-link {
+            color: #94a3b8;
+        }
+        .nav-tabs .nav-link.active {
+            background-color: #1e293b;
+            color: #38bdf8;
+            border-color: #334155 #334155 #1e293b;
+            font-weight: 600;
+        }
+        .form-control, .form-select {
+            background-color: #0f172a;
+            border-color: #334155;
+            color: #f8fafc;
+        }
+        .form-control:focus, .form-select:focus {
+            background-color: #0f172a;
+            border-color: #38bdf8;
+            color: #fff;
+            box-shadow: 0 0 0 0.25rem rgba(56, 189, 248, 0.25);
+        }
+        [dir="rtl"] {
+            text-align: right;
+            direction: rtl;
+        }
+        [dir="rtl"] .ms-auto {
+            margin-right: auto !important;
+            margin-left: 0 !important;
+        }
+        [dir="rtl"] .me-2 {
+            margin-left: 0.5rem !important;
+            margin-right: 0 !important;
+        }
+    </style>
+</head>
+<body>
+    <nav class="navbar navbar-expand-lg navbar-dark px-3 mb-4">
+        <div class="container-fluid">
+            <a class="navbar-brand fw-bold d-flex align-items-center" href="/admin">
+                <i class="bi bi-play-circle-fill text-info me-2 fs-4"></i>
+                <span>VidTele Admin</span>
+            </a>
+            <div class="ms-auto d-flex align-items-center gap-2">
+                <!-- Sélecteur de Langue -->
+                <button class="btn btn-outline-secondary btn-sm text-light" id="btn-toggle-lang" onclick="toggleLanguage()">
+                    <i class="bi bi-translate me-1"></i> <span id="lang-label">العربية</span>
+                </button>
+                <a href="/docs" target="_blank" class="btn btn-outline-info btn-sm">
+                    <i class="bi bi-file-code me-1"></i> Swagger API
+                </a>
+            </div>
+        </div>
+    </nav>
+
+    <div class="container-fluid px-4">
+        {% block content %}{% endblock %}
+    </div>
+
+    <!-- Bootstrap 5 JS Bundle -->
+    <script src="https://cdn.jsdelivr.net/npm/bootstrap@5.3.3/dist/js/bootstrap.bundle.min.js"></script>
+    {% block scripts %}{% endblock %}
+</body>
+</html>

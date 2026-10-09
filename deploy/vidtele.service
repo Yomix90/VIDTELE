@@ -1,0 +1,30 @@
+[Unit]
+Description=VidTele - Backend de Streaming Video Telegram & Cache LRU
+After=network.target
+
+[Service]
+Type=simple
+User=www-data
+Group=www-data
+WorkingDirectory=/var/www/vidtele/backend
+Environment="PATH=/var/www/vidtele/backend/venv/bin"
+ExecStart=/var/www/vidtele/backend/venv/bin/uvicorn app.main:app --host 127.0.0.1 --port 8000 --workers 1 --loop uvloop
+
+# Politiques de redémarrage automatique en cas de crash
+Restart=always
+RestartSec=5s
+
+# Limites de fichiers pour supporter les connexions concurrentes
+LimitNOFILE=65535
+
+# Sécurité renforcée
+NoNewPrivileges=true
+PrivateTmp=true
+
+# Logs dans journald
+StandardOutput=journal
+StandardError=journal
+SyslogIdentifier=vidtele
+
+[Install]
+WantedBy=multi-user.target

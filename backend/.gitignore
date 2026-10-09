@@ -1,0 +1,27 @@
+# Environnements virtuels et caches Python
+venv/
+.venv/
+__pycache__/
+*.pyc
+*.pyo
+*.pyd
+.pytest_cache/
+
+# Fichiers d'environnement et secrets
+.env
+*.session
+*.session-journal
+
+# Base de données locale et stockage
+*.db
+*.sqlite
+*.sqlite3
+cache/
+thumbnails/
+
+# Fichiers temporaires et IDE
+.vscode/
+.idea/
+*.log
+logs/
+tmp/

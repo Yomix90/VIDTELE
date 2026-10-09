@@ -1,0 +1,46 @@
+name: vidtele_mobile
+description: "Application mobile de streaming vidéo privé depuis Telegram façon Netflix."
+publish_to: 'none'
+version: 1.0.0+1
+
+environment:
+  sdk: '>=3.2.0 <4.0.0'
+
+dependencies:
+  flutter:
+    sdk: flutter
+  flutter_localizations:
+    sdk: flutter
+
+  # Gestion d'état moderne
+  flutter_riverpod: ^2.5.1
+
+  # Réseau HTTP & Intercepteurs JWT
+  dio: ^5.4.3+1
+
+  # Stockage sécurisé des tokens & préférences
+  flutter_secure_storage: ^9.2.2
+  shared_preferences: ^2.2.3
+
+  # Lecteur vidéo & Contrôles personnalisés
+  video_player: ^2.8.6
+  chewie: ^1.8.1
+
+  # Cache d'images pour les miniatures
+  cached_network_image: ^3.3.1
+
+  # Internationalisation & Dates
+  intl: ^0.20.3
+
+  # Icônes modernes
+  cupertino_icons: ^1.0.8
+
+dev_dependencies:
+  flutter_test:
+    sdk: flutter
+  flutter_lints: ^3.0.0
+
+flutter:
+  uses-material-design: true
+  assets:
+    - assets/images/

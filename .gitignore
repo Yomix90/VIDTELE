@@ -1,0 +1,33 @@
+# Python & Backend
+backend/venv/
+backend/__pycache__/
+backend/*/__pycache__/
+backend/*/*/__pycache__/
+backend/*.pyc
+backend/*.pyo
+backend/cache/
+backend/thumbnails/
+backend/vidtele.db
+backend/vidtele.db-journal
+backend/vidtele_session.session
+backend/vidtele_session.session-journal
+backend/.env
+
+# Flutter & Mobile
+mobile/.dart_tool/
+mobile/.flutter-plugins
+mobile/.flutter-plugins-dependencies
+mobile/.packages
+mobile/build/
+mobile/.pub-cache/
+mobile/.pub/
+mobile/*.lock
+mobile/android/.gradle/
+mobile/android/local.properties
+
+# OS & IDE
+.vscode/
+.idea/
+*.DS_Store
+Thumbs.db
+*.log
