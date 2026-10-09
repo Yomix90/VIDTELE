@@ -45,6 +45,9 @@ services:
       - vidtele_data:/app/data
       - vidtele_cache:/app/cache
       - vidtele_thumbnails:/app/thumbnails
+    networks:
+      - dokploy-network
+      - default
     healthcheck:
       test: ["CMD", "curl", "-f", "http://localhost:8000/api/health"]
       interval: 30s
@@ -59,3 +62,9 @@ volumes:
     name: vidtele_cache
   vidtele_thumbnails:
     name: vidtele_thumbnails
+
+networks:
+  dokploy-network:
+    external: true
+  default:
+
