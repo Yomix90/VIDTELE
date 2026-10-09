@@ -1,11 +1,14 @@
 {% extends "base.html" %}
 
-{% block title %}StreamAdmin - Séries{% endblock %}
+{% block title %}Atlas Play - Séries TV{% endblock %}
 
 {% block content %}
 <div class="d-flex flex-wrap align-items-center justify-content-between gap-3 mb-4">
   <div>
-    <h1 class="h3 mb-1 fw-bold text-white" data-i18n="series">Gestion des Séries</h1>
+    <h1 class="h3 mb-1 fw-bold text-white d-flex align-items-center gap-2" data-i18n="series">
+      <i class="bi bi-collection-play text-danger"></i>
+      <span>Gestion des Séries</span>
+    </h1>
     <div class="text-muted small">Créez et organisez vos séries, saisons et épisodes diffusés sur l'application mobile.</div>
   </div>
   <button class="btn btn-danger btn-sm d-flex align-items-center gap-1 shadow-sm" data-bs-toggle="modal" data-bs-target="#modalCreateSeries">
@@ -14,39 +17,45 @@
   </button>
 </div>
 
-<!-- Grille des séries -->
+<!-- Grille des séries (Cartes Style Streaming HD) -->
 <div class="row g-4">
   {% for s in series_list %}
   <div class="col-12 col-sm-6 col-md-4 col-xl-3">
-    <div class="card-dark h-100 overflow-hidden border border-secondary border-opacity-25 d-flex flex-column shadow-sm">
-      <div class="position-relative" style="height: 220px; background: #121A2B;">
+    <div class="media-poster-card">
+      <div class="media-poster-wrapper">
         {% if s.poster_path %}
-          <img src="{{ s.poster_path }}" alt="{{ s.title_fr }}" class="w-100 h-100 object-fit-cover">
+          <img src="{{ s.poster_path }}" alt="{{ s.title_fr }}" class="media-poster-img">
         {% else %}
           <div class="w-100 h-100 d-flex flex-column align-items-center justify-content-center text-muted">
-            <i class="bi bi-film fs-1 mb-2"></i>
-            <span class="small">Pas d'affiche</span>
+            <i class="bi bi-film fs-1 mb-2 text-danger opacity-50"></i>
+            <span class="small">Sans affiche</span>
           </div>
         {% endif %}
-        <div class="position-absolute top-0 end-0 p-2 d-flex gap-1">
+        
+        <div class="media-poster-overlay"></div>
+
+        <div class="media-poster-badge">
           {% if s.visibility == 'published' %}
-            <span class="badge bg-success shadow-sm">Publié</span>
+            <span class="badge badge-atlas-green shadow-sm">Publié</span>
           {% else %}
-            <span class="badge badge-warning-soft shadow-sm">Brouillon</span>
+            <span class="badge badge-atlas-amber shadow-sm">Brouillon</span>
           {% endif %}
         </div>
       </div>
 
-      <div class="p-3 d-flex flex-column flex-grow-1">
-        <h2 class="h6 fw-bold text-white mb-1 text-truncate" title="{{ s.title_fr }}">{{ s.title_fr }}</h2>
-        <div class="text-muted small mb-2">{{ s.year_start or 'N/A' }} · {{ s.seasons_count }} saison(s)</div>
-        <p class="text-muted small mb-3 flex-grow-1" style="display: -webkit-box; -webkit-line-clamp: 2; -webkit-box-orient: vertical; overflow: hidden;">
+      <div class="media-poster-content">
+        <h2 class="media-poster-title" title="{{ s.title_fr }}">{{ s.title_fr }}</h2>
+        <div class="media-poster-meta">
+          <i class="bi bi-calendar3 me-1"></i>{{ s.year_start or 'N/A' }} · 
+          <span class="text-danger fw-semibold">{{ s.seasons_count }} saison(s)</span>
+        </div>
+        <p class="text-muted small mb-3 flex-grow-1" style="display: -webkit-box; -webkit-line-clamp: 2; -webkit-box-orient: vertical; overflow: hidden; line-height: 1.4;">
           {{ s.synopsis_fr or 'Aucun synopsis disponible.' }}
         </p>
 
-        <div class="d-flex gap-2 mt-auto">
+        <div class="mt-auto">
           <a href="/admin/series/{{ s.id }}" class="btn btn-sm btn-outline-danger w-100">
-            <i class="bi bi-gear me-1"></i>Gérer
+            <i class="bi bi-gear me-1"></i>Gérer les saisons & épisodes
           </a>
         </div>
       </div>

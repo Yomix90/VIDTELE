@@ -1,6 +1,6 @@
 {% extends "base.html" %}
 
-{% block title %}StreamAdmin - {{ series.title_fr }}{% endblock %}
+{% block title %}Atlas Play - {{ series.title_fr }}{% endblock %}
 
 {% block content %}
 <!-- Fil d'Ariane -->
@@ -12,22 +12,22 @@
   </ol>
 </nav>
 
-<!-- Bannière Héro de la Série -->
-<section class="card-dark p-4 p-lg-5 mb-4 position-relative overflow-hidden border border-secondary border-opacity-25" 
-  style="{% if series.banner_path %}background: linear-gradient(90deg, rgba(7,10,18,0.95) 0%, rgba(7,10,18,0.7) 60%, rgba(7,10,18,0.3) 100%), url('{{ series.banner_path }}') center/cover no-repeat;{% else %}background: linear-gradient(135deg, rgba(229,9,20,0.14) 0%, rgba(124,58,237,0.12) 50%, #0d1320 100%);{% endif %} min-height: 280px;">
+<!-- Bannière Héro de la Série (Atlas Play Immersif) -->
+<section class="card-dark p-4 p-lg-5 mb-4 position-relative overflow-hidden shadow-lg" 
+  style="{% if series.banner_path %}background: linear-gradient(90deg, rgba(7,9,14,0.95) 0%, rgba(7,9,14,0.7) 60%, rgba(7,9,14,0.3) 100%), url('{{ series.banner_path }}') center/cover no-repeat;{% else %}background: linear-gradient(135deg, rgba(229,9,20,0.18) 0%, rgba(14,165,233,0.12) 50%, #0d121f 100%);{% endif %} min-height: 280px; border-radius: var(--radius-xl);">
   
   <div class="row align-items-center">
     <div class="col-12 col-lg-8">
       <div class="d-flex flex-wrap gap-2 mb-3">
-        <span class="badge badge-accent">Série</span>
+        <span class="badge badge-atlas-red">Série TV</span>
         {% if series.visibility == 'published' %}
-          <span class="badge badge-success-soft">Publié sur Mobile</span>
+          <span class="badge badge-atlas-green">Publié sur Mobile</span>
         {% else %}
-          <span class="badge badge-warning-soft">Brouillon (Masqué)</span>
+          <span class="badge badge-atlas-amber">Brouillon (Masqué)</span>
         {% endif %}
-        <span class="badge badge-soft">{{ series.status }}</span>
+        <span class="badge badge-atlas-muted">{{ series.status | upper }}</span>
         {% if series.is_featured %}
-          <span class="badge badge-accent">À la une</span>
+          <span class="badge badge-atlas-red"><i class="bi bi-star-fill text-warning me-1"></i>À la une</span>
         {% endif %}
       </div>
 

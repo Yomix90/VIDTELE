@@ -1,12 +1,15 @@
 {% extends "base.html" %}
 
-{% block title %}StreamAdmin - Utilisateurs{% endblock %}
+{% block title %}Atlas Play - Utilisateurs{% endblock %}
 
 {% block content %}
 <div class="d-flex flex-wrap align-items-center justify-content-between gap-3 mb-4">
   <div>
-    <h1 class="h3 mb-1 fw-bold text-white" data-i18n="users">Gestion des Utilisateurs</h1>
-    <div class="text-muted small">Contrôlez les comptes utilisateurs de l'application mobile et leurs limites d'écrans simultanés.</div>
+    <h1 class="h3 mb-1 fw-bold text-white d-flex align-items-center gap-2" data-i18n="users">
+      <i class="bi bi-people text-info"></i>
+      <span>Gestion des Utilisateurs</span>
+    </h1>
+    <div class="text-muted small">Contrôlez les comptes utilisateurs de l'application mobile Atlas Play et leurs quotas de streaming simultané.</div>
   </div>
   <button class="btn btn-danger btn-sm d-flex align-items-center gap-1 shadow-sm" data-bs-toggle="modal" data-bs-target="#modalCreateUser">
     <i class="bi bi-person-plus"></i>
@@ -14,11 +17,11 @@
   </button>
 </div>
 
-<div class="card-dark p-3 p-lg-4">
+<div class="card-dark p-3 p-lg-4 shadow-sm">
   <div class="table-responsive">
-    <table class="table table-dark table-hover align-middle mb-0">
+    <table class="table-atlas">
       <thead>
-        <tr class="text-muted small">
+        <tr>
           <th>Utilisateur</th>
           <th>Rôle</th>
           <th>Statut</th>
@@ -33,30 +36,30 @@
         <tr>
           <td>
             <div class="d-flex align-items-center gap-2">
-              <span class="avatar rounded-circle bg-danger bg-opacity-20 text-danger fw-bold d-flex align-items-center justify-content-center" style="width: 34px; height: 34px;">
+              <span class="profile-avatar" style="width: 36px; height: 36px; font-size: 0.85rem;">
                 {{ u.username[:2] | upper }}
               </span>
               <div>
-                <div class="fw-semibold text-white">{{ u.username }}</div>
+                <div class="fw-bold text-white">{{ u.username }}</div>
                 {% if u.email %}
-                  <div class="text-muted small">{{ u.email }}</div>
+                  <div class="text-muted small" style="font-size: 0.75rem;">{{ u.email }}</div>
                 {% endif %}
               </div>
             </div>
           </td>
           <td>
-            <span class="badge {% if u.role == 'admin' %}badge-accent{% else %}badge-soft{% endif %}">
-              {{ u.role }}
+            <span class="badge {% if u.role == 'admin' %}badge-atlas-red{% else %}badge-atlas-muted{% endif %}">
+              {{ u.role | upper }}
             </span>
           </td>
           <td>
             {% if u.is_active %}
-              <span class="badge bg-success-subtle text-success border border-success-subtle">Actif</span>
+              <span class="badge badge-atlas-green">Actif</span>
             {% else %}
-              <span class="badge bg-danger-subtle text-danger border border-danger-subtle">Bloqué</span>
+              <span class="badge badge-atlas-red">Bloqué</span>
             {% endif %}
           </td>
-          <td class="text-white">{{ u.max_concurrent_streams }} simultanés</td>
+          <td class="text-white fw-semibold">{{ u.max_concurrent_streams }} simultané(s)</td>
           <td class="text-muted small">{{ u.last_login_at.strftime('%d/%m/%Y %H:%M') if u.last_login_at else 'Jamais' }}</td>
           <td class="text-muted small">{{ u.created_at.strftime('%d/%m/%Y') if u.created_at else '--' }}</td>
           <td class="text-end">

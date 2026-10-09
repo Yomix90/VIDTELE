@@ -1,11 +1,14 @@
 {% extends "base.html" %}
 
-{% block title %}StreamAdmin - Codes d'Invitation{% endblock %}
+{% block title %}Atlas Play - Codes d'Invitation VIP{% endblock %}
 
 {% block content %}
 <div class="d-flex flex-wrap align-items-center justify-content-between gap-3 mb-4">
   <div>
-    <h1 class="h3 mb-1 fw-bold text-white" data-i18n="invites">Codes d'Invitation</h1>
+    <h1 class="h3 mb-1 fw-bold text-white d-flex align-items-center gap-2" data-i18n="invites">
+      <i class="bi bi-ticket-perforated text-warning"></i>
+      <span>Codes d'Invitation VIP</span>
+    </h1>
     <div class="text-muted small">Générez des codes à usage unique nécessaires pour l'inscription de nouveaux utilisateurs sur l'application mobile.</div>
   </div>
   <button class="btn btn-danger btn-sm d-flex align-items-center gap-1 shadow-sm" onclick="generateInviteCode()">
@@ -14,11 +17,11 @@
   </button>
 </div>
 
-<div class="card-dark p-3 p-lg-4">
+<div class="card-dark p-3 p-lg-4 shadow-sm">
   <div class="table-responsive">
-    <table class="table table-dark table-hover align-middle mb-0">
+    <table class="table-atlas">
       <thead>
-        <tr class="text-muted small">
+        <tr>
           <th>Code d'Invitation</th>
           <th>Statut</th>
           <th>Date de Création</th>
@@ -31,17 +34,17 @@
         <tr>
           <td>
             <div class="d-flex align-items-center gap-2">
-              <code class="fs-6 text-info fw-bold px-2 py-1 rounded">{{ inv.code }}</code>
-              <button class="btn btn-sm btn-ghost p-1 text-muted" onclick="navigator.clipboard.writeText('{{ inv.code }}'); showToast('Code copié dans le presse-papier !', 'info');" title="Copier">
+              <code class="fs-6 text-white fw-bold px-2 py-1 rounded" style="background: rgba(229,9,20,0.15); border: 1px solid rgba(229,9,20,0.3);">{{ inv.code }}</code>
+              <button class="btn btn-sm btn-outline-light p-1" onclick="navigator.clipboard.writeText('{{ inv.code }}'); showToast('Code copié dans le presse-papier !', 'info');" title="Copier">
                 <i class="bi bi-clipboard"></i>
               </button>
             </div>
           </td>
           <td>
             {% if inv.is_used %}
-              <span class="badge bg-secondary-subtle text-secondary border border-secondary-subtle">Utilisé</span>
+              <span class="badge badge-atlas-muted">Utilisé</span>
             {% else %}
-              <span class="badge bg-success-subtle text-success border border-success-subtle">Disponible</span>
+              <span class="badge badge-atlas-green">Disponible</span>
             {% endif %}
           </td>
           <td class="text-muted small">{{ inv.created_at.strftime('%d/%m/%Y %H:%M') if inv.created_at else '--' }}</td>

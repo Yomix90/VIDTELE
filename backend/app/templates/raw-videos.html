@@ -1,29 +1,32 @@
 {% extends "base.html" %}
 
-{% block title %}StreamAdmin - Bibliothèque Brute Telegram{% endblock %}
+{% block title %}Atlas Play - Vidéos Brutes Telegram{% endblock %}
 
 {% block content %}
 <div class="d-flex flex-wrap align-items-center justify-content-between gap-3 mb-4">
   <div>
-    <h1 class="h3 mb-1 fw-bold text-white" data-i18n="raw_videos">Bibliothèque Brute Telegram</h1>
+    <h1 class="h3 mb-1 fw-bold text-white d-flex align-items-center gap-2" data-i18n="raw_videos">
+      <i class="bi bi-inbox text-warning"></i>
+      <span>Bibliothèque Brute Telegram</span>
+    </h1>
     <div class="text-muted small">Toutes les vidéos synchronisées depuis votre canal privé Telegram en attente d'organisation ou de publication.</div>
   </div>
-  <button class="btn btn-outline-light btn-sm d-flex align-items-center gap-2" onclick="triggerSync()">
-    <i class="bi bi-arrow-repeat" id="syncIcon"></i>
+  <button class="btn btn-outline-light btn-sm d-flex align-items-center gap-2 shadow-sm" onclick="triggerSync()">
+    <i class="bi bi-arrow-repeat text-info" id="syncIcon"></i>
     <span data-i18n="sync_btn">Synchroniser Telegram</span>
   </button>
 </div>
 
-<div class="card-dark p-3 p-lg-4">
+<div class="card-dark p-3 p-lg-4 shadow-sm">
   <div class="table-responsive">
-    <table class="table table-dark table-hover align-middle mb-0">
+    <table class="table-atlas">
       <thead>
-        <tr class="text-muted small">
-          <th>Message ID</th>
-          <th>Titre / Fichier</th>
+        <tr>
+          <th>Msg ID</th>
+          <th>Titre / Fichier Détecté</th>
           <th>Taille</th>
           <th>Durée</th>
-          <th>Date Telegram</th>
+          <th>Date Téléversement</th>
           <th>Statut</th>
           <th class="text-end">Actions</th>
         </tr>
@@ -31,11 +34,11 @@
       <tbody>
         {% for v in raw_videos %}
         <tr>
-          <td><code>#{{ v.telegram_message_id }}</code></td>
+          <td><code class="text-info">#{{ v.telegram_message_id }}</code></td>
           <td>
-            <div class="fw-semibold text-white text-truncate" style="max-width: 320px;" title="{{ v.title }}">{{ v.title }}</div>
+            <div class="fw-bold text-white text-truncate" style="max-width: 320px;" title="{{ v.title }}">{{ v.title }}</div>
             {% if v.file_name and v.file_name != v.title %}
-              <div class="text-muted small text-truncate" style="max-width: 320px;">{{ v.file_name }}</div>
+              <div class="text-muted small text-truncate" style="max-width: 320px; font-size: 0.75rem;">{{ v.file_name }}</div>
             {% endif %}
           </td>
           <td class="text-muted small">{{ (v.file_size_bytes / 1024 / 1024) | round(1) }} Mo</td>
@@ -49,14 +52,14 @@
           <td class="text-muted small">{{ v.telegram_date.strftime('%d/%m/%Y %H:%M') if v.telegram_date else '--' }}</td>
           <td>
             {% if v.is_published %}
-              <span class="badge bg-success-subtle text-success border border-success-subtle">Publié sur Mobile</span>
+              <span class="badge badge-atlas-green">Publié sur Mobile</span>
             {% else %}
-              <span class="badge bg-warning-subtle text-warning border border-warning-subtle">Brut (Non classé)</span>
+              <span class="badge badge-atlas-amber">Brut (Non classé)</span>
             {% endif %}
           </td>
           <td class="text-end">
-            <button class="btn btn-sm btn-outline-warning" onclick="autoDetectVideo({{ v.id }})">
-              <i class="bi bi-magic me-1"></i>Détecter
+            <button class="btn btn-sm btn-outline-warning py-1 px-2" style="font-size: 0.8rem;" onclick="autoDetectVideo({{ v.id }})">
+              <i class="bi bi-magic me-1"></i>Détecter & Lier
             </button>
           </td>
         </tr>

@@ -65,62 +65,86 @@
   <div class="app-shell" id="appShell">
 
     <!-- Barre latérale Atlas Play -->
-    <aside class="sidebar d-flex flex-column p-3">
-      <div class="brand mb-4 d-flex align-items-center gap-2">
-        <img src="/static/img/atlas_play_icon.svg" alt="Atlas Play" style="width: 38px; height: 38px; border-radius: 9px;">
-        <div class="d-flex flex-column lh-1">
-          <span class="fw-bold tracking-wide text-white fs-5" style="letter-spacing: 1px;">ATLAS<span class="text-danger ms-1">PLAY</span></span>
-          <span class="text-muted" style="font-size: 0.65rem; letter-spacing: 2px;">ADMIN CONSOLE</span>
-        </div>
+    <aside class="sidebar">
+      <!-- En-tête de la marque -->
+      <div class="sidebar-header">
+        <a href="/admin" class="brand-link">
+          <img src="/static/img/atlas_play_icon.svg" alt="Atlas Play" class="brand-logo-img">
+          <div class="d-flex flex-column lh-1">
+            <span class="brand-title">ATLAS<span class="brand-accent">PLAY</span></span>
+            <span class="brand-subtitle">V2 CONTROL PANEL</span>
+          </div>
+        </a>
       </div>
 
-      <nav class="nav flex-column gap-1">
-        <a class="nav-link {% if active_page == 'dashboard' or not active_page %}active{% endif %}" href="/admin">
-          <i class="bi bi-speedometer2"></i>
-          <span data-i18n="dashboard">Tableau de bord</span>
-        </a>
-        <a class="nav-link {% if active_page == 'series' %}active{% endif %}" href="/admin/series">
-          <i class="bi bi-film"></i>
-          <span data-i18n="series">Séries</span>
-        </a>
-        <a class="nav-link {% if active_page == 'movies' %}active{% endif %}" href="/admin/movies">
-          <i class="bi bi-camera-reels"></i>
-          <span data-i18n="movies">Films</span>
-        </a>
-        <a class="nav-link {% if active_page == 'raw_videos' %}active{% endif %}" href="/admin/raw-videos">
-          <i class="bi bi-collection-play"></i>
-          <span data-i18n="raw_videos">Bibliothèque brute</span>
-        </a>
-        <a class="nav-link {% if active_page == 'telegram' %}active{% endif %}" href="/admin/telegram">
-          <i class="bi bi-telegram"></i>
-          <span data-i18n="telegram">Telegram</span>
-        </a>
-        <a class="nav-link {% if active_page == 'users' %}active{% endif %}" href="/admin/users">
-          <i class="bi bi-people"></i>
-          <span data-i18n="users">Utilisateurs</span>
-        </a>
-        <a class="nav-link {% if active_page == 'invitations' %}active{% endif %}" href="/admin/invitations">
-          <i class="bi bi-ticket-perforated"></i>
-          <span data-i18n="invites">Codes d'invitation</span>
-        </a>
-        <a class="nav-link {% if active_page == 'home_editor' %}active{% endif %}" href="/admin/home-editor">
-          <i class="bi bi-phone"></i>
-          <span data-i18n="mobile_home">Accueil mobile</span>
-        </a>
-        <a class="nav-link {% if active_page == 'settings' %}active{% endif %}" href="/admin/settings">
-          <i class="bi bi-gear"></i>
-          <span data-i18n="settings">Paramètres</span>
-        </a>
-      </nav>
+      <!-- Navigation organisée par catégories fonctionnelles -->
+      <div class="sidebar-nav-container">
+        <!-- Section 1 : Vue d'ensemble -->
+        <span class="sidebar-category-header" data-i18n="cat_overview">VUE D'ENSEMBLE</span>
+        <nav class="nav flex-column mb-3">
+          <a class="nav-link {% if active_page == 'dashboard' or not active_page %}active{% endif %}" href="/admin">
+            <i class="bi bi-grid-1x2"></i>
+            <span data-i18n="dashboard">Tableau de bord</span>
+          </a>
+        </nav>
 
-      <div class="mt-auto p-3 sidebar-footer">
-        <div class="d-flex align-items-center gap-2">
-          <div class="avatar avatar-red bg-danger text-white rounded-circle d-flex align-items-center justify-content-center fw-bold" style="width: 38px; height: 38px;">
-            {{ (current_user.username[:2] if current_user and current_user.username else 'SA') | upper }}
+        <!-- Section 2 : Catalogue & Médias -->
+        <span class="sidebar-category-header" data-i18n="cat_catalog">CATALOGUE & MÉDIAS</span>
+        <nav class="nav flex-column mb-3">
+          <a class="nav-link {% if active_page == 'series' %}active{% endif %}" href="/admin/series">
+            <i class="bi bi-collection-play"></i>
+            <span data-i18n="series">Séries & Épisodes</span>
+          </a>
+          <a class="nav-link {% if active_page == 'movies' %}active{% endif %}" href="/admin/movies">
+            <i class="bi bi-film"></i>
+            <span data-i18n="movies">Films</span>
+          </a>
+          <a class="nav-link {% if active_page == 'raw_videos' %}active{% endif %}" href="/admin/raw-videos">
+            <i class="bi bi-inbox"></i>
+            <span data-i18n="raw_videos">Vidéos Brutes Telegram</span>
+          </a>
+          <a class="nav-link {% if active_page == 'home_editor' %}active{% endif %}" href="/admin/home-editor">
+            <i class="bi bi-phone"></i>
+            <span data-i18n="mobile_home">Éditeur Accueil Mobile</span>
+          </a>
+        </nav>
+
+        <!-- Section 3 : Infrastructure & Réseau -->
+        <span class="sidebar-category-header" data-i18n="cat_infra">RÉSEAU & STOCKAGE</span>
+        <nav class="nav flex-column mb-3">
+          <a class="nav-link {% if active_page == 'telegram' %}active{% endif %}" href="/admin/telegram">
+            <i class="bi bi-telegram"></i>
+            <span data-i18n="telegram">Canaux Telegram MTProto</span>
+          </a>
+          <a class="nav-link {% if active_page == 'settings' %}active{% endif %}" href="/admin/settings">
+            <i class="bi bi-sliders2"></i>
+            <span data-i18n="settings">Paramètres & Mises à Jour</span>
+          </a>
+        </nav>
+
+        <!-- Section 4 : Comptes & Sécurité -->
+        <span class="sidebar-category-header" data-i18n="cat_users">UTILISATEURS & ACCÈS</span>
+        <nav class="nav flex-column">
+          <a class="nav-link {% if active_page == 'users' %}active{% endif %}" href="/admin/users">
+            <i class="bi bi-people"></i>
+            <span data-i18n="users">Utilisateurs</span>
+          </a>
+          <a class="nav-link {% if active_page == 'invitations' %}active{% endif %}" href="/admin/invitations">
+            <i class="bi bi-ticket-perforated"></i>
+            <span data-i18n="invites">Codes d'Invitation VIP</span>
+          </a>
+        </nav>
+      </div>
+
+      <!-- Pied de page avec avatar profil -->
+      <div class="sidebar-footer mt-auto">
+        <div class="sidebar-profile">
+          <div class="profile-avatar">
+            {{ (current_user.username[:2] if current_user and current_user.username else 'AP') | upper }}
           </div>
-          <div class="sidebar-footer-text overflow-hidden">
-            <div class="fw-semibold small text-truncate">{{ current_user.username if current_user else 'Admin' }}</div>
-            <div class="small text-muted text-truncate">{{ current_user.role if current_user else 'Super Admin' }}</div>
+          <div class="sidebar-profile-info overflow-hidden">
+            <div class="fw-bold text-white small text-truncate">{{ current_user.username if current_user else 'Admin' }}</div>
+            <div class="small text-muted text-truncate">{{ current_user.role if current_user else 'Administrateur' }}</div>
           </div>
         </div>
       </div>

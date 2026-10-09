@@ -1,15 +1,18 @@
 {% extends "base.html" %}
 
-{% block title %}StreamAdmin - Configuration Telegram MTProto{% endblock %}
+{% block title %}Atlas Play - Infrastructure Telegram MTProto{% endblock %}
 
 {% block content %}
 <div class="d-flex flex-wrap align-items-center justify-content-between gap-3 mb-4">
   <div>
-    <h1 class="h3 mb-1 fw-bold text-white" data-i18n="telegram">Connexion Telegram & Canaux</h1>
-    <div class="text-muted small">Surveillez l'état de la session MTProto Telethon et configurez votre canal privé de stockage.</div>
+    <h1 class="h3 mb-1 fw-bold text-white d-flex align-items-center gap-2" data-i18n="telegram">
+      <i class="bi bi-telegram text-info"></i>
+      <span>Réseau & Stockage Telegram MTProto</span>
+    </h1>
+    <div class="text-muted small">Surveillez l'état de la session MTProto Telethon et configurez votre canal privé de stockage cloud illimité.</div>
   </div>
-  <button class="btn btn-primary btn-sm d-flex align-items-center gap-2" onclick="triggerSync()">
-    <i class="bi bi-arrow-repeat" id="syncIcon"></i>
+  <button class="btn btn-outline-light btn-sm d-flex align-items-center gap-2 shadow-sm" onclick="triggerSync()">
+    <i class="bi bi-arrow-repeat text-info" id="syncIcon"></i>
     <span data-i18n="sync_btn">Synchroniser Telegram</span>
   </button>
 </div>
@@ -17,46 +20,46 @@
 <!-- État MTProto Direct -->
 <div class="row g-4 mb-4">
   <div class="col-12 col-lg-6">
-    <div class="card-dark p-4 h-100 border border-secondary border-opacity-25">
+    <div class="card-dark p-4 h-100 shadow-sm" style="border-top: 3px solid #0EA5E9;">
       <h2 class="h6 fw-bold text-white mb-3 d-flex align-items-center gap-2">
         <i class="bi bi-shield-check text-info"></i>
         <span>Statut de la Session MTProto</span>
       </h2>
 
-      <div class="d-flex align-items-center gap-3 mb-4 p-3 rounded-3" style="background: rgba(255,255,255,0.02); border: 1px solid rgba(255,255,255,0.06);">
-        <div class="p-3 rounded-circle {% if telegram.connected %}bg-success bg-opacity-20 text-success{% else %}bg-warning bg-opacity-20 text-warning{% endif %} fs-3">
+      <div class="d-flex align-items-center gap-3 mb-4 p-3 rounded-3" style="background: rgba(255,255,255,0.02); border: 1px solid var(--border-subtle);">
+        <div class="stat-icon rounded-3 {% if telegram.connected %}bg-success bg-opacity-20 text-success{% else %}bg-warning bg-opacity-20 text-warning{% endif %} fs-3 p-2">
           <i class="bi bi-telegram"></i>
         </div>
         <div>
           <div class="fw-bold fs-5 text-white">
             {% if telegram.connected %}Session Active (Connecté){% else %}En attente / Session locale{% endif %}
           </div>
-          <div class="text-muted small">
-            Compte : <strong class="text-white">{{ telegram.user_name or 'Youssef' }}</strong> 
+          <div class="text-muted small mt-1">
+            Compte propriétaire : <strong class="text-white">{{ telegram.user_name or 'Administrateur' }}</strong> 
             {% if telegram.user_id %}(ID: <code>{{ telegram.user_id }}</code>){% endif %}
           </div>
         </div>
       </div>
 
       <div class="text-muted small">
-        <p class="mb-1"><i class="bi bi-check2 text-success me-1"></i>Client Telethon configuré en mode natif.</p>
-        <p class="mb-1"><i class="bi bi-check2 text-success me-1"></i>Écoute en temps réel des nouveaux messages activée.</p>
-        <p class="mb-0"><i class="bi bi-check2 text-success me-1"></i>Téléchargement par blocs HTTP Range 206 pour le streaming mobile.</p>
+        <p class="mb-1"><i class="bi bi-check2 text-success me-2"></i>Client Telethon configuré en mode asynchrone natif.</p>
+        <p class="mb-1"><i class="bi bi-check2 text-success me-2"></i>Écoute en temps réel des nouveaux messages activée.</p>
+        <p class="mb-0"><i class="bi bi-check2 text-success me-2"></i>Téléchargement par blocs HTTP Range 206 pour le streaming mobile.</p>
       </div>
     </div>
   </div>
 
   <!-- Canal Actif -->
   <div class="col-12 col-lg-6">
-    <div class="card-dark p-4 h-100 border border-secondary border-opacity-25">
+    <div class="card-dark p-4 h-100 shadow-sm" style="border-top: 3px solid #E50914;">
       <h2 class="h6 fw-bold text-white mb-3 d-flex align-items-center gap-2">
         <i class="bi bi-broadcast text-danger"></i>
         <span>Canal de Stockage Actif</span>
       </h2>
 
-      <div class="p-3 rounded-3 mb-4" style="background: rgba(255,255,255,0.02); border: 1px solid rgba(255,255,255,0.06);">
+      <div class="p-3 rounded-3 mb-4" style="background: rgba(255,255,255,0.02); border: 1px solid var(--border-subtle);">
         <div class="text-muted small">Titre du canal :</div>
-        <div class="fs-5 fw-bold text-white">{{ telegram.channel_title or 'My App [TD]' }}</div>
+        <div class="fs-5 fw-bold text-white mt-1">{{ telegram.channel_title or 'Non configuré' }}</div>
         <div class="text-muted small mt-1">
           Identifiant Telegram : <code>{{ telegram.channel_id or '-1004234167037' }}</code>
         </div>

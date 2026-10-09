@@ -1,11 +1,14 @@
 {% extends "base.html" %}
 
-{% block title %}StreamAdmin - Films{% endblock %}
+{% block title %}Atlas Play - Films{% endblock %}
 
 {% block content %}
 <div class="d-flex flex-wrap align-items-center justify-content-between gap-3 mb-4">
   <div>
-    <h1 class="h3 mb-1 fw-bold text-white" data-i18n="movies">Catalogue des Films</h1>
+    <h1 class="h3 mb-1 fw-bold text-white d-flex align-items-center gap-2" data-i18n="movies">
+      <i class="bi bi-film text-danger"></i>
+      <span>Catalogue des Films</span>
+    </h1>
     <div class="text-muted small">Gérez les longs-métrages et associez-les directement aux fichiers vidéo de vos canaux Telegram.</div>
   </div>
   <button class="btn btn-danger btn-sm d-flex align-items-center gap-1 shadow-sm" data-bs-toggle="modal" data-bs-target="#modalCreateMovie">
@@ -14,42 +17,48 @@
   </button>
 </div>
 
-<!-- Grille des films -->
+<!-- Grille des films (Cartes Style Streaming HD) -->
 <div class="row g-4">
   {% for m in movies_list %}
   <div class="col-12 col-sm-6 col-md-4 col-xl-3">
-    <div class="card-dark h-100 overflow-hidden border border-secondary border-opacity-25 d-flex flex-column shadow-sm">
-      <div class="position-relative" style="height: 220px; background: #121A2B;">
+    <div class="media-poster-card">
+      <div class="media-poster-wrapper">
         {% if m.poster_path %}
-          <img src="{{ m.poster_path }}" alt="{{ m.title_fr }}" class="w-100 h-100 object-fit-cover">
+          <img src="{{ m.poster_path }}" alt="{{ m.title_fr }}" class="media-poster-img">
         {% else %}
           <div class="w-100 h-100 d-flex flex-column align-items-center justify-content-center text-muted">
-            <i class="bi bi-camera-reels fs-1 mb-2"></i>
-            <span class="small">Pas d'affiche</span>
+            <i class="bi bi-camera-reels fs-1 mb-2 text-danger opacity-50"></i>
+            <span class="small">Sans affiche</span>
           </div>
         {% endif %}
-        <div class="position-absolute top-0 end-0 p-2">
+        
+        <div class="media-poster-overlay"></div>
+
+        <div class="media-poster-badge">
           {% if m.visibility == 'published' %}
-            <span class="badge bg-success shadow-sm">Publié</span>
+            <span class="badge badge-atlas-green shadow-sm">Publié</span>
           {% else %}
-            <span class="badge badge-warning-soft shadow-sm">Brouillon</span>
+            <span class="badge badge-atlas-amber shadow-sm">Brouillon</span>
           {% endif %}
         </div>
       </div>
 
-      <div class="p-3 d-flex flex-column flex-grow-1">
-        <h2 class="h6 fw-bold text-white mb-1 text-truncate" title="{{ m.title_fr }}">{{ m.title_fr }}</h2>
-        <div class="text-muted small mb-2">{{ m.year or 'N/A' }} · {% if m.duration_sec %}{{ (m.duration_sec / 60) | round | int }} min{% else %}--{% endif %}</div>
-        <p class="text-muted small mb-3 flex-grow-1" style="display: -webkit-box; -webkit-line-clamp: 2; -webkit-box-orient: vertical; overflow: hidden;">
+      <div class="media-poster-content">
+        <h2 class="media-poster-title" title="{{ m.title_fr }}">{{ m.title_fr }}</h2>
+        <div class="media-poster-meta">
+          <i class="bi bi-calendar3 me-1"></i>{{ m.year or 'N/A' }} · 
+          {% if m.duration_sec %}{{ (m.duration_sec / 60) | round | int }} min{% else %}--{% endif %}
+        </div>
+        <p class="text-muted small mb-3 flex-grow-1" style="display: -webkit-box; -webkit-line-clamp: 2; -webkit-box-orient: vertical; overflow: hidden; line-height: 1.4;">
           {{ m.synopsis_fr or 'Aucun résumé disponible.' }}
         </p>
 
-        <div class="d-flex align-items-center justify-content-between pt-2 border-top border-secondary border-opacity-25">
+        <div class="d-flex align-items-center justify-content-between pt-2 border-top border-secondary border-opacity-10 mt-auto">
           <span class="small {% if m.telegram_video_id %}text-success{% else %}text-warning{% endif %}">
             <i class="bi {% if m.telegram_video_id %}bi-check-circle-fill{% else %}bi-exclamation-triangle{% endif %} me-1"></i>
             {% if m.telegram_video_id %}Vidéo liée{% else %}Sans vidéo{% endif %}
           </span>
-          <span class="small text-muted"><i class="bi bi-star-fill text-warning me-1"></i>{{ m.rating or '--' }}</span>
+          <span class="small text-white"><i class="bi bi-star-fill text-warning me-1"></i>{{ m.rating or '--' }}</span>
         </div>
       </div>
     </div>

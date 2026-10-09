@@ -1,142 +1,153 @@
 {% extends "base.html" %}
 
-{% block title %}StreamAdmin - Tableau de bord{% endblock %}
+{% block title %}Atlas Play - Tableau de bord{% endblock %}
 
 {% block content %}
-<!-- Titre & Actions Rapides -->
+<!-- En-tête : Titre & Actions Rapides Cinéma -->
 <div class="d-flex flex-wrap align-items-center justify-content-between gap-3 mb-4">
   <div>
-    <h1 class="h3 mb-1 fw-bold" data-i18n="dashboard">Tableau de bord</h1>
-    <div class="text-muted small">Vue globale du catalogue, des utilisateurs, de Telegram et du streaming.</div>
+    <h1 class="h3 mb-1 fw-bold text-white d-flex align-items-center gap-2" data-i18n="dashboard">
+      <i class="bi bi-grid-1x2 text-danger"></i>
+      <span>Tableau de bord</span>
+    </h1>
+    <div class="text-muted small">Supervision en direct de la plateforme Atlas Play : catalogue, utilisateurs, cache & réseau Telegram MTProto.</div>
   </div>
   <div class="d-flex flex-wrap gap-2">
-    <button class="btn btn-outline-light btn-sm d-flex align-items-center gap-2" id="btnSyncTelegram" onclick="triggerSync()">
-      <i class="bi bi-arrow-repeat" id="syncIcon"></i>
+    <button class="btn btn-outline-light btn-sm d-flex align-items-center gap-2 shadow-sm" id="btnSyncTelegram" onclick="triggerSync()">
+      <i class="bi bi-arrow-repeat text-info" id="syncIcon"></i>
       <span data-i18n="sync_btn">Synchroniser Telegram</span>
     </button>
     <a href="/admin/series" class="btn btn-danger btn-sm d-flex align-items-center gap-1 shadow-sm">
       <i class="bi bi-plus-lg"></i>
-      <span>Ajouter une série</span>
+      <span>Nouvelle Série</span>
     </a>
-    <button class="btn btn-outline-danger btn-sm d-flex align-items-center gap-1" onclick="purgeCache()">
+    <a href="/admin/movies" class="btn btn-outline-light btn-sm d-flex align-items-center gap-1 shadow-sm">
+      <i class="bi bi-plus-lg"></i>
+      <span>Nouveau Film</span>
+    </a>
+    <button class="btn btn-outline-danger btn-sm d-flex align-items-center gap-1 shadow-sm" onclick="purgeCache()">
       <i class="bi bi-trash"></i>
       <span data-i18n="purge_cache">Vider le cache</span>
     </button>
   </div>
 </div>
 
-<!-- État Telegram MTProto -->
-<div class="card-dark p-3 mb-4 border border-secondary border-opacity-25 shadow-sm">
+<!-- Bandeau d'état Telegram MTProto & Statut Serveur -->
+<div class="card-dark p-3 mb-4 shadow-sm" style="border-left: 4px solid {% if telegram.connected %}#10B981{% else %}#F59E0B{% endif %};">
   <div class="d-flex flex-wrap align-items-center justify-content-between gap-3">
     <div class="d-flex align-items-center gap-3">
-      <div class="p-2 rounded-circle {% if telegram.connected %}bg-success bg-opacity-20 text-success{% else %}bg-warning bg-opacity-20 text-warning{% endif %} fs-4">
+      <div class="stat-icon p-2 rounded-3 {% if telegram.connected %}bg-success bg-opacity-20 text-success{% else %}bg-warning bg-opacity-20 text-warning{% endif %} fs-3">
         <i class="bi bi-telegram"></i>
       </div>
       <div>
-        <div class="fw-bold d-flex align-items-center gap-2">
-          <span>MTProto Telethon :</span>
+        <div class="fw-bold d-flex align-items-center gap-2 text-white">
+          <span>Client MTProto Telethon :</span>
           {% if telegram.connected %}
-            <span class="badge bg-success-subtle text-success border border-success-subtle">Connecté</span>
+            <span class="badge badge-atlas-green">Session Active & Connectée</span>
           {% else %}
-            <span class="badge bg-warning-subtle text-warning border border-warning-subtle">En attente / Session locale</span>
+            <span class="badge badge-atlas-amber">En attente / Session locale</span>
           {% endif %}
         </div>
-        <div class="text-muted small">
-          Canal source : <strong class="text-light">{{ telegram.channel_title or 'Non configuré' }}</strong> 
+        <div class="text-muted small mt-1">
+          Canal source : <strong class="text-white">{{ telegram.channel_title or 'Non configuré' }}</strong> 
           {% if telegram.channel_id %}(ID: <code>{{ telegram.channel_id }}</code>){% endif %}
-          · {{ stats.raw_videos_count }} vidéo(s) brute(s) en attente d'organisation
+          · <span class="text-warning fw-semibold">{{ stats.raw_videos_count }} vidéo(s) brute(s) en attente</span> d'attribution
         </div>
       </div>
     </div>
     <div class="d-flex gap-2">
-      <a href="/admin/telegram" class="btn btn-sm btn-outline-info">Gérer le canal</a>
-      <a href="/admin/raw-videos" class="btn btn-sm btn-outline-warning">Traiter les vidéos brutes ({{ stats.raw_videos_count }})</a>
+      <a href="/admin/telegram" class="btn btn-sm btn-outline-info">
+        <i class="bi bi-gear-wide-connected me-1"></i>Configurer Canal
+      </a>
+      <a href="/admin/raw-videos" class="btn btn-sm btn-outline-warning">
+        <i class="bi bi-magic me-1"></i>Organiser Vidéos ({{ stats.raw_videos_count }})
+      </a>
     </div>
   </div>
 </div>
 
-<!-- Cartes Statistiques Principales (Charte StreamAdmin) -->
+<!-- 4 Cartes Métriques Clés (Atlas Play Haute Définition) -->
 <div class="row g-3 mb-4">
-  <!-- Contenus -->
-  <div class="col-12 col-md-6 col-xl-3">
-    <div class="card-dark stat-card p-3 h-100">
+  <!-- 1. Catalogue & Contenus -->
+  <div class="col-12 col-sm-6 col-xl-3">
+    <div class="card-dark stat-card-hd stat-red h-100">
       <div class="d-flex justify-content-between align-items-start">
         <div>
-          <div class="text-muted small">Catalogue & Médias</div>
-          <div class="h4 mb-1 mt-2 fw-bold text-white">{{ stats.total_videos }} vidéos</div>
-          <div class="small text-muted">{{ stats.series_count }} séries · {{ stats.movies_count }} films · {{ stats.published_videos }} publiées</div>
+          <div class="stat-label">Catalogue Vidéo</div>
+          <div class="stat-value">{{ stats.total_videos }}</div>
+          <div class="small text-muted">{{ stats.series_count }} séries · {{ stats.movies_count }} films</div>
         </div>
-        <div class="icon icon-red">
+        <div class="stat-icon">
           <i class="bi bi-collection-play"></i>
         </div>
       </div>
-      <div class="mt-3 d-flex flex-wrap gap-2">
-        <span class="badge badge-accent">{{ stats.series_count }} séries</span>
-        <span class="badge badge-soft">{{ stats.movies_count }} films</span>
-        <span class="badge badge-success-soft">{{ stats.published_videos }} sur mobile</span>
+      <div class="mt-3 d-flex flex-wrap gap-1">
+        <span class="badge badge-atlas-red">{{ stats.series_count }} séries</span>
+        <span class="badge badge-atlas-muted">{{ stats.movies_count }} films</span>
+        <span class="badge badge-atlas-green">{{ stats.published_videos }} publiées</span>
       </div>
     </div>
   </div>
 
-  <!-- Utilisateurs -->
-  <div class="col-12 col-md-6 col-xl-3">
-    <div class="card-dark stat-card p-3 h-100">
+  <!-- 2. Utilisateurs & Inscriptions -->
+  <div class="col-12 col-sm-6 col-xl-3">
+    <div class="card-dark stat-card-hd stat-purple h-100">
       <div class="d-flex justify-content-between align-items-start">
         <div>
-          <div class="text-muted small">Utilisateurs</div>
-          <div class="h4 mb-1 mt-2 fw-bold text-white">{{ stats.total_users }} comptes</div>
+          <div class="stat-label">Comptes Utilisateurs</div>
+          <div class="stat-value">{{ stats.total_users }}</div>
           <div class="small text-muted">{{ stats.active_users }} actifs · {{ stats.total_users - stats.active_users }} inactifs</div>
         </div>
-        <div class="icon icon-purple">
+        <div class="stat-icon">
           <i class="bi bi-people"></i>
         </div>
       </div>
-      <div class="mt-3 d-flex flex-wrap gap-2">
-        <span class="badge badge-success-soft">{{ stats.active_users }} actifs</span>
-        <span class="badge badge-soft">{{ stats.invites_count }} invitations</span>
+      <div class="mt-3 d-flex flex-wrap gap-1">
+        <span class="badge badge-atlas-green">{{ stats.active_users }} actifs</span>
+        <span class="badge badge-atlas-muted">{{ stats.invites_count }} invites dispo</span>
       </div>
     </div>
   </div>
 
-  <!-- Lectures & Streaming -->
-  <div class="col-12 col-md-6 col-xl-3">
-    <div class="card-dark stat-card p-3 h-100">
+  <!-- 3. Flux Direct & Streaming -->
+  <div class="col-12 col-sm-6 col-xl-3">
+    <div class="card-dark stat-card-hd stat-green h-100">
       <div class="d-flex justify-content-between align-items-start">
         <div>
-          <div class="text-muted small">Streaming en direct</div>
-          <div class="h4 mb-1 mt-2 fw-bold text-white">{{ stats.streams.current_active }} flux actifs</div>
-          <div class="small text-muted">Limite globale : {{ stats.streams.max_global }} flux · {{ stats.total_views }} vues cumulées</div>
+          <div class="stat-label">Flux en Streaming</div>
+          <div class="stat-value">{{ stats.streams.current_active }} <span class="fs-6 text-muted fw-normal">/ {{ stats.streams.max_global }}</span></div>
+          <div class="small text-muted">{{ stats.total_views }} lectures cumulées</div>
         </div>
-        <div class="icon icon-green">
+        <div class="stat-icon">
           <i class="bi bi-broadcast"></i>
         </div>
       </div>
-      <div class="mt-3 d-flex flex-wrap gap-2">
-        <span class="badge badge-accent">{{ stats.streams.current_active }} / {{ stats.streams.max_global }} simultanés</span>
-        <span class="badge badge-soft">{{ stats.streams.max_per_user }} max / compte</span>
+      <div class="mt-3 d-flex flex-wrap gap-1">
+        <span class="badge badge-atlas-green">HTTP 206 Partiel</span>
+        <span class="badge badge-atlas-muted">{{ stats.streams.max_per_user }} max / compte</span>
       </div>
     </div>
   </div>
 
-  <!-- Cache Disque & Stockage -->
-  <div class="col-12 col-md-6 col-xl-3">
-    <div class="card-dark stat-card p-3 h-100">
+  <!-- 4. Cache Disque & Espace Stockage -->
+  <div class="col-12 col-sm-6 col-xl-3">
+    <div class="card-dark stat-card-hd stat-blue h-100">
       <div class="d-flex justify-content-between align-items-start">
         <div>
-          <div class="text-muted small">Cache Disque Vidéo</div>
-          <div class="h4 mb-1 mt-2 fw-bold text-white">{{ stats.cache.total_gb }} Go</div>
-          <div class="small text-muted">Quota max : {{ stats.cache.max_gb }} Go ({{ stats.cache.file_count }} fichiers)</div>
+          <div class="stat-label">Cache Disque VPS</div>
+          <div class="stat-value">{{ stats.cache.total_gb }} <span class="fs-6 text-muted fw-normal">Go</span></div>
+          <div class="small text-muted">Sur {{ stats.cache.max_gb }} Go max ({{ stats.cache.file_count }} fichiers)</div>
         </div>
-        <div class="icon icon-blue">
+        <div class="stat-icon">
           <i class="bi bi-hdd-network"></i>
         </div>
       </div>
       <div class="mt-3">
-        <div class="d-flex justify-content-between small text-muted mb-1">
-          <span>Utilisation</span>
-          <span>{{ stats.cache.percent_used }}%</span>
+        <div class="d-flex justify-content-between small text-muted mb-1" style="font-size: 0.75rem;">
+          <span>Remplissage</span>
+          <span class="fw-bold text-white">{{ stats.cache.percent_used }}%</span>
         </div>
-        <div class="progress" style="height: 8px; background: rgba(255,255,255,0.08);">
+        <div class="progress" style="height: 6px; background: rgba(255,255,255,0.08); border-radius: 99px;">
           <div class="progress-bar {% if stats.cache.percent_used > 80 %}bg-danger{% elif stats.cache.percent_used > 50 %}bg-warning{% else %}bg-info{% endif %}" style="width: {{ stats.cache.percent_used }}%;"></div>
         </div>
       </div>
@@ -144,103 +155,122 @@
   </div>
 </div>
 
-<!-- Graphiques Chart.js -->
+<!-- Graphiques Analytiques -->
 <div class="row g-3 mb-4">
-  <!-- Graphique 1 : Vues et activité -->
+  <!-- Graphique 1 : Lectures & Évolution -->
   <div class="col-12 col-xl-8">
     <div class="card-dark p-3 h-100">
       <div class="d-flex justify-content-between align-items-center mb-3">
         <div>
-          <h2 class="h6 mb-1 text-white fw-bold">Activité & Visionnages</h2>
-          <div class="text-muted small">Tendances des lectures vidéo</div>
+          <h2 class="h6 mb-1 text-white fw-bold d-flex align-items-center gap-2">
+            <i class="bi bi-graph-up text-danger"></i>
+            <span>Visionnages & Lectures Vidéo</span>
+          </h2>
+          <div class="text-muted small">Évolution du streaming sur les 7 derniers jours</div>
         </div>
-        <span class="badge badge-soft">Temps réel</span>
+        <span class="badge badge-atlas-muted">Temps Réel</span>
       </div>
-      <div style="height: 260px;">
+      <div style="height: 250px;">
         <canvas id="chartPlays"></canvas>
       </div>
     </div>
   </div>
 
-  <!-- Graphique 2 : Répartition du catalogue -->
+  <!-- Graphique 2 : Répartition du Catalogue -->
   <div class="col-12 col-xl-4">
     <div class="card-dark p-3 h-100">
       <div class="d-flex justify-content-between align-items-center mb-3">
         <div>
-          <h2 class="h6 mb-1 text-white fw-bold">Répartition du Catalogue</h2>
-          <div class="text-muted small">Séries, Films et Vidéos en attente</div>
+          <h2 class="h6 mb-1 text-white fw-bold d-flex align-items-center gap-2">
+            <i class="bi bi-pie-chart text-info"></i>
+            <span>Répartition Catalogue</span>
+          </h2>
+          <div class="text-muted small">Séries vs Films vs Fichiers Bruts</div>
         </div>
       </div>
-      <div style="height: 260px; display: flex; align-items: center; justify-content: center;">
+      <div style="height: 250px; display: flex; align-items: center; justify-content: center;">
         <canvas id="chartCatalog"></canvas>
       </div>
     </div>
   </div>
 </div>
 
-<!-- Listes Rapides : Séries, Vidéos Brutes, Utilisateurs -->
+<!-- Sections de Gestion Rapide (3 Colonnes Réorganisées) -->
 <div class="row g-3">
-  <!-- Dernières Séries -->
+  <!-- 1. Dernières Séries Créées -->
   <div class="col-12 col-lg-4">
-    <div class="card-dark p-3 h-100">
-      <div class="d-flex justify-content-between align-items-center mb-3">
-        <h2 class="h6 mb-0 text-white fw-bold">Séries du Catalogue</h2>
-        <a href="/admin/series" class="small text-decoration-none text-danger fw-semibold">Tout voir</a>
+    <div class="card-dark p-3 h-100 d-flex flex-column">
+      <div class="d-flex justify-content-between align-items-center mb-3 pb-2 border-bottom border-secondary border-opacity-10">
+        <h2 class="h6 mb-0 text-white fw-bold d-flex align-items-center gap-2">
+          <i class="bi bi-collection-play text-danger"></i>
+          <span>Séries du Catalogue</span>
+        </h2>
+        <a href="/admin/series" class="small text-danger fw-semibold">Tout voir &rarr;</a>
       </div>
 
-      <div class="list-group list-group-flush">
+      <div class="d-flex flex-column gap-2 flex-grow-1">
         {% for s in recent_series %}
-        <div class="list-group-item bg-transparent border-secondary border-opacity-25 d-flex align-items-center gap-3 px-0 py-2">
-          <div class="avatar bg-danger bg-opacity-20 text-danger rounded-3 d-flex align-items-center justify-content-center fw-bold" style="width: 42px; height: 42px;">
-            <i class="bi bi-film"></i>
+        <div class="d-flex align-items-center gap-3 p-2 rounded-3" style="background: rgba(255,255,255,0.02); border: 1px solid var(--border-subtle);">
+          <div class="rounded-2 overflow-hidden bg-dark flex-shrink-0" style="width: 36px; height: 50px;">
+            {% if s.poster_path %}
+              <img src="{{ s.poster_path }}" alt="{{ s.title_fr }}" class="w-100 h-100 object-fit-cover">
+            {% else %}
+              <div class="w-100 h-100 d-grid place-items-center text-muted"><i class="bi bi-film"></i></div>
+            {% endif %}
           </div>
           <div class="flex-grow-1 overflow-hidden">
             <div class="fw-semibold small text-white text-truncate">{{ s.title_fr }}</div>
-            <div class="text-muted small">{{ s.status }} · {{ s.visibility }}</div>
+            <div class="text-muted small" style="font-size: 0.75rem;">
+              {{ s.year_start or 'N/A' }} · 
+              {% if s.visibility == 'published' %}<span class="text-success">Publiée</span>{% else %}<span class="text-warning">Brouillon</span>{% endif %}
+            </div>
           </div>
-          <a href="/admin/series/{{ s.id }}" class="btn btn-sm btn-outline-secondary">Gérer</a>
+          <a href="/admin/series/{{ s.id }}" class="btn btn-sm btn-outline-light py-1 px-2" style="font-size: 0.78rem;">Gérer</a>
         </div>
         {% else %}
-        <div class="text-muted small text-center py-4">Aucune série créée. Cliquez sur "Ajouter une série" ci-dessus.</div>
+        <div class="text-muted small text-center py-4">Aucune série créée. Cliquez sur "Nouvelle Série" ci-dessus.</div>
         {% endfor %}
       </div>
     </div>
   </div>
 
-  <!-- Vidéos Brutes en Attente -->
+  <!-- 2. Vidéos Telegram Brutes en Attente -->
   <div class="col-12 col-lg-5">
-    <div class="card-dark p-3 h-100">
-      <div class="d-flex justify-content-between align-items-center mb-3">
-        <h2 class="h6 mb-0 text-white fw-bold">Vidéos Telegram en Attente</h2>
-        <span class="badge badge-warning-soft">{{ stats.raw_videos_count }} à classer</span>
+    <div class="card-dark p-3 h-100 d-flex flex-column">
+      <div class="d-flex justify-content-between align-items-center mb-3 pb-2 border-bottom border-secondary border-opacity-10">
+        <h2 class="h6 mb-0 text-white fw-bold d-flex align-items-center gap-2">
+          <i class="bi bi-inbox text-warning"></i>
+          <span>Vidéos Brutes à Classer</span>
+        </h2>
+        <span class="badge badge-atlas-amber">{{ stats.raw_videos_count }} en attente</span>
       </div>
 
-      <div class="table-responsive">
-        <table class="table table-dark table-hover align-middle mb-0 small">
+      <div class="table-responsive flex-grow-1">
+        <table class="table-atlas">
           <thead>
-            <tr class="text-muted">
+            <tr>
               <th>Fichier / Titre</th>
               <th>Taille</th>
               <th class="text-end">Action</th>
             </tr>
           </thead>
           <tbody>
-            {% for v in raw_videos[:6] %}
+            {% for v in raw_videos[:5] %}
             <tr>
               <td>
                 <div class="fw-semibold text-white text-truncate" style="max-width: 220px;" title="{{ v.title }}">{{ v.title }}</div>
-                <div class="text-muted" style="font-size: 0.75rem;">Msg ID: {{ v.telegram_message_id }} · {{ v.telegram_date.strftime('%d/%m/%Y') if v.telegram_date else '' }}</div>
+                <div class="text-muted" style="font-size: 0.72rem;">Msg #{{ v.telegram_message_id }} · {{ v.telegram_date.strftime('%d/%m/%Y') if v.telegram_date else '' }}</div>
               </td>
-              <td class="text-muted">{{ (v.file_size_bytes / 1024 / 1024) | round(1) }} Mo</td>
+              <td class="text-muted small">{{ (v.file_size_bytes / 1024 / 1024) | round(1) }} Mo</td>
               <td class="text-end">
-                <button class="btn btn-sm btn-outline-warning" onclick="autoDetectVideo({{ v.id }})">
-                  <i class="bi bi-magic me-1"></i>Détecter
+                <button class="btn btn-sm btn-outline-warning py-1 px-2" style="font-size: 0.75rem;" onclick="autoDetectVideo({{ v.id }})">
+                  <i class="bi bi-magic me-1"></i>Classer
                 </button>
               </td>
             </tr>
             {% else %}
             <tr>
-              <td colspan="3" class="text-center text-muted py-3">Toutes les vidéos Telegram sont déjà organisées !</td>
+              <td colspan="3" class="text-center text-muted py-4">Toutes les vidéos Telegram sont déjà organisées !</td>
             </tr>
             {% endfor %}
           </tbody>
@@ -249,27 +279,30 @@
     </div>
   </div>
 
-  <!-- Derniers Utilisateurs -->
+  <!-- 3. Utilisateurs Récents -->
   <div class="col-12 col-lg-3">
-    <div class="card-dark p-3 h-100">
-      <div class="d-flex justify-content-between align-items-center mb-3">
-        <h2 class="h6 mb-0 text-white fw-bold">Utilisateurs Récents</h2>
-        <a href="/admin/users" class="small text-decoration-none text-danger fw-semibold">Gérer</a>
+    <div class="card-dark p-3 h-100 d-flex flex-column">
+      <div class="d-flex justify-content-between align-items-center mb-3 pb-2 border-bottom border-secondary border-opacity-10">
+        <h2 class="h6 mb-0 text-white fw-bold d-flex align-items-center gap-2">
+          <i class="bi bi-people text-info"></i>
+          <span>Utilisateurs Récents</span>
+        </h2>
+        <a href="/admin/users" class="small text-danger fw-semibold">Gérer &rarr;</a>
       </div>
 
-      <div class="d-flex flex-column gap-2">
+      <div class="d-flex flex-column gap-2 flex-grow-1">
         {% for u in recent_users[:5] %}
-        <div class="d-flex align-items-center gap-2 p-2 rounded-3 border border-secondary border-opacity-10" style="background: rgba(255,255,255,0.02);">
-          <span class="avatar rounded-circle bg-primary bg-opacity-20 text-info fw-bold d-flex align-items-center justify-content-center" style="width: 32px; height: 32px; font-size: 0.8rem;">
+        <div class="d-flex align-items-center gap-2 p-2 rounded-3" style="background: rgba(255,255,255,0.02); border: 1px solid var(--border-subtle);">
+          <span class="profile-avatar" style="width: 32px; height: 32px; font-size: 0.78rem;">
             {{ u.username[:2] | upper }}
           </span>
           <div class="small overflow-hidden flex-grow-1">
             <div class="fw-semibold text-white text-truncate">{{ u.username }}</div>
-            <div class="text-muted" style="font-size: 0.75rem;">{{ u.role }} · {% if u.is_active %}<span class="text-success">Actif</span>{% else %}<span class="text-danger">Bloqué</span>{% endif %}</div>
+            <div class="text-muted" style="font-size: 0.72rem;">{{ u.role }} · {% if u.is_active %}<span class="text-success">Actif</span>{% else %}<span class="text-danger">Bloqué</span>{% endif %}</div>
           </div>
         </div>
         {% else %}
-        <div class="text-muted small text-center py-3">Aucun utilisateur enregistré.</div>
+        <div class="text-muted small text-center py-4">Aucun utilisateur enregistré.</div>
         {% endfor %}
       </div>
     </div>
@@ -291,10 +324,12 @@ document.addEventListener("DOMContentLoaded", function () {
           label: 'Lectures',
           data: [12, 19, 15, 25, 22, 30, {{ stats.total_views }}],
           borderColor: '#E50914',
-          backgroundColor: 'rgba(229, 9, 20, 0.1)',
+          backgroundColor: 'rgba(229, 9, 20, 0.08)',
           tension: 0.35,
           fill: true,
           pointBackgroundColor: '#E50914',
+          pointRadius: 4,
+          pointHoverRadius: 6,
         }]
       },
       options: {
@@ -302,8 +337,8 @@ document.addEventListener("DOMContentLoaded", function () {
         maintainAspectRatio: false,
         plugins: { legend: { display: false } },
         scales: {
-          x: { grid: { color: 'rgba(255, 255, 255, 0.05)' }, ticks: { color: '#94A3B8' } },
-          y: { grid: { color: 'rgba(255, 255, 255, 0.05)' }, ticks: { color: '#94A3B8' } }
+          x: { grid: { color: 'rgba(255, 255, 255, 0.04)' }, ticks: { color: '#94A3B8' } },
+          y: { grid: { color: 'rgba(255, 255, 255, 0.04)' }, ticks: { color: '#94A3B8' } }
         }
       }
     });
@@ -318,7 +353,7 @@ document.addEventListener("DOMContentLoaded", function () {
         labels: ['Séries', 'Films', 'En attente'],
         datasets: [{
           data: [{{ stats.series_count }}, {{ stats.movies_count }}, {{ stats.raw_videos_count }}],
-          backgroundColor: ['#E50914', '#7C3AED', '#F59E0B'],
+          backgroundColor: ['#E50914', '#0EA5E9', '#F59E0B'],
           borderWidth: 0,
         }]
       },
@@ -326,7 +361,7 @@ document.addEventListener("DOMContentLoaded", function () {
         responsive: true,
         maintainAspectRatio: false,
         plugins: {
-          legend: { position: 'bottom', labels: { color: '#F8FAFC', boxWidth: 12 } }
+          legend: { position: 'bottom', labels: { color: '#CBD5E1', boxWidth: 12, padding: 16 } }
         }
       }
     });
@@ -337,7 +372,7 @@ document.addEventListener("DOMContentLoaded", function () {
 async function triggerSync() {
   const icon = document.getElementById('syncIcon');
   if (icon) icon.classList.add('spin-animation');
-  showToast('Synchronisation Telegram lancée...', 'info');
+  showToast('Synchronisation Telegram MTProto en cours...', 'info');
 
   try {
     const res = await fetch('/api/admin/telegram/sync', { method: 'POST' });
@@ -356,7 +391,7 @@ async function triggerSync() {
 }
 
 async function purgeCache() {
-  if (!confirm('Êtes-vous sûr de vouloir vider le cache vidéo local sur le disque ?')) return;
+  if (!confirm('Êtes-vous sûr de vouloir vider le cache vidéo local sur le disque du VPS ?')) return;
   try {
     const res = await fetch('/api/admin/cache/purge', { method: 'POST' });
     const data = await res.json();
@@ -372,7 +407,7 @@ async function autoDetectVideo(videoId) {
     const res = await fetch(`/api/admin/raw-videos/${videoId}/auto-detect`, { method: 'POST' });
     const data = await res.json();
     if (res.ok) {
-      alert(`Détection automatique :\n- Type: ${data.kind}\n- Titre: ${data.clean_title}\n- Saison: S${data.season}\n- Épisode: E${data.episode}\n\nConfiance: ${(data.confidence * 100).toFixed(0)}%`);
+      alert(`Détection automatique intelligente :\n\n- Titre détecté: ${data.clean_title}\n- Type: ${data.kind}\n- Saison: S${data.season}\n- Épisode: E${data.episode}\n- Indice de confiance: ${(data.confidence * 100).toFixed(0)}%`);
     } else {
       showToast(data.detail || 'Erreur de détection', 'error');
     }
