@@ -9,8 +9,10 @@ from sqlalchemy import delete, desc, func, select
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.database import get_db
-from app.models import InviteCode, MediaItem, User, Video
+from app.models import InviteCode, MediaItem, SystemSetting, User, Video
 from app.schemas import (
+    AppUpdateConfig,
+    AppUpdateInfo,
     AdminStatsResponse,
     CacheStats,
     EpisodeAssignRequest,
