@@ -31,7 +31,7 @@
         <tr>
           <td>
             <div class="d-flex align-items-center gap-2">
-              <code class="fs-6 text-white fw-bold bg-black px-2 py-1 rounded border border-secondary border-opacity-50">{{ inv.code }}</code>
+              <code class="fs-6 text-info fw-bold px-2 py-1 rounded">{{ inv.code }}</code>
               <button class="btn btn-sm btn-ghost p-1 text-muted" onclick="navigator.clipboard.writeText('{{ inv.code }}'); showToast('Code copié dans le presse-papier !', 'info');" title="Copier">
                 <i class="bi bi-clipboard"></i>
               </button>

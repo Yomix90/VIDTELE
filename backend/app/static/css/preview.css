@@ -566,3 +566,285 @@ a {
     width: 100%;
   }
 }
+
+
+/* ==========================================================================
+   AMÉLIORATION DU CONTRASTE ET LISIBILITÉ (Accessibilité & Thème Sombre)
+   Garantit que tous les textes sont parfaitement lisibles sur leurs fonds
+   ========================================================================== */
+
+/* 1. Formulaires & Champs de saisie (Inputs, Selects, Textareas) */
+.form-control,
+.form-select,
+textarea.form-control,
+select.form-select,
+input[type="text"],
+input[type="number"],
+input[type="password"],
+input[type="search"],
+input[type="url"],
+input[type="email"] {
+  background-color: #0f172a !important;
+  color: #f8fafc !important;
+  border: 1px solid rgba(255, 255, 255, 0.18) !important;
+  border-radius: 0.75rem !important;
+  padding: 0.62rem 0.9rem !important;
+  font-size: 0.92rem !important;
+}
+
+.form-control:focus,
+.form-select:focus,
+textarea.form-control:focus {
+  background-color: #131d35 !important;
+  color: #ffffff !important;
+  border-color: #e50914 !important;
+  box-shadow: 0 0 0 0.25rem rgba(229, 9, 20, 0.22) !important;
+  outline: none !important;
+}
+
+.form-control::placeholder,
+textarea.form-control::placeholder {
+  color: #94a3b8 !important;
+  opacity: 0.85 !important;
+}
+
+.form-control:disabled,
+.form-control[readonly],
+.form-select:disabled {
+  background-color: #0b1120 !important;
+  color: #cbd5e1 !important;
+  border-color: rgba(255, 255, 255, 0.1) !important;
+  opacity: 0.9 !important;
+}
+
+/* Options des listes déroulantes */
+select option,
+.form-select option {
+  background-color: #0f172a !important;
+  color: #f8fafc !important;
+  padding: 10px 14px !important;
+}
+
+/* Labels et titres de formulaires */
+.form-label,
+label {
+  color: #e2e8f0 !important;
+  font-weight: 500 !important;
+  margin-bottom: 0.35rem !important;
+  font-size: 0.88rem !important;
+}
+
+/* 2. Textes & Niveaux de contraste */
+body {
+  color: #f8fafc !important;
+  background-color: #070A12 !important;
+}
+
+.text-muted,
+.text-secondary {
+  color: #94a3b8 !important;
+}
+
+.text-white {
+  color: #ffffff !important;
+}
+
+.text-light {
+  color: #f1f5f9 !important;
+}
+
+h1, h2, h3, h4, h5, h6,
+.h1, .h2, .h3, .h4, .h5, .h6 {
+  color: #ffffff !important;
+}
+
+/* 3. Tableaux sombres haute lisibilité */
+.table {
+  color: #f8fafc !important;
+  border-color: rgba(255, 255, 255, 0.08) !important;
+  margin-bottom: 0 !important;
+}
+
+.table > :not(caption) > * > * {
+  background-color: transparent !important;
+  color: #f8fafc !important;
+  border-bottom-color: rgba(255, 255, 255, 0.08) !important;
+  padding: 0.85rem 0.75rem !important;
+}
+
+.table thead th {
+  color: #cbd5e1 !important;
+  background-color: rgba(255, 255, 255, 0.04) !important;
+  border-bottom: 1px solid rgba(255, 255, 255, 0.14) !important;
+  font-weight: 600 !important;
+  font-size: 0.8rem !important;
+  text-transform: uppercase !important;
+  letter-spacing: 0.05em !important;
+}
+
+.table tbody tr:hover > * {
+  background-color: rgba(255, 255, 255, 0.045) !important;
+  color: #ffffff !important;
+}
+
+/* 4. Modales & Boîtes de dialogue */
+.modal-content {
+  background: #0d1320 !important;
+  color: #f8fafc !important;
+  border: 1px solid rgba(255, 255, 255, 0.14) !important;
+  border-radius: 1.25rem !important;
+  box-shadow: 0 25px 60px rgba(0, 0, 0, 0.7) !important;
+}
+
+.modal-header {
+  border-bottom: 1px solid rgba(255, 255, 255, 0.08) !important;
+  padding: 1.2rem 1.5rem !important;
+}
+
+.modal-body {
+  padding: 1.5rem !important;
+}
+
+.modal-footer {
+  border-top: 1px solid rgba(255, 255, 255, 0.08) !important;
+  padding: 1rem 1.5rem !important;
+}
+
+.modal-title {
+  color: #ffffff !important;
+  font-weight: 700 !important;
+}
+
+.btn-close-white {
+  filter: invert(1) grayscale(100%) brightness(200%) !important;
+}
+
+/* 5. Badges harmonisés & contrastés */
+.badge {
+  font-weight: 600 !important;
+  letter-spacing: 0.02em !important;
+  padding: 0.4em 0.75em !important;
+  border-radius: 0.5rem !important;
+  font-size: 0.76rem !important;
+}
+
+.badge.bg-success,
+.badge-success-soft,
+.badge.bg-success-subtle {
+  background-color: rgba(34, 197, 94, 0.18) !important;
+  color: #4ade80 !important;
+  border: 1px solid rgba(34, 197, 94, 0.35) !important;
+}
+
+.badge.bg-warning,
+.badge-warning-soft,
+.badge.bg-warning-subtle {
+  background-color: rgba(245, 158, 11, 0.18) !important;
+  color: #fbbf24 !important;
+  border: 1px solid rgba(245, 158, 11, 0.35) !important;
+}
+
+.badge.bg-danger,
+.badge-danger-soft,
+.badge-accent,
+.badge.bg-danger-subtle {
+  background-color: rgba(229, 9, 20, 0.2) !important;
+  color: #fca5a5 !important;
+  border: 1px solid rgba(229, 9, 20, 0.4) !important;
+}
+
+.badge.bg-secondary,
+.badge-soft,
+.badge.bg-secondary-subtle {
+  background-color: rgba(255, 255, 255, 0.09) !important;
+  color: #e2e8f0 !important;
+  border: 1px solid rgba(255, 255, 255, 0.15) !important;
+}
+
+.badge.bg-info,
+.badge.bg-info-subtle {
+  background-color: rgba(56, 189, 248, 0.18) !important;
+  color: #38bdf8 !important;
+  border: 1px solid rgba(56, 189, 248, 0.35) !important;
+}
+
+/* 6. Menus déroulants (Dropdowns) */
+.dropdown-menu,
+.dropdown-menu-dark {
+  background-color: #0d1320 !important;
+  border: 1px solid rgba(255, 255, 255, 0.12) !important;
+  border-radius: 0.9rem !important;
+  box-shadow: 0 15px 35px rgba(0, 0, 0, 0.5) !important;
+  padding: 0.5rem !important;
+}
+
+.dropdown-item {
+  color: #cbd5e1 !important;
+  border-radius: 0.5rem !important;
+  padding: 0.55rem 1rem !important;
+  font-size: 0.88rem !important;
+}
+
+.dropdown-item:hover,
+.dropdown-item:focus {
+  background-color: rgba(255, 255, 255, 0.07) !important;
+  color: #ffffff !important;
+}
+
+.dropdown-divider {
+  border-top-color: rgba(255, 255, 255, 0.08) !important;
+}
+
+/* 7. Cartes & Conteneurs */
+.card-dark,
+.card {
+  background: linear-gradient(180deg, rgba(255, 255, 255, 0.035), rgba(255, 255, 255, 0.01)), #0D1320 !important;
+  border: 1px solid rgba(255, 255, 255, 0.09) !important;
+  color: #f8fafc !important;
+}
+
+/* 8. Codes & Balises techniques */
+code {
+  color: #38bdf8 !important;
+  background: rgba(56, 189, 248, 0.12) !important;
+  padding: 0.2rem 0.45rem !important;
+  border-radius: 0.4rem !important;
+  font-size: 0.88em !important;
+}
+
+/* 9. Boutons d'action */
+.btn-outline-light {
+  border-color: rgba(255, 255, 255, 0.22) !important;
+  color: #f1f5f9 !important;
+}
+
+.btn-outline-light:hover {
+  background-color: rgba(255, 255, 255, 0.1) !important;
+  color: #ffffff !important;
+  border-color: rgba(255, 255, 255, 0.35) !important;
+}
+
+.btn-outline-secondary {
+  border-color: rgba(255, 255, 255, 0.15) !important;
+  color: #cbd5e1 !important;
+}
+
+.btn-outline-secondary:hover {
+  background-color: rgba(255, 255, 255, 0.08) !important;
+  color: #ffffff !important;
+}
+
+/* 10. Cases à cocher et boutons radio */
+.form-check-input {
+  background-color: #0f172a !important;
+  border: 1px solid rgba(255, 255, 255, 0.3) !important;
+}
+
+.form-check-input:checked {
+  background-color: #e50914 !important;
+  border-color: #e50914 !important;
+}
+
+.form-check-label {
+  color: #e2e8f0 !important;
+}

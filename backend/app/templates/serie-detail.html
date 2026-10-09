@@ -14,7 +14,7 @@
 
 <!-- Bannière Héro de la Série -->
 <section class="card-dark p-4 p-lg-5 mb-4 position-relative overflow-hidden border border-secondary border-opacity-25" 
-  style="background: linear-gradient(90deg, rgba(7,10,18,0.95) 0%, rgba(7,10,18,0.7) 60%, rgba(7,10,18,0.3) 100%), url('{{ series.banner_path or '/static/img/default_banner.jpg' }}') center/cover no-repeat; min-height: 280px;">
+  style="{% if series.banner_path %}background: linear-gradient(90deg, rgba(7,10,18,0.95) 0%, rgba(7,10,18,0.7) 60%, rgba(7,10,18,0.3) 100%), url('{{ series.banner_path }}') center/cover no-repeat;{% else %}background: linear-gradient(135deg, rgba(229,9,20,0.14) 0%, rgba(124,58,237,0.12) 50%, #0d1320 100%);{% endif %} min-height: 280px;">
   
   <div class="row align-items-center">
     <div class="col-12 col-lg-8">
