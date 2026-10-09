@@ -1,0 +1,47 @@
+{% extends "base.html" %}
+
+{% block title %}StreamAdmin - Accueil Mobile{% endblock %}
+
+{% block content %}
+<div class="d-flex flex-wrap align-items-center justify-content-between gap-3 mb-4">
+  <div>
+    <h1 class="h3 mb-1 fw-bold text-white" data-i18n="mobile_home">Éditeur de l'Accueil Mobile</h1>
+    <div class="text-muted small">Configurez l'ordre et le contenu des rangées affichées sur l'application mobile Flutter (Carrousel, Nouveautés, Séries, Films).</div>
+  </div>
+</div>
+
+<div class="card-dark p-3 p-lg-4">
+  <div class="table-responsive">
+    <table class="table table-dark table-hover align-middle mb-0">
+      <thead>
+        <tr class="text-muted small">
+          <th>Ordre</th>
+          <th>Type de Rangée</th>
+          <th>Titre (Français)</th>
+          <th>Titre (Arabe)</th>
+          <th>Limite d'éléments</th>
+          <th>Statut</th>
+        </tr>
+      </thead>
+      <tbody>
+        {% for row in home_rows %}
+        <tr>
+          <td><span class="badge bg-secondary">#{{ row.order_index }}</span></td>
+          <td><code class="text-info">{{ row.row_type }}</code></td>
+          <td class="fw-semibold text-white">{{ row.title_fr }}</td>
+          <td class="text-muted" dir="rtl">{{ row.title_ar or '--' }}</td>
+          <td class="text-muted">{{ row.limit_items }} max</td>
+          <td>
+            {% if row.is_active %}
+              <span class="badge bg-success-subtle text-success border border-success-subtle">Visible</span>
+            {% else %}
+              <span class="badge bg-secondary-subtle text-secondary border border-secondary-subtle">Masquée</span>
+            {% endif %}
+          </td>
+        </tr>
+        {% endfor %}
+      </tbody>
+    </table>
+  </div>
+</div>
+{% endblock %}

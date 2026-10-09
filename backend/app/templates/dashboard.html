@@ -1,1794 +1,384 @@
 {% extends "base.html" %}
 
+{% block title %}StreamAdmin - Tableau de bord{% endblock %}
+
 {% block content %}
-<div class="row mb-3">
-    <div class="col-12 d-flex justify-content-between align-items-center flex-wrap gap-2">
-        <h2 class="fw-bold m-0" id="txt-page-title">Tableau de Bord</h2>
-        <div class="d-flex gap-2">
-            <button class="btn btn-primary d-flex align-items-center gap-2" id="btn-sync" onclick="triggerSync()">
-                <i class="bi bi-arrow-repeat" id="sync-icon"></i>
-                <span id="txt-btn-sync">Synchroniser Telegram</span>
-            </button>
-            <button class="btn btn-outline-danger btn-sm d-flex align-items-center gap-1" onclick="purgeCache()">
-                <i class="bi bi-trash"></i>
-                <span id="txt-btn-cache">Vider le Cache</span>
-            </button>
-        </div>
-    </div>
+<!-- Titre & Actions Rapides -->
+<div class="d-flex flex-wrap align-items-center justify-content-between gap-3 mb-4">
+  <div>
+    <h1 class="h3 mb-1 fw-bold" data-i18n="dashboard">Tableau de bord</h1>
+    <div class="text-muted small">Vue globale du catalogue, des utilisateurs, de Telegram et du streaming.</div>
+  </div>
+  <div class="d-flex flex-wrap gap-2">
+    <button class="btn btn-outline-light btn-sm d-flex align-items-center gap-2" id="btnSyncTelegram" onclick="triggerSync()">
+      <i class="bi bi-arrow-repeat" id="syncIcon"></i>
+      <span data-i18n="sync_btn">Synchroniser Telegram</span>
+    </button>
+    <a href="/admin/series" class="btn btn-danger btn-sm d-flex align-items-center gap-1 shadow-sm">
+      <i class="bi bi-plus-lg"></i>
+      <span>Ajouter une série</span>
+    </a>
+    <button class="btn btn-outline-danger btn-sm d-flex align-items-center gap-1" onclick="purgeCache()">
+      <i class="bi bi-trash"></i>
+      <span data-i18n="purge_cache">Vider le cache</span>
+    </button>
+  </div>
 </div>
 
-<!-- Alertes d'état -->
-<div id="alert-container"></div>
+<!-- État Telegram MTProto -->
+<div class="card-dark p-3 mb-4 border border-secondary border-opacity-25 shadow-sm">
+  <div class="d-flex flex-wrap align-items-center justify-content-between gap-3">
+    <div class="d-flex align-items-center gap-3">
+      <div class="p-2 rounded-circle {% if telegram.connected %}bg-success bg-opacity-20 text-success{% else %}bg-warning bg-opacity-20 text-warning{% endif %} fs-4">
+        <i class="bi bi-telegram"></i>
+      </div>
+      <div>
+        <div class="fw-bold d-flex align-items-center gap-2">
+          <span>MTProto Telethon :</span>
+          {% if telegram.connected %}
+            <span class="badge bg-success-subtle text-success border border-success-subtle">Connecté</span>
+          {% else %}
+            <span class="badge bg-warning-subtle text-warning border border-warning-subtle">En attente / Session locale</span>
+          {% endif %}
+        </div>
+        <div class="text-muted small">
+          Canal source : <strong class="text-light">{{ telegram.channel_title or 'Non configuré' }}</strong> 
+          {% if telegram.channel_id %}(ID: <code>{{ telegram.channel_id }}</code>){% endif %}
+          · {{ stats.raw_videos_count }} vidéo(s) brute(s) en attente d'organisation
+        </div>
+      </div>
+    </div>
+    <div class="d-flex gap-2">
+      <a href="/admin/telegram" class="btn btn-sm btn-outline-info">Gérer le canal</a>
+      <a href="/admin/raw-videos" class="btn btn-sm btn-outline-warning">Traiter les vidéos brutes ({{ stats.raw_videos_count }})</a>
+    </div>
+  </div>
+</div>
 
-<!-- Cartes Statistiques Clés -->
+<!-- Cartes Statistiques Principales (Charte StreamAdmin) -->
 <div class="row g-3 mb-4">
-    <div class="col-12 col-sm-6 col-xl-3">
-        <div class="card stat-card p-3 shadow-sm border-start border-4 border-danger">
-            <div class="d-flex justify-content-between align-items-center">
-                <div>
-                    <div class="text-secondary small fw-semibold text-uppercase" id="lbl-media">Catalogue (Films & Séries)</div>
-                    <div class="fs-3 fw-bold text-danger" id="stat-media">{{ stats.total_media_items }}</div>
-                </div>
-                <div class="bg-danger bg-opacity-10 p-3 rounded-circle text-danger fs-3">
-                    <i class="bi bi-film"></i>
-                </div>
-            </div>
+  <!-- Contenus -->
+  <div class="col-12 col-md-6 col-xl-3">
+    <div class="card-dark stat-card p-3 h-100">
+      <div class="d-flex justify-content-between align-items-start">
+        <div>
+          <div class="text-muted small">Catalogue & Médias</div>
+          <div class="h4 mb-1 mt-2 fw-bold text-white">{{ stats.total_videos }} vidéos</div>
+          <div class="small text-muted">{{ stats.series_count }} séries · {{ stats.movies_count }} films · {{ stats.published_videos }} publiées</div>
         </div>
+        <div class="icon icon-red">
+          <i class="bi bi-collection-play"></i>
+        </div>
+      </div>
+      <div class="mt-3 d-flex flex-wrap gap-2">
+        <span class="badge badge-accent">{{ stats.series_count }} séries</span>
+        <span class="badge badge-soft">{{ stats.movies_count }} films</span>
+        <span class="badge badge-success-soft">{{ stats.published_videos }} sur mobile</span>
+      </div>
     </div>
+  </div>
 
-    <div class="col-12 col-sm-6 col-xl-3">
-        <div class="card stat-card p-3 shadow-sm border-start border-4 border-info">
-            <div class="d-flex justify-content-between align-items-center">
-                <div>
-                    <div class="text-secondary small fw-semibold text-uppercase" id="lbl-videos">Vidéos Publiées sur Mobile</div>
-                    <div class="fs-3 fw-bold text-info" id="stat-videos">{{ stats.published_videos }} <span class="fs-6 text-secondary fw-normal">/ {{ stats.total_videos }}</span></div>
-                </div>
-                <div class="bg-info bg-opacity-10 p-3 rounded-circle text-info fs-3">
-                    <i class="bi bi-collection-play"></i>
-                </div>
-            </div>
-            <div class="small text-secondary mt-1">
-                <span class="badge bg-warning text-dark">{{ stats.raw_videos_count }}</span> en attente d'organisation
-            </div>
+  <!-- Utilisateurs -->
+  <div class="col-12 col-md-6 col-xl-3">
+    <div class="card-dark stat-card p-3 h-100">
+      <div class="d-flex justify-content-between align-items-start">
+        <div>
+          <div class="text-muted small">Utilisateurs</div>
+          <div class="h4 mb-1 mt-2 fw-bold text-white">{{ stats.total_users }} comptes</div>
+          <div class="small text-muted">{{ stats.active_users }} actifs · {{ stats.total_users - stats.active_users }} inactifs</div>
         </div>
+        <div class="icon icon-purple">
+          <i class="bi bi-people"></i>
+        </div>
+      </div>
+      <div class="mt-3 d-flex flex-wrap gap-2">
+        <span class="badge badge-success-soft">{{ stats.active_users }} actifs</span>
+        <span class="badge badge-soft">{{ stats.invites_count }} invitations</span>
+      </div>
     </div>
+  </div>
 
-    <div class="col-12 col-sm-6 col-xl-3">
-        <div class="card stat-card p-3 shadow-sm border-start border-4 border-success">
-            <div class="d-flex justify-content-between align-items-center">
-                <div>
-                    <div class="text-secondary small fw-semibold text-uppercase" id="lbl-users">Utilisateurs Actifs</div>
-                    <div class="fs-3 fw-bold text-success" id="stat-users">{{ stats.active_users }} / {{ stats.total_users }}</div>
-                </div>
-                <div class="bg-success bg-opacity-10 p-3 rounded-circle text-success fs-3">
-                    <i class="bi bi-people"></i>
-                </div>
-            </div>
+  <!-- Lectures & Streaming -->
+  <div class="col-12 col-md-6 col-xl-3">
+    <div class="card-dark stat-card p-3 h-100">
+      <div class="d-flex justify-content-between align-items-start">
+        <div>
+          <div class="text-muted small">Streaming en direct</div>
+          <div class="h4 mb-1 mt-2 fw-bold text-white">{{ stats.streams.current_active }} flux actifs</div>
+          <div class="small text-muted">Limite globale : {{ stats.streams.max_global }} flux · {{ stats.total_views }} vues cumulées</div>
         </div>
+        <div class="icon icon-green">
+          <i class="bi bi-broadcast"></i>
+        </div>
+      </div>
+      <div class="mt-3 d-flex flex-wrap gap-2">
+        <span class="badge badge-accent">{{ stats.streams.current_active }} / {{ stats.streams.max_global }} simultanés</span>
+        <span class="badge badge-soft">{{ stats.streams.max_per_user }} max / compte</span>
+      </div>
     </div>
+  </div>
 
-    <div class="col-12 col-sm-6 col-xl-3">
-        <div class="card stat-card p-3 shadow-sm border-start border-4 border-warning">
-            <div class="d-flex justify-content-between align-items-center">
-                <div>
-                    <div class="text-secondary small fw-semibold text-uppercase" id="lbl-streams">Lectures Simultanées</div>
-                    <div class="fs-3 fw-bold text-warning" id="stat-streams">{{ stats.streams.current_active }} / {{ stats.streams.max_global }}</div>
-                </div>
-                <div class="bg-warning bg-opacity-10 p-3 rounded-circle text-warning fs-3">
-                    <i class="bi bi-broadcast"></i>
-                </div>
-            </div>
+  <!-- Cache Disque & Stockage -->
+  <div class="col-12 col-md-6 col-xl-3">
+    <div class="card-dark stat-card p-3 h-100">
+      <div class="d-flex justify-content-between align-items-start">
+        <div>
+          <div class="text-muted small">Cache Disque Vidéo</div>
+          <div class="h4 mb-1 mt-2 fw-bold text-white">{{ stats.cache.total_gb }} Go</div>
+          <div class="small text-muted">Quota max : {{ stats.cache.max_gb }} Go ({{ stats.cache.file_count }} fichiers)</div>
         </div>
+        <div class="icon icon-blue">
+          <i class="bi bi-hdd-network"></i>
+        </div>
+      </div>
+      <div class="mt-3">
+        <div class="d-flex justify-content-between small text-muted mb-1">
+          <span>Utilisation</span>
+          <span>{{ stats.cache.percent_used }}%</span>
+        </div>
+        <div class="progress" style="height: 8px; background: rgba(255,255,255,0.08);">
+          <div class="progress-bar {% if stats.cache.percent_used > 80 %}bg-danger{% elif stats.cache.percent_used > 50 %}bg-warning{% else %}bg-info{% endif %}" style="width: {{ stats.cache.percent_used }}%;"></div>
+        </div>
+      </div>
     </div>
+  </div>
 </div>
 
-<!-- Jauge Espace Disque Cache -->
-<div class="card p-3 mb-4 shadow-sm">
-    <div class="d-flex justify-content-between align-items-center mb-2">
-        <span class="fw-semibold" id="lbl-cache-disk"><i class="bi bi-hdd me-2"></i>Espace Disque Cache Vidéos</span>
-        <span class="badge bg-secondary" id="badge-cache-size">{{ stats.cache.total_gb }} Go / {{ stats.cache.max_gb }} Go ({{ stats.cache.percent_used }}%)</span>
-    </div>
-    <div class="progress" style="height: 12px; background-color: #0f172a;">
-        <div class="progress-bar {% if stats.cache.percent_used > 80 %}bg-danger{% elif stats.cache.percent_used > 50 %}bg-warning{% else %}bg-info{% endif %}" 
-             role="progressbar" 
-             style="width: {{ stats.cache.percent_used }}%;" 
-             aria-valuenow="{{ stats.cache.percent_used }}" 
-             aria-valuemin="0" 
-             aria-valuemax="100">
+<!-- Graphiques Chart.js -->
+<div class="row g-3 mb-4">
+  <!-- Graphique 1 : Vues et activité -->
+  <div class="col-12 col-xl-8">
+    <div class="card-dark p-3 h-100">
+      <div class="d-flex justify-content-between align-items-center mb-3">
+        <div>
+          <h2 class="h6 mb-1 text-white fw-bold">Activité & Visionnages</h2>
+          <div class="text-muted small">Tendances des lectures vidéo</div>
         </div>
+        <span class="badge badge-soft">Temps réel</span>
+      </div>
+      <div style="height: 260px;">
+        <canvas id="chartPlays"></canvas>
+      </div>
     </div>
+  </div>
+
+  <!-- Graphique 2 : Répartition du catalogue -->
+  <div class="col-12 col-xl-4">
+    <div class="card-dark p-3 h-100">
+      <div class="d-flex justify-content-between align-items-center mb-3">
+        <div>
+          <h2 class="h6 mb-1 text-white fw-bold">Répartition du Catalogue</h2>
+          <div class="text-muted small">Séries, Films et Vidéos en attente</div>
+        </div>
+      </div>
+      <div style="height: 260px; display: flex; align-items: center; justify-content: center;">
+        <canvas id="chartCatalog"></canvas>
+      </div>
+    </div>
+  </div>
 </div>
 
-<!-- Onglets Principaux -->
-<ul class="nav nav-tabs mb-3" id="adminTab" role="tablist">
-    <li class="nav-item" role="presentation">
-        <button class="nav-link active" id="media-tab" data-bs-toggle="tab" data-bs-target="#tab-media" type="button" role="tab">
-            <i class="bi bi-film me-1 text-danger"></i> <span id="tab-title-media">Films & Séries</span>
-            <span class="badge bg-danger ms-1">{{ stats.total_media_items }}</span>
-        </button>
-    </li>
-    <li class="nav-item" role="presentation">
-        <button class="nav-link" id="raw-tab" data-bs-toggle="tab" data-bs-target="#tab-raw" type="button" role="tab">
-            <i class="bi bi-inbox me-1 text-warning"></i> <span id="tab-title-raw">Vidéos Brutes (En attente)</span>
-            {% if stats.raw_videos_count > 0 %}
-            <span class="badge bg-warning text-dark ms-1">{{ stats.raw_videos_count }}</span>
-            {% endif %}
-        </button>
-    </li>
-    <li class="nav-item" role="presentation">
-        <button class="nav-link" id="telegram-tab" data-bs-toggle="tab" data-bs-target="#tab-telegram" type="button" role="tab">
-            <i class="bi bi-telegram me-1 text-info"></i> <span id="tab-title-telegram">Canal Telegram</span>
-        </button>
-    </li>
-    <li class="nav-item" role="presentation">
-        <button class="nav-link" id="users-tab" data-bs-toggle="tab" data-bs-target="#tab-users" type="button" role="tab">
-            <i class="bi bi-people me-1"></i> <span id="tab-title-users">Gestion Utilisateurs</span>
-        </button>
-    </li>
-    <li class="nav-item" role="presentation">
-        <button class="nav-link" id="invites-tab" data-bs-toggle="tab" data-bs-target="#tab-invites" type="button" role="tab">
-            <i class="bi bi-ticket-perforated me-1"></i> <span id="tab-title-invites">Codes d'Invitation</span>
-        </button>
-    </li>
-</ul>
+<!-- Listes Rapides : Séries, Vidéos Brutes, Utilisateurs -->
+<div class="row g-3">
+  <!-- Dernières Séries -->
+  <div class="col-12 col-lg-4">
+    <div class="card-dark p-3 h-100">
+      <div class="d-flex justify-content-between align-items-center mb-3">
+        <h2 class="h6 mb-0 text-white fw-bold">Séries du Catalogue</h2>
+        <a href="/admin/series" class="small text-decoration-none text-danger fw-semibold">Tout voir</a>
+      </div>
 
-<div class="tab-content" id="adminTabContent">
-    <!-- Onglet 1: Organisation du Catalogue (Films & Séries) -->
-    <div class="tab-pane fade show active" id="tab-media" role="tabpanel">
-        <div class="card p-3 mb-3 shadow-sm border-0 bg-dark bg-opacity-50">
-            <div class="d-flex justify-content-between align-items-center flex-wrap gap-2">
-                <div>
-                    <h5 class="fw-bold m-0 d-flex align-items-center gap-2">
-                        <i class="bi bi-collection-play-fill text-danger"></i>
-                        <span id="txt-media-title">Catalogue Films & Séries</span>
-                        <span class="badge bg-secondary">{{ media_items|length }}</span>
-                    </h5>
-                    <div class="text-secondary small mt-1" id="txt-media-subtitle">
-                        Organisez vos vidéos Telegram en Films ou Séries. Seuls les éléments <strong>publiés</strong> s'affichent sur l'application mobile.
-                    </div>
-                </div>
-                <div class="d-flex gap-2">
-                    <button class="btn btn-primary d-flex align-items-center gap-2" onclick="openCreateMediaModal()">
-                        <i class="bi bi-plus-circle"></i>
-                        <span id="txt-btn-new-media">Nouveau Film ou Série</span>
-                    </button>
-                </div>
-            </div>
-            
-            <!-- Barre de filtrage -->
-            <div class="row g-2 mt-2 pt-2 border-top border-secondary border-opacity-25 align-items-center">
-                <div class="col-12 col-md-5">
-                    <div class="input-group input-group-sm">
-                        <span class="input-group-text bg-dark border-secondary text-secondary"><i class="bi bi-search"></i></span>
-                        <input type="text" class="form-control" id="search-media-input" placeholder="Rechercher par titre, genre..." onkeyup="filterMediaCards()">
-                    </div>
-                </div>
-                <div class="col-12 col-md-7 d-flex justify-content-md-end flex-wrap gap-1">
-                    <button class="btn btn-sm btn-outline-light active filter-btn" onclick="applyMediaFilter('all', this)">Tous</button>
-                    <button class="btn btn-sm btn-outline-primary filter-btn" onclick="applyMediaFilter('movie', this)"><i class="bi bi-film me-1"></i>Films</button>
-                    <button class="btn btn-sm btn-outline-info filter-btn" onclick="applyMediaFilter('series', this)"><i class="bi bi-tv me-1"></i>Séries</button>
-                    <button class="btn btn-sm btn-outline-success filter-btn" onclick="applyMediaFilter('published', this)"><i class="bi bi-check-circle me-1"></i>Publiés</button>
-                    <button class="btn btn-sm btn-outline-secondary filter-btn" onclick="applyMediaFilter('draft', this)"><i class="bi bi-eye-slash me-1"></i>Brouillons</button>
-                </div>
-            </div>
+      <div class="list-group list-group-flush">
+        {% for s in recent_series %}
+        <div class="list-group-item bg-transparent border-secondary border-opacity-25 d-flex align-items-center gap-3 px-0 py-2">
+          <div class="avatar bg-danger bg-opacity-20 text-danger rounded-3 d-flex align-items-center justify-content-center fw-bold" style="width: 42px; height: 42px;">
+            <i class="bi bi-film"></i>
+          </div>
+          <div class="flex-grow-1 overflow-hidden">
+            <div class="fw-semibold small text-white text-truncate">{{ s.title_fr }}</div>
+            <div class="text-muted small">{{ s.status }} · {{ s.visibility }}</div>
+          </div>
+          <a href="/admin/series/{{ s.id }}" class="btn btn-sm btn-outline-secondary">Gérer</a>
         </div>
+        {% else %}
+        <div class="text-muted small text-center py-4">Aucune série créée. Cliquez sur "Ajouter une série" ci-dessus.</div>
+        {% endfor %}
+      </div>
+    </div>
+  </div>
 
-        <!-- Grille des Films & Séries -->
-        <div class="row g-3" id="media-cards-grid">
-            {% if media_items %}
-                {% for item in media_items %}
-                <div class="col-12 col-md-6 col-xl-4 media-card-item" 
-                     data-type="{{ item.media_type }}" 
-                     data-published="{{ '1' if item.is_published else '0' }}" 
-                     data-title="{{ item.title|lower }}" 
-                     data-category="{{ (item.category or '')|lower }}">
-                    <div class="card h-100 shadow-sm border border-secondary border-opacity-25 overflow-hidden">
-                        <!-- En-tête / Affiche -->
-                        <div class="position-relative bg-black" style="height: 180px; overflow: hidden;">
-                            {% if item.poster_url %}
-                                <img src="{{ item.poster_url }}" alt="{{ item.title }}" class="w-100 h-100 object-fit-cover" onerror="this.src='/api/videos/1/thumbnail';">
-                            {% elif item.attached_videos and item.attached_videos[0].thumbnail_path %}
-                                <img src="{{ item.attached_videos[0].thumbnail_path }}" alt="{{ item.title }}" class="w-100 h-100 object-fit-cover">
-                            {% else %}
-                                <div class="w-100 h-100 d-flex flex-column align-items-center justify-content-center bg-dark text-secondary">
-                                    <i class="bi {% if item.media_type == 'movie' %}bi-film{% else %}bi-tv{% endif %} fs-1 mb-2"></i>
-                                    <span class="small">Aucune affiche</span>
-                                </div>
-                            {% endif %}
-                            
-                            <!-- Badges superposés -->
-                            <div class="position-absolute top-0 start-0 m-2 d-flex gap-1">
-                                {% if item.media_type == 'movie' %}
-                                    <span class="badge bg-primary"><i class="bi bi-film me-1"></i>FILM</span>
-                                {% else %}
-                                    <span class="badge" style="background-color: #8b5cf6;"><i class="bi bi-tv me-1"></i>SÉRIE</span>
-                                {% endif %}
-                                {% if item.category %}
-                                    <span class="badge bg-dark bg-opacity-75 border border-secondary">{{ item.category }}</span>
-                                {% endif %}
-                            </div>
-                            
-                            <div class="position-absolute top-0 end-0 m-2">
-                                {% if item.is_published %}
-                                    <span class="badge bg-success shadow"><i class="bi bi-check-circle me-1"></i>Publié sur Mobile</span>
-                                {% else %}
-                                    <span class="badge bg-secondary shadow"><i class="bi bi-eye-slash me-1"></i>Brouillon (Masqué)</span>
-                                {% endif %}
-                            </div>
+  <!-- Vidéos Brutes en Attente -->
+  <div class="col-12 col-lg-5">
+    <div class="card-dark p-3 h-100">
+      <div class="d-flex justify-content-between align-items-center mb-3">
+        <h2 class="h6 mb-0 text-white fw-bold">Vidéos Telegram en Attente</h2>
+        <span class="badge badge-warning-soft">{{ stats.raw_videos_count }} à classer</span>
+      </div>
 
-                            <div class="position-absolute bottom-0 start-0 w-100 p-2" style="background: linear-gradient(transparent, rgba(15, 23, 42, 0.95));">
-                                <div class="d-flex justify-content-between align-items-end">
-                                    <span class="badge bg-dark border border-secondary">
-                                        <i class="bi bi-collection-play me-1"></i>
-                                        {% if item.media_type == 'movie' %}
-                                            {{ item.attached_videos|length }} vidéo liée
-                                        {% else %}
-                                            {{ item.attached_videos|length }} épisode(s)
-                                        {% endif %}
-                                    </span>
-                                    <div class="small text-light">
-                                        {% if item.release_year %}<span>{{ item.release_year }}</span>{% endif %}
-                                        {% if item.rating %}<span class="text-warning ms-1">⭐ {{ item.rating }}</span>{% endif %}
-                                    </div>
-                                </div>
-                            </div>
-                        </div>
-
-                        <!-- Corps de la carte -->
-                        <div class="card-body p-3 d-flex flex-column">
-                            <h6 class="fw-bold text-light mb-1 text-truncate" title="{{ item.title }}">{{ item.title }}</h6>
-                            <p class="text-secondary small mb-3 flex-grow-1" style="display: -webkit-box; -webkit-line-clamp: 2; -webkit-box-orient: vertical; overflow: hidden;">
-                                {{ item.description or 'Aucune description fournie.' }}
-                            </p>
-
-                            <!-- Actions -->
-                            <div class="d-flex justify-content-between align-items-center gap-1 pt-2 border-top border-secondary border-opacity-25 flex-wrap">
-                                <button class="btn btn-sm {% if item.is_published %}btn-outline-warning{% else %}btn-success{% endif %}" onclick="togglePublishMedia({{ item.id }})" title="Publier / Dépublier">
-                                    <i class="bi {% if item.is_published %}bi-eye-slash{% else %}bi-check-circle{% endif %} me-1"></i>
-                                    <span>{% if item.is_published %}Dépublier{% else %}Publier{% endif %}</span>
-                                </button>
-                                
-                                <div class="d-flex gap-1">
-                                    <button class="btn btn-sm btn-outline-info" onclick="openManageEpisodesModal({{ item.id }})" title="Gérer les vidéos / épisodes">
-                                        <i class="bi bi-list-ul me-1"></i>
-                                        <span>{% if item.media_type == 'movie' %}Vidéo{% else %}Épisodes ({{ item.attached_videos|length }}){% endif %}</span>
-                                    </button>
-                                    <button class="btn btn-sm btn-outline-light" onclick="openEditMediaModal({{ item.id }})" title="Modifier">
-                                        <i class="bi bi-pencil"></i>
-                                    </button>
-                                    <button class="btn btn-sm btn-outline-danger" onclick="deleteMediaItem({{ item.id }}, '{{ item.title|replace("'", "\\'") }}')" title="Supprimer">
-                                        <i class="bi bi-trash"></i>
-                                    </button>
-                                </div>
-                            </div>
-                        </div>
-                    </div>
-                </div>
-                {% endfor %}
+      <div class="table-responsive">
+        <table class="table table-dark table-hover align-middle mb-0 small">
+          <thead>
+            <tr class="text-muted">
+              <th>Fichier / Titre</th>
+              <th>Taille</th>
+              <th class="text-end">Action</th>
+            </tr>
+          </thead>
+          <tbody>
+            {% for v in raw_videos[:6] %}
+            <tr>
+              <td>
+                <div class="fw-semibold text-white text-truncate" style="max-width: 220px;" title="{{ v.title }}">{{ v.title }}</div>
+                <div class="text-muted" style="font-size: 0.75rem;">Msg ID: {{ v.telegram_message_id }} · {{ v.telegram_date.strftime('%d/%m/%Y') if v.telegram_date else '' }}</div>
+              </td>
+              <td class="text-muted">{{ (v.file_size_bytes / 1024 / 1024) | round(1) }} Mo</td>
+              <td class="text-end">
+                <button class="btn btn-sm btn-outline-warning" onclick="autoDetectVideo({{ v.id }})">
+                  <i class="bi bi-magic me-1"></i>Détecter
+                </button>
+              </td>
+            </tr>
             {% else %}
-                <div class="col-12">
-                    <div class="card p-5 text-center border-dashed border-secondary">
-                        <i class="bi bi-film display-3 text-secondary mb-3"></i>
-                        <h4 class="fw-bold text-light">Votre catalogue est encore vide</h4>
-                        <p class="text-secondary mx-auto" style="max-width: 500px;">
-                            Vous avez synchronisé des vidéos de Telegram mais elles ne sont pas encore organisées.
-                            Créez un premier Film ou une Série pour regrouper vos vidéos et les rendre accessibles sur l'application mobile.
-                        </p>
-                        <div class="mt-2">
-                            <button class="btn btn-primary px-4 py-2" onclick="openCreateMediaModal()">
-                                <i class="bi bi-plus-circle me-2"></i>Créer un Film ou une Série
-                            </button>
-                        </div>
-                    </div>
-                </div>
-            {% endif %}
-        </div>
+            <tr>
+              <td colspan="3" class="text-center text-muted py-3">Toutes les vidéos Telegram sont déjà organisées !</td>
+            </tr>
+            {% endfor %}
+          </tbody>
+        </table>
+      </div>
     </div>
+  </div>
 
-    <!-- Onglet 2: Vidéos Brutes Telegram (En attente d'organisation) -->
-    <div class="tab-pane fade" id="tab-raw" role="tabpanel">
-        <div class="alert alert-warning border-0 d-flex align-items-center gap-3 mb-3">
-            <i class="bi bi-inbox-fill fs-3 text-warning"></i>
-            <div>
-                <div class="fw-bold">Vidéos Brutes Détectées sur Telegram (Masquées du Mobile)</div>
-                <div class="small">
-                    Ces vidéos proviennent de votre canal Telegram. Elles ne s'affichent <strong>PAS</strong> sur l'application mobile tant que vous ne les avez pas associées à un Film ou une Série dans l'onglet <strong>Films & Séries</strong>.
-                </div>
-            </div>
+  <!-- Derniers Utilisateurs -->
+  <div class="col-12 col-lg-3">
+    <div class="card-dark p-3 h-100">
+      <div class="d-flex justify-content-between align-items-center mb-3">
+        <h2 class="h6 mb-0 text-white fw-bold">Utilisateurs Récents</h2>
+        <a href="/admin/users" class="small text-decoration-none text-danger fw-semibold">Gérer</a>
+      </div>
+
+      <div class="d-flex flex-column gap-2">
+        {% for u in recent_users[:5] %}
+        <div class="d-flex align-items-center gap-2 p-2 rounded-3 border border-secondary border-opacity-10" style="background: rgba(255,255,255,0.02);">
+          <span class="avatar rounded-circle bg-primary bg-opacity-20 text-info fw-bold d-flex align-items-center justify-content-center" style="width: 32px; height: 32px; font-size: 0.8rem;">
+            {{ u.username[:2] | upper }}
+          </span>
+          <div class="small overflow-hidden flex-grow-1">
+            <div class="fw-semibold text-white text-truncate">{{ u.username }}</div>
+            <div class="text-muted" style="font-size: 0.75rem;">{{ u.role }} · {% if u.is_active %}<span class="text-success">Actif</span>{% else %}<span class="text-danger">Bloqué</span>{% endif %}</div>
+          </div>
         </div>
-
-        <div class="card p-3 shadow-sm">
-            <div class="d-flex justify-content-between align-items-center mb-3 flex-wrap gap-2">
-                <h5 class="fw-bold m-0 d-flex align-items-center gap-2">
-                    <i class="bi bi-cloud-arrow-down-fill text-warning"></i>
-                    <span>Vidéos en Attente</span>
-                    <span class="badge bg-warning text-dark">{{ raw_videos|length }}</span>
-                </h5>
-                <button class="btn btn-outline-info btn-sm" onclick="triggerSync()">
-                    <i class="bi bi-arrow-repeat me-1"></i>Rafraîchir depuis Telegram
-                </button>
-            </div>
-
-            {% if raw_videos %}
-            <div class="table-responsive">
-                <table class="table table-dark table-hover align-middle mb-0">
-                    <thead>
-                        <tr class="text-secondary small text-uppercase">
-                            <th style="width: 70px;">Aperçu</th>
-                            <th>ID Telegram</th>
-                            <th>Titre / Fichier d'origine</th>
-                            <th>Catégorie auto</th>
-                            <th>Durée</th>
-                            <th>Poids</th>
-                            <th>Date Telegram</th>
-                            <th class="text-end">Action</th>
-                        </tr>
-                    </thead>
-                    <tbody>
-                        {% for v in raw_videos %}
-                        <tr>
-                            <td>
-                                {% if v.thumbnail_path %}
-                                    <img src="{{ v.thumbnail_path }}" class="rounded object-fit-cover" style="width: 55px; height: 35px;" onerror="this.style.display='none';">
-                                {% else %}
-                                    <div class="bg-secondary bg-opacity-25 rounded d-flex align-items-center justify-content-center" style="width: 55px; height: 35px;">
-                                        <i class="bi bi-camera-video text-secondary"></i>
-                                    </div>
-                                {% endif %}
-                            </td>
-                            <td><code>#{{ v.telegram_message_id }}</code></td>
-                            <td>
-                                <div class="fw-semibold text-light text-truncate" style="max-width: 280px;" title="{{ v.title }}">{{ v.title }}</div>
-                                {% if v.file_name and v.file_name != v.title %}
-                                    <div class="small text-secondary text-truncate" style="max-width: 280px;">{{ v.file_name }}</div>
-                                {% endif %}
-                            </td>
-                            <td><span class="badge bg-secondary">{{ v.category or 'Général' }}</span></td>
-                            <td>
-                                {% if v.duration_seconds > 0 %}
-                                    {{ v.duration_seconds // 60 }}m {{ v.duration_seconds % 60 }}s
-                                {% else %}
-                                    <span class="text-secondary">Clip</span>
-                                {% endif %}
-                            </td>
-                            <td>{{ (v.file_size_bytes / 1048576)|round(1) }} Mo</td>
-                            <td class="small text-secondary">{{ v.telegram_date.strftime('%d/%m/%Y %H:%M') if v.telegram_date else 'N/A' }}</td>
-                            <td class="text-end">
-                                <button class="btn btn-sm btn-primary" onclick="quickCreateMediaWithVideo({{ v.id }}, '{{ (v.title or v.file_name or '')|replace("'", "\\'") }}', '{{ (v.category or 'Général')|replace("'", "\\'") }}', '{{ v.thumbnail_path or '' }}')">
-                                    <i class="bi bi-plus-circle me-1"></i>Créer Film / Série
-                                </button>
-                            </td>
-                        </tr>
-                        {% endfor %}
-                    </tbody>
-                </table>
-            </div>
-            {% else %}
-            <div class="p-4 text-center text-secondary">
-                <i class="bi bi-check-circle-fill text-success fs-2 mb-2 d-block"></i>
-                <div class="fw-semibold">Toutes vos vidéos sont organisées !</div>
-                <div class="small">Aucune vidéo brute en attente. Lors de votre prochain upload sur Telegram, les nouvelles vidéos apparaîtront ici.</div>
-            </div>
-            {% endif %}
-        </div>
+        {% else %}
+        <div class="text-muted small text-center py-3">Aucun utilisateur enregistré.</div>
+        {% endfor %}
+      </div>
     </div>
-
-    <!-- Onglet 3: Configuration et Vérification Canal Telegram -->
-    <div class="tab-pane fade" id="tab-telegram" role="tabpanel">
-        <div class="row g-3 mb-3">
-            <!-- État actuel du compte & canal -->
-            <div class="col-12 col-lg-5">
-                <div class="card p-3 shadow-sm h-100 border-start border-4 {% if telegram.is_connected %}border-success{% else %}border-warning{% endif %}">
-                    <h5 class="fw-bold mb-3 d-flex align-items-center gap-2">
-                        <i class="bi bi-telegram text-primary"></i>
-                        <span>État Telegram MTProto</span>
-                    </h5>
-                    
-                    <div class="mb-3">
-                        <div class="small text-secondary mb-1">Statut de Connexion</div>
-                        {% if telegram.is_connected %}
-                            <span class="badge bg-success fs-6"><i class="bi bi-check-circle me-1"></i> Connecté & Opérationnel</span>
-                        {% elif telegram.session_exists %}
-                            <span class="badge bg-warning text-dark fs-6"><i class="bi bi-hourglass-split me-1"></i> Session prête (en attente)</span>
-                        {% else %}
-                            <span class="badge bg-danger fs-6"><i class="bi bi-x-circle me-1"></i> Session non connectée</span>
-                        {% endif %}
-                    </div>
-
-                    {% if telegram.account %}
-                    <div class="mb-3 p-2 bg-dark rounded border border-secondary border-opacity-25">
-                        <div class="small text-secondary mb-1">Compte Connecté</div>
-                        <div class="fw-semibold text-light">{{ telegram.account.first_name }} <span class="text-info">(@{{ telegram.account.username or 'sans_username' }})</span></div>
-                        <div class="small text-secondary">ID Utilisateur : <code>{{ telegram.account.id }}</code></div>
-                    </div>
-                    {% endif %}
-
-                    <div class="p-2 bg-dark rounded border border-secondary border-opacity-25 mb-3">
-                        <div class="small text-secondary mb-1">Canal Actuellement Actif</div>
-                        <div class="fs-6 fw-bold text-light" id="display-channel-title">
-                            {{ telegram.current_channel_title or 'Canal Privé' }}
-                        </div>
-                        <div class="small text-secondary">ID Actuel : <code class="text-warning fs-6" id="display-channel-id">{{ telegram.current_channel_id }}</code></div>
-                    </div>
-
-                    <div class="mt-auto">
-                        <button class="btn btn-outline-info w-100 btn-sm d-flex align-items-center justify-content-center gap-2" onclick="scanMyChannels()">
-                            <i class="bi bi-search" id="scan-icon"></i>
-                            <span id="txt-btn-scan">Scanner mes canaux Telegram</span>
-                        </button>
-                    </div>
-                </div>
-            </div>
-
-            <!-- Configuration & Test du Canal -->
-            <div class="col-12 col-lg-7">
-                <div class="card p-3 shadow-sm h-100">
-                    <h5 class="fw-bold mb-3 d-flex align-items-center gap-2">
-                        <i class="bi bi-sliders text-info"></i>
-                        <span>Configurer & Vérifier un Canal</span>
-                    </h5>
-
-                    <p class="text-secondary small mb-3">
-                        Renseignez l'identifiant du canal privé (ex: <code>-4234167037</code> ou <code>-1004234167037</code>) ou un nom d'utilisateur public (ex: <code>@moncanal</code>).
-                    </p>
-
-                    <div class="mb-3">
-                        <label class="form-label fw-semibold">Identifiant ou Lien du Canal</label>
-                        <div class="input-group">
-                            <input type="text" class="form-control" id="input-channel-id" value="{{ telegram.current_channel_id }}" placeholder="-4234167037">
-                            <button class="btn btn-primary d-flex align-items-center gap-2" type="button" id="btn-test-channel" onclick="testChannelAccess()">
-                                <i class="bi bi-shield-check" id="test-icon"></i>
-                                <span id="txt-btn-test-ch">Vérifier l'accès</span>
-                            </button>
-                        </div>
-                    </div>
-
-                    <!-- Zone de résultat du test dynamique -->
-                    <div id="channel-test-result" class="d-none mb-3"></div>
-
-                    <!-- Boutons d'action -->
-                    <div class="d-flex gap-2 flex-wrap mt-auto">
-                        <button class="btn btn-success d-flex align-items-center gap-2" id="btn-save-channel" onclick="saveActiveChannel()">
-                            <i class="bi bi-check2-circle"></i>
-                            <span id="txt-btn-save-ch">Enregistrer & Activer ce Canal</span>
-                        </button>
-                        <button class="btn btn-outline-primary d-flex align-items-center gap-2" onclick="triggerSync()">
-                            <i class="bi bi-arrow-repeat"></i>
-                            <span>Synchroniser les Vidéos</span>
-                        </button>
-                    </div>
-                </div>
-            </div>
-
-            <!-- Liste des canaux détectés (affichée au clic sur Scanner) -->
-            <div class="col-12 d-none" id="section-detected-channels">
-                <div class="card p-3 shadow-sm border-info">
-                    <div class="d-flex justify-content-between align-items-center mb-2">
-                        <h6 class="fw-bold m-0 text-info"><i class="bi bi-list-check me-2"></i>Canaux et Groupes Détectés sur votre Compte</h6>
-                        <button class="btn btn-sm btn-outline-secondary" onclick="hideDetectedChannels()">Fermer</button>
-                    </div>
-                    <div class="table-responsive">
-                        <table class="table table-dark table-hover align-middle mb-0">
-                            <thead>
-                                <tr>
-                                    <th>Nom du Canal</th>
-                                    <th>Type</th>
-                                    <th>Identifiant (ID)</th>
-                                    <th>Action</th>
-                                </tr>
-                            </thead>
-                            <tbody id="detected-channels-tbody">
-                            </tbody>
-                        </table>
-                    </div>
-                </div>
-            </div>
-        </div>
-    </div>
-
-    <!-- Onglet 2: Utilisateurs -->
-    <div class="tab-pane fade" id="tab-users" role="tabpanel">
-        <div class="card p-3 shadow-sm">
-            <div class="d-flex justify-content-between align-items-center mb-3">
-                <h5 class="m-0 fw-bold" id="txt-users-list">Liste des Comptes</h5>
-                <button class="btn btn-outline-success btn-sm" data-bs-toggle="modal" data-bs-target="#modalCreateUser">
-                    <i class="bi bi-person-plus me-1"></i> <span id="txt-btn-add-user">Créer un utilisateur</span>
-                </button>
-            </div>
-            <div class="table-responsive">
-                <table class="table table-dark table-hover align-middle">
-                    <thead>
-                        <tr>
-                            <th>ID</th>
-                            <th id="th-username">Nom d'utilisateur</th>
-                            <th id="th-role">Rôle</th>
-                            <th id="th-status">Statut</th>
-                            <th id="th-streams">Max Flux</th>
-                            <th id="th-created">Créé le</th>
-                            <th id="th-actions">Actions</th>
-                        </tr>
-                    </thead>
-                    <tbody id="users-tbody">
-                        {% for u in users %}
-                        <tr>
-                            <td>{{ u.id }}</td>
-                            <td class="fw-semibold">{{ u.username }}</td>
-                            <td>
-                                <span class="badge {% if u.role == 'admin' %}bg-danger{% else %}bg-primary{% endif %}">
-                                    {{ u.role }}
-                                </span>
-                            </td>
-                            <td>
-                                {% if u.is_active %}
-                                <span class="badge bg-success">Actif</span>
-                                {% else %}
-                                <span class="badge bg-secondary">Désactivé</span>
-                                {% endif %}
-                            </td>
-                            <td>{{ u.max_concurrent_streams }}</td>
-                            <td>{{ u.created_at.strftime('%d/%m/%Y %H:%M') }}</td>
-                            <td>
-                                <div class="btn-group btn-group-sm">
-                                    <button class="btn btn-outline-warning" onclick="toggleUserActive({{ u.id }}, {{ 'false' if u.is_active else 'true' }})">
-                                        <i class="bi bi-power"></i>
-                                    </button>
-                                    {% if u.id != current_user.id %}
-                                    <button class="btn btn-outline-danger" onclick="deleteUser({{ u.id }})">
-                                        <i class="bi bi-trash"></i>
-                                    </button>
-                                    {% endif %}
-                                </div>
-                            </td>
-                        </tr>
-                        {% endfor %}
-                    </tbody>
-                </table>
-            </div>
-        </div>
-    </div>
-
-    <!-- Onglet 2: Invitations -->
-    <div class="tab-pane fade" id="tab-invites" role="tabpanel">
-        <div class="card p-3 shadow-sm">
-            <div class="d-flex justify-content-between align-items-center mb-3">
-                <h5 class="m-0 fw-bold" id="txt-invites-list">Codes d'Invitation Disponibles</h5>
-                <button class="btn btn-outline-info btn-sm" onclick="createInvite()">
-                    <i class="bi bi-plus-circle me-1"></i> <span id="txt-btn-new-invite">Générer un code</span>
-                </button>
-            </div>
-            <div class="table-responsive">
-                <table class="table table-dark table-hover align-middle">
-                    <thead>
-                        <tr>
-                            <th id="th-code">Code</th>
-                            <th id="th-inv-status">État</th>
-                            <th id="th-expires">Expire le</th>
-                            <th id="th-copy">Action</th>
-                        </tr>
-                    </thead>
-                    <tbody id="invites-tbody">
-                        {% for inv in invites %}
-                        <tr>
-                            <td><code class="fs-6 text-info">{{ inv.code }}</code></td>
-                            <td>
-                                {% if inv.is_used %}
-                                <span class="badge bg-secondary">Utilisé</span>
-                                {% else %}
-                                <span class="badge bg-success">Disponible</span>
-                                {% endif %}
-                            </td>
-                            <td>{{ inv.expires_at.strftime('%d/%m/%Y') if inv.expires_at else 'Illimité' }}</td>
-                            <td>
-                                <div class="btn-group btn-group-sm">
-                                    <button class="btn btn-outline-light" onclick="copyToClipboard('{{ inv.code }}')">
-                                        <i class="bi bi-clipboard"></i> Copier
-                                    </button>
-                                    <button class="btn btn-outline-danger" onclick="deleteInvite({{ inv.id }})">
-                                        <i class="bi bi-trash"></i>
-                                    </button>
-                                </div>
-                            </td>
-                        </tr>
-                        {% endfor %}
-                    </tbody>
-                </table>
-            </div>
-        </div>
-    </div>
-</div>
-
-<!-- Modal 1: Création Nouveau Film ou Série -->
-<div class="modal fade" id="modalCreateMedia" tabindex="-1">
-    <div class="modal-dialog modal-lg">
-        <div class="modal-content bg-dark text-light border-secondary">
-            <div class="modal-header border-secondary">
-                <h5 class="modal-title d-flex align-items-center gap-2">
-                    <i class="bi bi-plus-circle text-primary"></i>
-                    <span id="modal-title-media">Nouveau Film ou Série</span>
-                </h5>
-                <button type="button" class="btn-close btn-close-white" data-bs-dismiss="modal"></button>
-            </div>
-            <div class="modal-body">
-                <!-- Choix Type : Film ou Série -->
-                <div class="mb-3">
-                    <label class="form-label fw-semibold">Type d'œuvre</label>
-                    <div class="d-flex gap-2">
-                        <input type="radio" class="btn-check" name="media_type_radio" id="type-movie" value="movie" checked onchange="onMediaTypeChange()">
-                        <label class="btn btn-outline-primary flex-fill" for="type-movie">
-                            <i class="bi bi-film me-2"></i>Film Unique
-                        </label>
-
-                        <input type="radio" class="btn-check" name="media_type_radio" id="type-series" value="series" onchange="onMediaTypeChange()">
-                        <label class="btn btn-outline-info flex-fill" for="type-series">
-                            <i class="bi bi-tv me-2"></i>Série (Épisodes)
-                        </label>
-                    </div>
-                </div>
-
-                <!-- Titre -->
-                <div class="mb-3">
-                    <label class="form-label fw-semibold">Titre de l'œuvre <span class="text-danger">*</span></label>
-                    <input type="text" class="form-control" id="media-title" placeholder="Ex: Inception, Breaking Bad, Prison Break..." required>
-                </div>
-
-                <div class="row g-3 mb-3">
-                    <!-- Catégorie / Genre -->
-                    <div class="col-12 col-md-6">
-                        <label class="form-label fw-semibold">Genre / Catégorie</label>
-                        <input type="text" class="form-control" id="media-category" placeholder="Ex: Action, Sci-Fi, Drame...">
-                        <div class="d-flex flex-wrap gap-1 mt-2">
-                            <button type="button" class="btn btn-xs btn-outline-secondary py-0 px-2 small" onclick="setCategoryTag('Action')">Action</button>
-                            <button type="button" class="btn btn-xs btn-outline-secondary py-0 px-2 small" onclick="setCategoryTag('Drame')">Drame</button>
-                            <button type="button" class="btn btn-xs btn-outline-secondary py-0 px-2 small" onclick="setCategoryTag('Comédie')">Comédie</button>
-                            <button type="button" class="btn btn-xs btn-outline-secondary py-0 px-2 small" onclick="setCategoryTag('Sci-Fi')">Sci-Fi</button>
-                            <button type="button" class="btn btn-xs btn-outline-secondary py-0 px-2 small" onclick="setCategoryTag('Thriller')">Thriller</button>
-                            <button type="button" class="btn btn-xs btn-outline-secondary py-0 px-2 small" onclick="setCategoryTag('Animation')">Animation</button>
-                        </div>
-                    </div>
-
-                    <!-- Année & Note -->
-                    <div class="col-6 col-md-3">
-                        <label class="form-label fw-semibold">Année</label>
-                        <input type="number" class="form-control" id="media-year" placeholder="2024" min="1900" max="2100">
-                    </div>
-                    <div class="col-6 col-md-3">
-                        <label class="form-label fw-semibold">Note (/10)</label>
-                        <input type="number" step="0.1" class="form-control" id="media-rating" placeholder="8.5" min="0" max="10">
-                    </div>
-                </div>
-
-                <!-- URL Affiche (Poster) & Fond (Backdrop) -->
-                <div class="row g-3 mb-3">
-                    <div class="col-12 col-md-6">
-                        <label class="form-label fw-semibold">URL de l'Affiche (Poster)</label>
-                        <input type="url" class="form-control" id="media-poster" placeholder="https://image.tmdb.org/... ou laisser vide">
-                        <div class="form-text text-secondary small">Si vide, la miniature Telegram de la vidéo sera utilisée.</div>
-                    </div>
-                    <div class="col-12 col-md-6">
-                        <label class="form-label fw-semibold">URL Image de fond (Optionnel)</label>
-                        <input type="url" class="form-control" id="media-backdrop" placeholder="https://... bannière large">
-                    </div>
-                </div>
-
-                <!-- Synopsis -->
-                <div class="mb-3">
-                    <label class="form-label fw-semibold">Synopsis / Résumé</label>
-                    <textarea class="form-control" id="media-description" rows="3" placeholder="Description de l'histoire, résumé..."></textarea>
-                </div>
-
-                <!-- Liaison immédiate d'une vidéo brute -->
-                <div class="p-3 bg-black bg-opacity-40 rounded border border-secondary border-opacity-25 mb-3">
-                    <label class="form-label fw-semibold d-flex align-items-center gap-2">
-                        <i class="bi bi-link-45deg text-warning fs-5"></i>
-                        <span id="lbl-link-raw">Associer immédiatement une vidéo Telegram</span>
-                        <span class="badge bg-secondary">Optionnel</span>
-                    </label>
-                    <select class="form-select mb-2" id="media-raw-video">
-                        <option value="">-- Aucune (associer plus tard depuis les vidéos brutes) --</option>
-                        {% for v in raw_videos %}
-                        <option value="{{ v.id }}" data-title="{{ v.title }}" data-cat="{{ v.category or '' }}" data-thumb="{{ v.thumbnail_path or '' }}">
-                            #{{ v.telegram_message_id }} - {{ v.title }} ({{ v.duration_seconds // 60 }}m, {{ (v.file_size_bytes / 1048576)|round(1) }} Mo)
-                        </option>
-                        {% endfor %}
-                    </select>
-
-                    <!-- Champs spécifiques aux séries pour la vidéo sélectionnée -->
-                    <div id="series-episode-fields" class="row g-2 mt-2 d-none">
-                        <div class="col-3">
-                            <label class="form-label small text-secondary">Saison</label>
-                            <input type="number" class="form-control form-control-sm" id="media-raw-season" value="1" min="1">
-                        </div>
-                        <div class="col-3">
-                            <label class="form-label small text-secondary">Épisode</label>
-                            <input type="number" class="form-control form-control-sm" id="media-raw-episode" value="1" min="1">
-                        </div>
-                        <div class="col-6">
-                            <label class="form-label small text-secondary">Titre de l'épisode (optionnel)</label>
-                            <input type="text" class="form-control form-control-sm" id="media-raw-ep-title" placeholder="Ex: Pilote">
-                        </div>
-                    </div>
-                </div>
-
-                <!-- Case à cocher Publication immédiate -->
-                <div class="form-check form-switch mb-2">
-                    <input class="form-check-input" type="checkbox" id="media-is-published">
-                    <label class="form-check-label fw-semibold" for="media-is-published">
-                        <i class="bi bi-broadcast me-1 text-success"></i> Publier immédiatement sur l'application mobile
-                    </label>
-                    <div class="small text-secondary">Si décoché, l'élément restera en brouillon et ne sera pas visible sur les téléphones tant qu'il n'est pas publié.</div>
-                </div>
-            </div>
-            <div class="modal-footer border-secondary">
-                <button type="button" class="btn btn-secondary" data-bs-dismiss="modal">Annuler</button>
-                <button type="button" class="btn btn-primary" onclick="submitCreateMedia()">
-                    <i class="bi bi-check-circle me-1"></i>Enregistrer dans le Catalogue
-                </button>
-            </div>
-        </div>
-    </div>
-</div>
-
-<!-- Modal 2: Gestion des Épisodes & Vidéos d'une Œuvre -->
-<div class="modal fade" id="modalManageEpisodes" tabindex="-1">
-    <div class="modal-dialog modal-lg">
-        <div class="modal-content bg-dark text-light border-secondary">
-            <div class="modal-header border-secondary">
-                <h5 class="modal-title d-flex align-items-center gap-2">
-                    <i class="bi bi-collection-play text-info"></i>
-                    <span>Gestion des Vidéos / Épisodes : <span id="mng-media-title" class="text-warning fw-bold"></span></span>
-                </h5>
-                <button type="button" class="btn-close btn-close-white" data-bs-dismiss="modal"></button>
-            </div>
-            <div class="modal-body">
-                <input type="hidden" id="mng-media-id">
-                <input type="hidden" id="mng-media-type">
-
-                <!-- Liste des vidéos rattachées -->
-                <h6 class="fw-bold mb-2 text-light"><i class="bi bi-film me-2"></i>Vidéos Actuellement Associées</h6>
-                <div id="mng-episodes-table-container" class="mb-4">
-                    <div class="text-center text-secondary py-3">Chargement des vidéos...</div>
-                </div>
-
-                <!-- Formulaire d'ajout d'une vidéo brute -->
-                <div class="p-3 bg-black bg-opacity-40 rounded border border-secondary border-opacity-50">
-                    <h6 class="fw-bold mb-2 text-info d-flex align-items-center gap-2">
-                        <i class="bi bi-plus-circle"></i>
-                        <span id="mng-add-label">Associer une nouvelle vidéo</span>
-                    </h6>
-                    <div class="mb-2">
-                        <label class="form-label small text-secondary">Choisir une vidéo brute disponible</label>
-                        <select class="form-select form-select-sm" id="mng-select-video">
-                            <option value="">-- Sélectionner une vidéo --</option>
-                        </select>
-                    </div>
-
-                    <div id="mng-series-inputs" class="row g-2 mb-3 d-none">
-                        <div class="col-3">
-                            <label class="form-label small text-secondary">Saison #</label>
-                            <input type="number" class="form-control form-control-sm" id="mng-season-num" value="1" min="1">
-                        </div>
-                        <div class="col-3">
-                            <label class="form-label small text-secondary">Épisode #</label>
-                            <input type="number" class="form-control form-control-sm" id="mng-episode-num" value="1" min="1">
-                        </div>
-                        <div class="col-6">
-                            <label class="form-label small text-secondary">Titre de l'épisode</label>
-                            <input type="text" class="form-control form-control-sm" id="mng-episode-title" placeholder="Ex: Le commencement">
-                        </div>
-                    </div>
-
-                    <button type="button" class="btn btn-sm btn-info w-100" onclick="submitAttachEpisode()">
-                        <i class="bi bi-link-45deg me-1"></i>Rattacher cette vidéo
-                    </button>
-                </div>
-            </div>
-            <div class="modal-footer border-secondary">
-                <button type="button" class="btn btn-secondary" data-bs-dismiss="modal">Fermer</button>
-            </div>
-        </div>
-    </div>
-</div>
-
-<!-- Modal 3: Modification Métadonnées d'un Film ou Série -->
-<div class="modal fade" id="modalEditMedia" tabindex="-1">
-    <div class="modal-dialog modal-lg">
-        <div class="modal-content bg-dark text-light border-secondary">
-            <div class="modal-header border-secondary">
-                <h5 class="modal-title d-flex align-items-center gap-2">
-                    <i class="bi bi-pencil-square text-info"></i>
-                    <span>Modifier les Informations</span>
-                </h5>
-                <button type="button" class="btn-close btn-close-white" data-bs-dismiss="modal"></button>
-            </div>
-            <div class="modal-body">
-                <input type="hidden" id="edit-media-id">
-
-                <div class="mb-3">
-                    <label class="form-label fw-semibold">Titre</label>
-                    <input type="text" class="form-control" id="edit-media-title" required>
-                </div>
-
-                <div class="row g-3 mb-3">
-                    <div class="col-12 col-md-6">
-                        <label class="form-label fw-semibold">Genre / Catégorie</label>
-                        <input type="text" class="form-control" id="edit-media-category">
-                    </div>
-                    <div class="col-6 col-md-3">
-                        <label class="form-label fw-semibold">Année</label>
-                        <input type="number" class="form-control" id="edit-media-year" min="1900" max="2100">
-                    </div>
-                    <div class="col-6 col-md-3">
-                        <label class="form-label fw-semibold">Note (/10)</label>
-                        <input type="number" step="0.1" class="form-control" id="edit-media-rating" min="0" max="10">
-                    </div>
-                </div>
-
-                <div class="row g-3 mb-3">
-                    <div class="col-12 col-md-6">
-                        <label class="form-label fw-semibold">URL Affiche (Poster)</label>
-                        <input type="url" class="form-control" id="edit-media-poster">
-                    </div>
-                    <div class="col-12 col-md-6">
-                        <label class="form-label fw-semibold">URL Fond (Backdrop)</label>
-                        <input type="url" class="form-control" id="edit-media-backdrop">
-                    </div>
-                </div>
-
-                <div class="mb-3">
-                    <label class="form-label fw-semibold">Synopsis / Résumé</label>
-                    <textarea class="form-control" id="edit-media-description" rows="3"></textarea>
-                </div>
-            </div>
-            <div class="modal-footer border-secondary">
-                <button type="button" class="btn btn-secondary" data-bs-dismiss="modal">Annuler</button>
-                <button type="button" class="btn btn-primary" onclick="submitEditMedia()">
-                    <i class="bi bi-save me-1"></i>Enregistrer
-                </button>
-            </div>
-        </div>
-    </div>
-</div>
-
-<!-- Modal Création Utilisateur -->
-<div class="modal fade" id="modalCreateUser" tabindex="-1">
-    <div class="modal-dialog">
-        <div class="modal-content bg-dark text-light border-secondary">
-            <div class="modal-header border-secondary">
-                <h5 class="modal-title" id="modal-title-user">Créer un Nouvel Utilisateur</h5>
-                <button type="button" class="btn-close btn-close-white" data-bs-dismiss="modal"></button>
-            </div>
-            <div class="modal-body">
-                <div class="mb-3">
-                    <label class="form-label">Nom d'utilisateur</label>
-                    <input type="text" class="form-control" id="new-username" required>
-                </div>
-                <div class="mb-3">
-                    <label class="form-label">Mot de passe</label>
-                    <input type="password" class="form-control" id="new-password" required>
-                </div>
-                <div class="mb-3">
-                    <label class="form-label">Rôle</label>
-                    <select class="form-select" id="new-role">
-                        <option value="user" selected>Utilisateur standard</option>
-                        <option value="admin">Administrateur</option>
-                    </select>
-                </div>
-                <div class="mb-3">
-                    <label class="form-label">Nombre max de flux simultanés</label>
-                    <input type="number" class="form-control" id="new-streams" value="2" min="1" max="10">
-                </div>
-            </div>
-            <div class="modal-footer border-secondary">
-                <button type="button" class="btn btn-secondary" data-bs-dismiss="modal">Annuler</button>
-                <button type="button" class="btn btn-primary" onclick="submitCreateUser()">Enregistrer</button>
-            </div>
-        </div>
-    </div>
-</div>
-
-<!-- Modal Connexion Administrateur (affiché si token manquant ou 401) -->
-<div class="modal fade" id="modalAdminLogin" data-bs-backdrop="static" data-bs-keyboard="false" tabindex="-1">
-    <div class="modal-dialog">
-        <div class="modal-content bg-dark text-light border-secondary">
-            <div class="modal-header border-secondary">
-                <h5 class="modal-title"><i class="bi bi-shield-lock me-2 text-info"></i>Connexion Administrateur</h5>
-            </div>
-            <div class="modal-body">
-                <p class="text-secondary small">Veuillez vous authentifier pour administrer le serveur et déclencher la synchronisation.</p>
-                <div class="mb-3">
-                    <label class="form-label">Identifiant</label>
-                    <input type="text" class="form-control" id="login-username" value="admin" required>
-                </div>
-                <div class="mb-3">
-                    <label class="form-label">Mot de passe</label>
-                    <input type="password" class="form-control" id="login-password" value="AdminSecurePass2026!" required>
-                </div>
-                <div id="login-error" class="text-danger small mb-2 d-none"></div>
-            </div>
-            <div class="modal-footer border-secondary">
-                <button type="button" class="btn btn-primary w-100" onclick="submitAdminLogin()">Se connecter</button>
-            </div>
-        </div>
-    </div>
+  </div>
 </div>
 {% endblock %}
 
-{% block scripts %}
+{% block extra_scripts %}
 <script>
-    // Dictionnaire bilingue FR / AR
-    const translations = {
-        fr: {
-            dir: 'ltr',
-            langLabel: 'العربية',
-            title: 'Tableau de Bord',
-            syncBtn: 'Synchroniser Telegram',
-            cacheBtn: 'Vider le Cache',
-            lblMedia: 'Catalogue (Films & Séries)',
-            lblVideos: 'Vidéos Publiées sur Mobile',
-            lblViews: 'Total Vues',
-            lblUsers: 'Utilisateurs Actifs',
-            lblStreams: 'Lectures Simultanées',
-            tabMedia: 'Films & Séries',
-            tabRaw: 'Vidéos Brutes (En attente)',
-            tabTelegram: 'Canal Telegram',
-            tabUsers: 'Gestion Utilisateurs',
-            tabInvites: "Codes d'Invitation",
-            btnNewMedia: 'Nouveau Film ou Série',
-            addUserBtn: 'Créer un utilisateur',
-            genInviteBtn: 'Générer un code',
-            copied: 'Code copié dans le presse-papier !'
-        },
-        ar: {
-            dir: 'rtl',
-            langLabel: 'Français',
-            title: 'لوحة التحكم',
-            syncBtn: 'مزامنة تيليجرام',
-            cacheBtn: 'إفراغ الذاكرة المؤقتة',
-            lblMedia: 'دليل الأفلام والمسلسلات',
-            lblVideos: 'مقاطع الفيديو المنشورة',
-            lblViews: 'إجمالي المشاهدات',
-            lblUsers: 'المستخدمون النشطون',
-            lblStreams: 'البث المتزامن',
-            tabMedia: 'الأفلام والمسلسلات',
-            tabRaw: 'الفيديوهات غير المصنفة',
-            tabTelegram: 'قناة تيليجرام',
-            tabUsers: 'إدارة المستخدمين',
-            tabInvites: 'رموز الدعوة',
-            btnNewMedia: 'فيلم أو مسلسل جديد',
-            addUserBtn: 'إضافة مستخدم جديد',
-            genInviteBtn: 'إنشاء رمز دعوة',
-            copied: 'تم نسخ الرمز إلى الحافظة!'
+// Graphique des Lectures (Chart.js)
+document.addEventListener("DOMContentLoaded", function () {
+  const ctxPlays = document.getElementById('chartPlays');
+  if (ctxPlays) {
+    new Chart(ctxPlays, {
+      type: 'line',
+      data: {
+        labels: ['J-6', 'J-5', 'J-4', 'J-3', 'J-2', 'Hier', 'Aujourd\'hui'],
+        datasets: [{
+          label: 'Lectures',
+          data: [12, 19, 15, 25, 22, 30, {{ stats.total_views }}],
+          borderColor: '#E50914',
+          backgroundColor: 'rgba(229, 9, 20, 0.1)',
+          tension: 0.35,
+          fill: true,
+          pointBackgroundColor: '#E50914',
+        }]
+      },
+      options: {
+        responsive: true,
+        maintainAspectRatio: false,
+        plugins: { legend: { display: false } },
+        scales: {
+          x: { grid: { color: 'rgba(255, 255, 255, 0.05)' }, ticks: { color: '#94A3B8' } },
+          y: { grid: { color: 'rgba(255, 255, 255, 0.05)' }, ticks: { color: '#94A3B8' } }
         }
-    };
-
-    let currentLang = 'fr';
-
-    function toggleLanguage() {
-        currentLang = currentLang === 'fr' ? 'ar' : 'fr';
-        applyLanguage(currentLang);
-    }
-
-    function applyLanguage(lang) {
-        const t = translations[lang];
-        document.getElementById('html-root').setAttribute('dir', t.dir);
-        document.getElementById('html-root').setAttribute('lang', lang);
-        document.getElementById('lang-label').innerText = t.langLabel;
-        document.getElementById('txt-page-title').innerText = t.title;
-        document.getElementById('txt-btn-sync').innerText = t.syncBtn;
-        document.getElementById('txt-btn-cache').innerText = t.cacheBtn;
-        const lblM = document.getElementById('lbl-media');
-        if (lblM) lblM.innerText = t.lblMedia;
-        document.getElementById('lbl-videos').innerText = t.lblVideos;
-        document.getElementById('lbl-views').innerText = t.lblViews;
-        document.getElementById('lbl-users').innerText = t.lblUsers;
-        document.getElementById('lbl-streams').innerText = t.lblStreams;
-        const tabM = document.getElementById('tab-title-media');
-        if (tabM) tabM.innerText = t.tabMedia;
-        const tabR = document.getElementById('tab-title-raw');
-        if (tabR) tabR.innerText = t.tabRaw;
-        const tabTel = document.getElementById('tab-title-telegram');
-        if (tabTel) tabTel.innerText = t.tabTelegram;
-        document.getElementById('tab-title-users').innerText = t.tabUsers;
-        document.getElementById('tab-title-invites').innerText = t.tabInvites;
-        const btnNM = document.getElementById('txt-btn-new-media');
-        if (btnNM) btnNM.innerText = t.btnNewMedia;
-        document.getElementById('txt-btn-add-user').innerText = t.addUserBtn;
-        document.getElementById('txt-btn-new-invite').innerText = t.genInviteBtn;
-    }
-
-    // Gestion de l'authentification Admin
-    function getAdminToken() {
-        return localStorage.getItem('vidtele_admin_token') || '';
-    }
-
-    function getAuthHeaders() {
-        const token = getAdminToken();
-        const headers = { 'Content-Type': 'application/json' };
-        if (token) {
-            headers['Authorization'] = 'Bearer ' + token;
-        }
-        return headers;
-    }
-
-    function showLoginModal() {
-        const modalEl = document.getElementById('modalAdminLogin');
-        if (modalEl) {
-            const modal = new bootstrap.Modal(modalEl);
-            modal.show();
-        }
-    }
-
-    async function submitAdminLogin() {
-        const username = document.getElementById('login-username').value.trim();
-        const password = document.getElementById('login-password').value;
-        const errDiv = document.getElementById('login-error');
-
-        try {
-            const res = await fetch('/api/auth/login', {
-                method: 'POST',
-                headers: { 'Content-Type': 'application/json' },
-                body: JSON.stringify({ username, password })
-            });
-            const data = await res.json();
-            if (res.ok && data.role === 'admin') {
-                localStorage.setItem('vidtele_admin_token', data.access_token);
-                location.reload();
-            } else {
-                errDiv.textContent = data.detail || 'Identifiants administrateur incorrects';
-                errDiv.classList.remove('d-none');
-            }
-        } catch (e) {
-            errDiv.textContent = 'Erreur réseau';
-            errDiv.classList.remove('d-none');
-        }
-    }
-
-    // Vérifier l'authentification au chargement
-    window.addEventListener('DOMContentLoaded', () => {
-        if (!getAdminToken()) {
-            showLoginModal();
-        }
+      }
     });
+  }
 
-    function showAlert(message, type = 'success') {
-        const container = document.getElementById('alert-container');
-        container.innerHTML = `
-            <div class="alert alert-${type} alert-dismissible fade show" role="alert">
-                ${message}
-                <button type="button" class="btn-close" data-bs-dismiss="alert"></button>
-            </div>
-        `;
-    }
-
-    async function triggerSync() {
-        const icon = document.getElementById('sync-icon');
-        icon.classList.add('bi-spin');
-        try {
-            const res = await fetch('/api/admin/sync', {
-                method: 'POST',
-                headers: getAuthHeaders()
-            });
-            const data = await res.json();
-            if (res.ok) {
-                showAlert(`Synchronisation terminée : ${data.added} ajoutée(s), ${data.updated} mise(s) à jour.`);
-                setTimeout(() => location.reload(), 1500);
-            } else if (res.status === 401) {
-                showLoginModal();
-            } else {
-                showAlert(`Erreur : ${data.detail || 'Échec de synchronisation'}`, 'danger');
-            }
-        } catch (e) {
-            showAlert(`Erreur de connexion réseau`, 'danger');
-        } finally {
-            icon.classList.remove('bi-spin');
+  // Graphique Doughnut Catalogue
+  const ctxCat = document.getElementById('chartCatalog');
+  if (ctxCat) {
+    new Chart(ctxCat, {
+      type: 'doughnut',
+      data: {
+        labels: ['Séries', 'Films', 'En attente'],
+        datasets: [{
+          data: [{{ stats.series_count }}, {{ stats.movies_count }}, {{ stats.raw_videos_count }}],
+          backgroundColor: ['#E50914', '#7C3AED', '#F59E0B'],
+          borderWidth: 0,
+        }]
+      },
+      options: {
+        responsive: true,
+        maintainAspectRatio: false,
+        plugins: {
+          legend: { position: 'bottom', labels: { color: '#F8FAFC', boxWidth: 12 } }
         }
+      }
+    });
+  }
+});
+
+// Actions Ajax
+async function triggerSync() {
+  const icon = document.getElementById('syncIcon');
+  if (icon) icon.classList.add('spin-animation');
+  showToast('Synchronisation Telegram lancée...', 'info');
+
+  try {
+    const res = await fetch('/api/admin/telegram/sync', { method: 'POST' });
+    const data = await res.json();
+    if (res.ok) {
+      showToast(`Synchronisation terminée : ${data.added || 0} nouvelle(s) vidéo(s) trouvée(s).`, 'success');
+      setTimeout(() => location.reload(), 1500);
+    } else {
+      showToast(data.detail || 'Erreur lors de la synchronisation', 'error');
     }
+  } catch (err) {
+    showToast('Erreur de connexion serveur', 'error');
+  } finally {
+    if (icon) icon.classList.remove('spin-animation');
+  }
+}
 
-    async function purgeCache() {
-        if (!confirm('Voulez-vous vraiment vider le cache des vidéos locales ?')) return;
-        try {
-            const res = await fetch('/api/admin/cache', {
-                method: 'DELETE',
-                headers: getAuthHeaders()
-            });
-            const data = await res.json();
-            if (res.ok) {
-                showAlert(data.message || 'Cache vidé avec succès !');
-                setTimeout(() => location.reload(), 1200);
-            } else if (res.status === 401) {
-                showLoginModal();
-            }
-        } catch (e) {
-            showAlert('Erreur lors de la purge', 'danger');
-        }
+async function purgeCache() {
+  if (!confirm('Êtes-vous sûr de vouloir vider le cache vidéo local sur le disque ?')) return;
+  try {
+    const res = await fetch('/api/admin/cache/purge', { method: 'POST' });
+    const data = await res.json();
+    showToast(data.message || 'Cache vidé avec succès.', 'success');
+    setTimeout(() => location.reload(), 1500);
+  } catch (e) {
+    showToast('Erreur lors du vidage du cache', 'error');
+  }
+}
+
+async function autoDetectVideo(videoId) {
+  try {
+    const res = await fetch(`/api/admin/raw-videos/${videoId}/auto-detect`, { method: 'POST' });
+    const data = await res.json();
+    if (res.ok) {
+      alert(`Détection automatique :\n- Type: ${data.kind}\n- Titre: ${data.clean_title}\n- Saison: S${data.season}\n- Épisode: E${data.episode}\n\nConfiance: ${(data.confidence * 100).toFixed(0)}%`);
+    } else {
+      showToast(data.detail || 'Erreur de détection', 'error');
     }
-
-    async function createInvite() {
-        try {
-            const res = await fetch('/api/admin/invites', {
-                method: 'POST',
-                headers: getAuthHeaders(),
-                body: JSON.stringify({ expires_in_days: 7 })
-            });
-            const data = await res.json();
-            if (res.ok) {
-                showAlert(`Code généré avec succès : <strong>${data.code}</strong>`);
-                setTimeout(() => location.reload(), 1200);
-            } else if (res.status === 401) {
-                showLoginModal();
-            }
-        } catch (e) {
-            showAlert("Erreur lors de la création de l'invitation", 'danger');
-        }
-    }
-
-    async function deleteInvite(id) {
-        if (!confirm('Supprimer ce code d\'invitation ?')) return;
-        try {
-            const res = await fetch(`/api/admin/invites/${id}`, {
-                method: 'DELETE',
-                headers: getAuthHeaders()
-            });
-            if (res.status === 401) {
-                showLoginModal();
-            } else {
-                location.reload();
-            }
-        } catch (e) {
-            showAlert('Erreur de suppression', 'danger');
-        }
-    }
-
-    async function toggleUserActive(userId, newStatus) {
-        try {
-            const res = await fetch(`/api/admin/users/${userId}`, {
-                method: 'PUT',
-                headers: getAuthHeaders(),
-                body: JSON.stringify({ is_active: newStatus })
-            });
-            if (res.status === 401) {
-                showLoginModal();
-            } else {
-                location.reload();
-            }
-        } catch (e) {
-            showAlert('Erreur de mise à jour', 'danger');
-        }
-    }
-
-    async function deleteUser(userId) {
-        if (!confirm('Voulez-vous vraiment supprimer cet utilisateur ?')) return;
-        try {
-            const res = await fetch(`/api/admin/users/${userId}`, {
-                method: 'DELETE',
-                headers: getAuthHeaders()
-            });
-            if (res.status === 401) {
-                showLoginModal();
-            } else {
-                location.reload();
-            }
-        } catch (e) {
-            showAlert('Erreur de suppression', 'danger');
-        }
-    }
-
-    async function submitCreateUser() {
-        const username = document.getElementById('new-username').value.trim();
-        const password = document.getElementById('new-password').value;
-        const role = document.getElementById('new-role').value;
-        const maxStreams = parseInt(document.getElementById('new-streams').value);
-
-        if (!username || !password) {
-            alert('Veuillez remplir tous les champs');
-            return;
-        }
-
-        try {
-            const res = await fetch('/api/admin/users', {
-                method: 'POST',
-                headers: getAuthHeaders(),
-                body: JSON.stringify({
-                    username: username,
-                    password: password,
-                    role: role,
-                    max_concurrent_streams: maxStreams
-                })
-            });
-            const data = await res.json();
-            if (res.ok) {
-                showAlert(`Utilisateur '${data.username}' créé avec succès !`);
-                setTimeout(() => location.reload(), 1000);
-            } else if (res.status === 401) {
-                showLoginModal();
-            } else {
-                alert(`Erreur : ${data.detail}`);
-            }
-        } catch (e) {
-            alert('Erreur réseau');
-        }
-    }
-
-    function copyToClipboard(text) {
-        navigator.clipboard.writeText(text);
-        showAlert(translations[currentLang].copied, 'info');
-    }
-
-    // Gestion Dynamique du Canal Telegram
-    async function testChannelAccess() {
-        const channelTarget = document.getElementById('input-channel-id').value.trim();
-        const resultDiv = document.getElementById('channel-test-result');
-        const testIcon = document.getElementById('test-icon');
-
-        if (!channelTarget) {
-            alert('Veuillez entrer un identifiant ou lien de canal.');
-            return;
-        }
-
-        testIcon.classList.add('bi-spin');
-        resultDiv.classList.remove('d-none');
-        resultDiv.innerHTML = `
-            <div class="alert alert-info d-flex align-items-center gap-2 mb-0">
-                <span class="spinner-border spinner-border-sm" role="status"></span>
-                <span>Vérification de la connexion au canal en cours...</span>
-            </div>
-        `;
-
-        try {
-            const res = await fetch('/api/admin/telegram/test-channel', {
-                method: 'POST',
-                headers: getAuthHeaders(),
-                body: JSON.stringify({ channel_target: channelTarget })
-            });
-            const data = await res.json();
-
-            if (res.ok && data.success) {
-                resultDiv.innerHTML = `
-                    <div class="alert alert-success mb-0 border-2">
-                        <div class="d-flex align-items-center gap-2 fw-bold mb-1 fs-6">
-                            <i class="bi bi-check-circle-fill text-success fs-5"></i>
-                            <span>Canal Accessible et Validé avec Succès !</span>
-                        </div>
-                        <ul class="mb-0 small ps-3">
-                            <li><strong>Titre du Canal :</strong> ${data.title}</li>
-                            <li><strong>Identifiant Résolu :</strong> <code class="text-warning">${data.formatted_id || data.id}</code></li>
-                            <li><strong>Lecture des Vidéos :</strong> ${data.can_read_messages ? '<span class="text-success fw-bold">✅ Autorisée</span>' : '<span class="text-warning fw-bold">⚠️ Messages restreints</span>'}</li>
-                            <li><strong>Échantillon de messages détectés :</strong> ${data.sample_messages_found}</li>
-                        </ul>
-                    </div>
-                `;
-                if (data.formatted_id) {
-                    document.getElementById('input-channel-id').value = data.formatted_id;
-                }
-            } else {
-                resultDiv.innerHTML = `
-                    <div class="alert alert-danger mb-0 border-2">
-                        <div class="d-flex align-items-center gap-2 fw-bold mb-1">
-                            <i class="bi bi-exclamation-triangle-fill text-danger fs-5"></i>
-                            <span>Échec de Connexion au Canal</span>
-                        </div>
-                        <div class="small">${data.error || data.detail || 'Impossible d\'accéder à ce canal.'}</div>
-                        <div class="small text-muted mt-1">Conseil : Vérifiez que le compte Telegram connecté est bien membre ou administrateur de ce canal.</div>
-                    </div>
-                `;
-            }
-        } catch (e) {
-            resultDiv.innerHTML = `
-                <div class="alert alert-danger mb-0">
-                    <i class="bi bi-x-circle me-1"></i> Erreur réseau lors de la vérification.
-                </div>
-            `;
-        } finally {
-            testIcon.classList.remove('bi-spin');
-        }
-    }
-
-    async function saveActiveChannel() {
-        const channelId = document.getElementById('input-channel-id').value.trim();
-        if (!channelId) {
-            alert('Veuillez entrer un identifiant de canal.');
-            return;
-        }
-
-        try {
-            const res = await fetch('/api/admin/telegram/set-channel', {
-                method: 'POST',
-                headers: getAuthHeaders(),
-                body: JSON.stringify({ channel_id: channelId })
-            });
-            const data = await res.json();
-            if (res.ok && data.success) {
-                showAlert(`✅ ${data.message}`);
-                const formatted = data.channel.formatted_id || data.channel.id;
-                document.getElementById('display-channel-id').innerText = formatted;
-                document.getElementById('display-channel-title').innerText = data.channel.title || 'Canal Privé';
-                document.getElementById('input-channel-id').value = formatted;
-                
-                if (confirm("Canal configuré avec succès ! Souhaitez-vous déclencher la synchronisation des vidéos maintenant ?")) {
-                    triggerSync();
-                }
-            } else {
-                showAlert(`❌ Erreur : ${data.detail || data.error || 'Échec de la configuration'}`, 'danger');
-            }
-        } catch (e) {
-            showAlert(`Erreur de connexion réseau`, 'danger');
-        }
-    }
-
-    async function scanMyChannels() {
-        const icon = document.getElementById('scan-icon');
-        const section = document.getElementById('section-detected-channels');
-        const tbody = document.getElementById('detected-channels-tbody');
-
-        icon.classList.add('bi-spin');
-        try {
-            const res = await fetch('/api/admin/telegram/channels', {
-                method: 'GET',
-                headers: getAuthHeaders()
-            });
-            const channels = await res.json();
-
-            if (res.ok && Array.isArray(channels)) {
-                if (channels.length === 0) {
-                    alert("Aucun canal ou groupe trouvé sur ce compte Telegram.");
-                    return;
-                }
-                tbody.innerHTML = '';
-                channels.forEach(ch => {
-                    const tr = document.createElement('tr');
-                    tr.innerHTML = `
-                        <td class="fw-semibold text-light">${ch.title}</td>
-                        <td><span class="badge ${ch.is_channel ? 'bg-primary' : 'bg-secondary'}">${ch.is_channel ? 'Canal' : 'Groupe'}</span></td>
-                        <td><code class="text-warning">${ch.id}</code></td>
-                        <td>
-                            <button class="btn btn-sm btn-outline-info" onclick="selectDetectedChannel('${ch.id}', '${ch.title.replace(/'/g, "\\'")}')">
-                                <i class="bi bi-check-lg me-1"></i> Choisir ce canal
-                            </button>
-                        </td>
-                    `;
-                    tbody.appendChild(tr);
-                });
-                section.classList.remove('d-none');
-                section.scrollIntoView({ behavior: 'smooth' });
-            } else {
-                alert("Impossible de lister les canaux : " + (channels.detail || "Erreur"));
-            }
-        } catch (e) {
-            alert("Erreur réseau lors de la détection des canaux.");
-        } finally {
-            icon.classList.remove('bi-spin');
-        }
-    }
-
-    function selectDetectedChannel(id, title) {
-        document.getElementById('input-channel-id').value = id;
-        testChannelAccess();
-    }
-
-    function hideDetectedChannels() {
-        document.getElementById('section-detected-channels').classList.add('d-none');
-    }
-
-    // ---------------------------------------------------------
-    // Gestion du Catalogue (Films & Séries)
-    // ---------------------------------------------------------
-
-    function onMediaTypeChange() {
-        const isSeries = document.getElementById('type-series').checked;
-        const seriesFields = document.getElementById('series-episode-fields');
-        const linkLbl = document.getElementById('lbl-link-raw');
-        if (isSeries) {
-            seriesFields.classList.remove('d-none');
-            if (linkLbl) linkLbl.innerText = "Associer immédiatement un 1er épisode";
-        } else {
-            seriesFields.classList.add('d-none');
-            if (linkLbl) linkLbl.innerText = "Associer immédiatement une vidéo Telegram";
-        }
-    }
-
-    function setCategoryTag(cat) {
-        document.getElementById('media-category').value = cat;
-    }
-
-    function openCreateMediaModal() {
-        document.getElementById('media-title').value = '';
-        document.getElementById('media-category').value = '';
-        document.getElementById('media-year').value = '';
-        document.getElementById('media-rating').value = '';
-        document.getElementById('media-poster').value = '';
-        document.getElementById('media-backdrop').value = '';
-        document.getElementById('media-description').value = '';
-        document.getElementById('media-raw-video').value = '';
-        document.getElementById('media-is-published').checked = false;
-        document.getElementById('type-movie').checked = true;
-        onMediaTypeChange();
-        new bootstrap.Modal(document.getElementById('modalCreateMedia')).show();
-    }
-
-    function quickCreateMediaWithVideo(videoId, title, category, thumb) {
-        openCreateMediaModal();
-        document.getElementById('media-title').value = title;
-        if (category && category !== 'Général') {
-            document.getElementById('media-category').value = category;
-        }
-        if (thumb) {
-            document.getElementById('media-poster').value = thumb;
-        }
-        document.getElementById('media-raw-video').value = videoId;
-    }
-
-    async function submitCreateMedia() {
-        const title = document.getElementById('media-title').value.trim();
-        if (!title) {
-            alert("Veuillez saisir un titre pour l'œuvre.");
-            return;
-        }
-
-        const mediaType = document.getElementById('type-series').checked ? 'series' : 'movie';
-        const category = document.getElementById('media-category').value.trim() || null;
-        const yearVal = document.getElementById('media-year').value;
-        const releaseYear = yearVal ? parseInt(yearVal) : null;
-        const rateVal = document.getElementById('media-rating').value;
-        const rating = rateVal ? parseFloat(rateVal) : null;
-        const posterUrl = document.getElementById('media-poster').value.trim() || null;
-        const backdropUrl = document.getElementById('media-backdrop').value.trim() || null;
-        const description = document.getElementById('media-description').value.trim() || null;
-        const isPublished = document.getElementById('media-is-published').checked;
-        const rawVideoIdVal = document.getElementById('media-raw-video').value;
-        const rawVideoId = rawVideoIdVal ? parseInt(rawVideoIdVal) : null;
-
-        const payload = {
-            title: title,
-            media_type: mediaType,
-            category: category,
-            release_year: releaseYear,
-            rating: rating,
-            poster_url: posterUrl,
-            backdrop_url: backdropUrl,
-            description: description,
-            is_published: isPublished,
-            raw_video_id: rawVideoId
-        };
-
-        try {
-            const res = await fetch('/api/admin/media-items', {
-                method: 'POST',
-                headers: getAuthHeaders(),
-                body: JSON.stringify(payload)
-            });
-            const data = await res.json();
-            if (res.ok) {
-                if (rawVideoId && mediaType === 'series') {
-                    const season = parseInt(document.getElementById('media-raw-season').value) || 1;
-                    const episode = parseInt(document.getElementById('media-raw-episode').value) || 1;
-                    const epTitle = document.getElementById('media-raw-ep-title').value.trim() || null;
-                    await fetch(`/api/admin/media-items/${data.id}/episodes`, {
-                        method: 'POST',
-                        headers: getAuthHeaders(),
-                        body: JSON.stringify({
-                            video_id: rawVideoId,
-                            season_number: season,
-                            episode_number: episode,
-                            episode_title: epTitle
-                        })
-                    });
-                }
-
-                showAlert(`Œuvre '${data.title}' créée avec succès !`);
-                setTimeout(() => location.reload(), 1000);
-            } else if (res.status === 401) {
-                showLoginModal();
-            } else {
-                alert(`Erreur : ${data.detail || 'Impossible de créer le média'}`);
-            }
-        } catch (e) {
-            alert('Erreur réseau lors de la création');
-        }
-    }
-
-    async function togglePublishMedia(mediaId) {
-        try {
-            const res = await fetch(`/api/admin/media-items/${mediaId}/toggle-publish`, {
-                method: 'POST',
-                headers: getAuthHeaders()
-            });
-            const data = await res.json();
-            if (res.ok && data.success) {
-                showAlert(data.message, data.is_published ? 'success' : 'secondary');
-                setTimeout(() => location.reload(), 800);
-            } else if (res.status === 401) {
-                showLoginModal();
-            } else {
-                alert(`Erreur : ${data.detail || 'Échec du changement de statut'}`);
-            }
-        } catch (e) {
-            alert('Erreur réseau');
-        }
-    }
-
-    async function openManageEpisodesModal(mediaId) {
-        document.getElementById('mng-media-id').value = mediaId;
-        const container = document.getElementById('mng-episodes-table-container');
-        container.innerHTML = '<div class="text-center text-secondary py-3"><span class="spinner-border spinner-border-sm me-2"></span>Chargement...</div>';
-
-        const modal = new bootstrap.Modal(document.getElementById('modalManageEpisodes'));
-        modal.show();
-
-        try {
-            const res = await fetch(`/api/admin/media-items/${mediaId}`, {
-                method: 'GET',
-                headers: getAuthHeaders()
-            });
-            const media = await res.json();
-            if (!res.ok) {
-                container.innerHTML = '<div class="text-danger">Impossible de charger cet élément.</div>';
-                return;
-            }
-
-            document.getElementById('mng-media-title').innerText = media.title;
-            document.getElementById('mng-media-type').value = media.media_type;
-
-            const isSeries = media.media_type === 'series';
-            const seriesInputs = document.getElementById('mng-series-inputs');
-            if (isSeries) {
-                seriesInputs.classList.remove('d-none');
-                document.getElementById('mng-add-label').innerText = "Associer un nouvel épisode";
-            } else {
-                seriesInputs.classList.add('d-none');
-                document.getElementById('mng-add-label').innerText = "Associer un fichier vidéo principal";
-            }
-
-            if (isSeries && media.videos && media.videos.length > 0) {
-                const maxEp = Math.max(...media.videos.map(v => v.episode_number || 1));
-                document.getElementById('mng-episode-num').value = maxEp + 1;
-            } else {
-                document.getElementById('mng-episode-num').value = 1;
-            }
-
-            if (!media.videos || media.videos.length === 0) {
-                container.innerHTML = '<div class="text-secondary small fst-italic p-2 bg-dark rounded border border-secondary border-opacity-25">Aucune vidéo rattachée pour le moment. Associez-en une ci-dessous.</div>';
-            } else {
-                let html = `
-                    <div class="table-responsive">
-                        <table class="table table-dark table-sm table-hover align-middle mb-0">
-                            <thead>
-                                <tr class="text-secondary small">
-                                    ${isSeries ? '<th>Saison / Épisode</th>' : ''}
-                                    <th>Titre Vidéo</th>
-                                    <th>Durée</th>
-                                    <th>Poids</th>
-                                    <th class="text-end">Détacher</th>
-                                </tr>
-                            </thead>
-                            <tbody>
-                `;
-                media.videos.forEach(v => {
-                    html += `
-                        <tr>
-                            ${isSeries ? `<td><span class="badge bg-secondary">S${String(v.season_number).padStart(2, '0')}E${String(v.episode_number).padStart(2, '0')}</span></td>` : ''}
-                            <td class="fw-semibold text-light text-truncate" style="max-width: 250px;">${v.title}</td>
-                            <td>${Math.floor(v.duration_seconds / 60)}m</td>
-                            <td>${(v.file_size_bytes / 1048576).toFixed(1)} Mo</td>
-                            <td class="text-end">
-                                <button class="btn btn-xs btn-outline-danger py-0 px-2" onclick="detachEpisode(${media.id}, ${v.id})">
-                                    <i class="bi bi-x-circle me-1"></i>Détacher
-                                </button>
-                            </td>
-                        </tr>
-                    `;
-                });
-                html += '</tbody></table></div>';
-                container.innerHTML = html;
-            }
-
-            const rawRes = await fetch('/api/admin/raw-videos?unassigned_only=true', {
-                method: 'GET',
-                headers: getAuthHeaders()
-            });
-            const rawVideos = await rawRes.json();
-            const selectEl = document.getElementById('mng-select-video');
-            selectEl.innerHTML = '<option value="">-- Sélectionner une vidéo brute --</option>';
-            if (Array.isArray(rawVideos)) {
-                rawVideos.forEach(rv => {
-                    const opt = document.createElement('option');
-                    opt.value = rv.id;
-                    opt.innerText = `#${rv.telegram_message_id} - ${rv.title} (${Math.floor(rv.duration_seconds / 60)}m, ${(rv.file_size_bytes / 1048576).toFixed(1)} Mo)`;
-                    selectEl.appendChild(opt);
-                });
-            }
-        } catch (e) {
-            container.innerHTML = '<div class="text-danger">Erreur réseau.</div>';
-        }
-    }
-
-    async function submitAttachEpisode() {
-        const mediaId = document.getElementById('mng-media-id').value;
-        const videoId = document.getElementById('mng-select-video').value;
-        if (!videoId) {
-            alert("Veuillez sélectionner une vidéo à rattacher.");
-            return;
-        }
-
-        const isSeries = document.getElementById('mng-media-type').value === 'series';
-        const season = isSeries ? (parseInt(document.getElementById('mng-season-num').value) || 1) : 1;
-        const episode = isSeries ? (parseInt(document.getElementById('mng-episode-num').value) || 1) : 1;
-        const epTitle = isSeries ? document.getElementById('mng-episode-title').value.trim() : null;
-
-        try {
-            const res = await fetch(`/api/admin/media-items/${mediaId}/episodes`, {
-                method: 'POST',
-                headers: getAuthHeaders(),
-                body: JSON.stringify({
-                    video_id: parseInt(videoId),
-                    season_number: season,
-                    episode_number: episode,
-                    episode_title: epTitle
-                })
-            });
-            const data = await res.json();
-            if (res.ok) {
-                showAlert(data.message || "Vidéo rattachée avec succès !");
-                openManageEpisodesModal(mediaId);
-            } else if (res.status === 401) {
-                showLoginModal();
-            } else {
-                alert(`Erreur : ${data.detail}`);
-            }
-        } catch (e) {
-            alert("Erreur réseau");
-        }
-    }
-
-    async function detachEpisode(mediaId, videoId) {
-        if (!confirm("Voulez-vous détacher cette vidéo ? Elle redeviendra une vidéo brute en attente.")) return;
-        try {
-            const res = await fetch(`/api/admin/media-items/${mediaId}/episodes/${videoId}`, {
-                method: 'DELETE',
-                headers: getAuthHeaders()
-            });
-            const data = await res.json();
-            if (res.ok) {
-                showAlert(data.message || "Vidéo détachée.");
-                openManageEpisodesModal(mediaId);
-            } else if (res.status === 401) {
-                showLoginModal();
-            } else {
-                alert(`Erreur : ${data.detail}`);
-            }
-        } catch (e) {
-            alert("Erreur réseau");
-        }
-    }
-
-    async function openEditMediaModal(mediaId) {
-        try {
-            const res = await fetch(`/api/admin/media-items/${mediaId}`, {
-                method: 'GET',
-                headers: getAuthHeaders()
-            });
-            const data = await res.json();
-            if (!res.ok) {
-                alert("Impossible de charger les données");
-                return;
-            }
-            document.getElementById('edit-media-id').value = data.id;
-            document.getElementById('edit-media-title').value = data.title;
-            document.getElementById('edit-media-category').value = data.category || '';
-            document.getElementById('edit-media-year').value = data.release_year || '';
-            document.getElementById('edit-media-rating').value = data.rating || '';
-            document.getElementById('edit-media-poster').value = data.poster_url || '';
-            document.getElementById('edit-media-backdrop').value = data.backdrop_url || '';
-            document.getElementById('edit-media-description').value = data.description || '';
-
-            new bootstrap.Modal(document.getElementById('modalEditMedia')).show();
-        } catch (e) {
-            alert("Erreur réseau");
-        }
-    }
-
-    async function submitEditMedia() {
-        const mediaId = document.getElementById('edit-media-id').value;
-        const title = document.getElementById('edit-media-title').value.trim();
-        if (!title) {
-            alert("Le titre est obligatoire");
-            return;
-        }
-
-        const category = document.getElementById('edit-media-category').value.trim() || null;
-        const yearVal = document.getElementById('edit-media-year').value;
-        const releaseYear = yearVal ? parseInt(yearVal) : null;
-        const rateVal = document.getElementById('edit-media-rating').value;
-        const rating = rateVal ? parseFloat(rateVal) : null;
-        const posterUrl = document.getElementById('edit-media-poster').value.trim() || null;
-        const backdropUrl = document.getElementById('edit-media-backdrop').value.trim() || null;
-        const description = document.getElementById('edit-media-description').value.trim() || null;
-
-        try {
-            const res = await fetch(`/api/admin/media-items/${mediaId}`, {
-                method: 'PUT',
-                headers: getAuthHeaders(),
-                body: JSON.stringify({
-                    title: title,
-                    category: category,
-                    release_year: releaseYear,
-                    rating: rating,
-                    poster_url: posterUrl,
-                    backdrop_url: backdropUrl,
-                    description: description
-                })
-            });
-            const data = await res.json();
-            if (res.ok) {
-                showAlert(`Modifications enregistrées pour '${data.title}'.`);
-                setTimeout(() => location.reload(), 800);
-            } else if (res.status === 401) {
-                showLoginModal();
-            } else {
-                alert(`Erreur : ${data.detail}`);
-            }
-        } catch (e) {
-            alert("Erreur réseau");
-        }
-    }
-
-    async function deleteMediaItem(mediaId, title) {
-        if (!confirm(`Supprimer '${title}' du catalogue ?\n\nLes vidéos associées ne seront pas effacées : elles retourneront dans la liste des Vidéos Brutes.`)) return;
-
-        try {
-            const res = await fetch(`/api/admin/media-items/${mediaId}`, {
-                method: 'DELETE',
-                headers: getAuthHeaders()
-            });
-            const data = await res.json();
-            if (res.ok) {
-                showAlert(data.message || "Élément supprimé.");
-                setTimeout(() => location.reload(), 800);
-            } else if (res.status === 401) {
-                showLoginModal();
-            } else {
-                alert(`Erreur : ${data.detail}`);
-            }
-        } catch (e) {
-            alert("Erreur réseau");
-        }
-    }
-
-    let activeFilter = 'all';
-
-    function applyMediaFilter(type, btnEl) {
-        activeFilter = type;
-        document.querySelectorAll('.filter-btn').forEach(b => b.classList.remove('active'));
-        if (btnEl) btnEl.classList.add('active');
-        filterMediaCards();
-    }
-
-    function filterMediaCards() {
-        const query = (document.getElementById('search-media-input')?.value || '').toLowerCase().trim();
-        const cards = document.querySelectorAll('.media-card-item');
-
-        cards.forEach(card => {
-            const type = card.getAttribute('data-type');
-            const isPub = card.getAttribute('data-published') === '1';
-            const title = card.getAttribute('data-title') || '';
-            const cat = card.getAttribute('data-category') || '';
-
-            let matchesFilter = true;
-            if (activeFilter === 'movie') matchesFilter = (type === 'movie');
-            else if (activeFilter === 'series') matchesFilter = (type === 'series');
-            else if (activeFilter === 'published') matchesFilter = isPub;
-            else if (activeFilter === 'draft') matchesFilter = !isPub;
-
-            let matchesQuery = true;
-            if (query) {
-                matchesQuery = title.includes(query) || cat.includes(query);
-            }
-
-            if (matchesFilter && matchesQuery) {
-                card.style.display = '';
-            } else {
-                card.style.display = 'none';
-            }
-        });
-    }
+  } catch (e) {
+    showToast('Erreur réseau', 'error');
+  }
+}
 </script>
 {% endblock %}

@@ -1,0 +1,114 @@
+{% extends "base.html" %}
+
+{% block title %}StreamAdmin - Bibliothèque Brute Telegram{% endblock %}
+
+{% block content %}
+<div class="d-flex flex-wrap align-items-center justify-content-between gap-3 mb-4">
+  <div>
+    <h1 class="h3 mb-1 fw-bold text-white" data-i18n="raw_videos">Bibliothèque Brute Telegram</h1>
+    <div class="text-muted small">Toutes les vidéos synchronisées depuis votre canal privé Telegram en attente d'organisation ou de publication.</div>
+  </div>
+  <button class="btn btn-outline-light btn-sm d-flex align-items-center gap-2" onclick="triggerSync()">
+    <i class="bi bi-arrow-repeat" id="syncIcon"></i>
+    <span data-i18n="sync_btn">Synchroniser Telegram</span>
+  </button>
+</div>
+
+<div class="card-dark p-3 p-lg-4">
+  <div class="table-responsive">
+    <table class="table table-dark table-hover align-middle mb-0">
+      <thead>
+        <tr class="text-muted small">
+          <th>Message ID</th>
+          <th>Titre / Fichier</th>
+          <th>Taille</th>
+          <th>Durée</th>
+          <th>Date Telegram</th>
+          <th>Statut</th>
+          <th class="text-end">Actions</th>
+        </tr>
+      </thead>
+      <tbody>
+        {% for v in raw_videos %}
+        <tr>
+          <td><code>#{{ v.telegram_message_id }}</code></td>
+          <td>
+            <div class="fw-semibold text-white text-truncate" style="max-width: 320px;" title="{{ v.title }}">{{ v.title }}</div>
+            {% if v.file_name and v.file_name != v.title %}
+              <div class="text-muted small text-truncate" style="max-width: 320px;">{{ v.file_name }}</div>
+            {% endif %}
+          </td>
+          <td class="text-muted small">{{ (v.file_size_bytes / 1024 / 1024) | round(1) }} Mo</td>
+          <td class="text-muted small">
+            {% if v.duration_seconds %}
+              {{ (v.duration_seconds / 60) | round | int }} min
+            {% else %}
+              --
+            {% endif %}
+          </td>
+          <td class="text-muted small">{{ v.telegram_date.strftime('%d/%m/%Y %H:%M') if v.telegram_date else '--' }}</td>
+          <td>
+            {% if v.is_published %}
+              <span class="badge bg-success-subtle text-success border border-success-subtle">Publié sur Mobile</span>
+            {% else %}
+              <span class="badge bg-warning-subtle text-warning border border-warning-subtle">Brut (Non classé)</span>
+            {% endif %}
+          </td>
+          <td class="text-end">
+            <button class="btn btn-sm btn-outline-warning" onclick="autoDetectVideo({{ v.id }})">
+              <i class="bi bi-magic me-1"></i>Détecter
+            </button>
+          </td>
+        </tr>
+        {% else %}
+        <tr>
+          <td colspan="7" class="text-center text-muted py-5">
+            <i class="bi bi-collection-play fs-1 d-block mb-2 text-secondary"></i>
+            Aucune vidéo Telegram synchronisée. Cliquez sur "Synchroniser Telegram" pour scanner votre canal.
+          </td>
+        </tr>
+        {% endfor %}
+      </tbody>
+    </table>
+  </div>
+</div>
+{% endblock %}
+
+{% block extra_scripts %}
+<script>
+async function triggerSync() {
+  const icon = document.getElementById('syncIcon');
+  if (icon) icon.classList.add('spin-animation');
+  showToast('Synchronisation Telegram lancée...', 'info');
+
+  try {
+    const res = await fetch('/api/admin/telegram/sync', { method: 'POST' });
+    const data = await res.json();
+    if (res.ok) {
+      showToast(`Synchronisation terminée : ${data.added || 0} nouvelle(s) vidéo(s) trouvée(s).`, 'success');
+      setTimeout(() => location.reload(), 1500);
+    } else {
+      showToast(data.detail || 'Erreur lors de la synchronisation', 'error');
+    }
+  } catch (err) {
+    showToast('Erreur serveur', 'error');
+  } finally {
+    if (icon) icon.classList.remove('spin-animation');
+  }
+}
+
+async function autoDetectVideo(videoId) {
+  try {
+    const res = await fetch(`/api/admin/raw-videos/${videoId}/auto-detect`, { method: 'POST' });
+    const data = await res.json();
+    if (res.ok) {
+      alert(`Détection automatique pour la vidéo #${data.video_id} :\n\n- Type : ${data.kind.toUpperCase()}\n- Titre proposé : ${data.clean_title}\n- Saison : S${data.season}\n- Épisode : E${data.episode}\n- Confiance : ${(data.confidence * 100).toFixed(0)}%\n\n${data.existing_series_id ? 'Une série existante correspondante a été trouvée !' : 'Aucune série existante. Créez-la dans Séries.'}`);
+    } else {
+      showToast(data.detail || 'Erreur', 'error');
+    }
+  } catch (e) {
+    showToast('Erreur de requête', 'error');
+  }
+}
+</script>
+{% endblock %}

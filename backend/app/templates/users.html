@@ -1,0 +1,159 @@
+{% extends "base.html" %}
+
+{% block title %}StreamAdmin - Utilisateurs{% endblock %}
+
+{% block content %}
+<div class="d-flex flex-wrap align-items-center justify-content-between gap-3 mb-4">
+  <div>
+    <h1 class="h3 mb-1 fw-bold text-white" data-i18n="users">Gestion des Utilisateurs</h1>
+    <div class="text-muted small">Contrôlez les comptes utilisateurs de l'application mobile et leurs limites d'écrans simultanés.</div>
+  </div>
+  <button class="btn btn-danger btn-sm d-flex align-items-center gap-1 shadow-sm" data-bs-toggle="modal" data-bs-target="#modalCreateUser">
+    <i class="bi bi-person-plus"></i>
+    <span>Créer un utilisateur</span>
+  </button>
+</div>
+
+<div class="card-dark p-3 p-lg-4">
+  <div class="table-responsive">
+    <table class="table table-dark table-hover align-middle mb-0">
+      <thead>
+        <tr class="text-muted small">
+          <th>Utilisateur</th>
+          <th>Rôle</th>
+          <th>Statut</th>
+          <th>Écrans Max</th>
+          <th>Dernière connexion</th>
+          <th>Créé le</th>
+          <th class="text-end">Actions</th>
+        </tr>
+      </thead>
+      <tbody>
+        {% for u in users %}
+        <tr>
+          <td>
+            <div class="d-flex align-items-center gap-2">
+              <span class="avatar rounded-circle bg-danger bg-opacity-20 text-danger fw-bold d-flex align-items-center justify-content-center" style="width: 34px; height: 34px;">
+                {{ u.username[:2] | upper }}
+              </span>
+              <div>
+                <div class="fw-semibold text-white">{{ u.username }}</div>
+                {% if u.email %}
+                  <div class="text-muted small">{{ u.email }}</div>
+                {% endif %}
+              </div>
+            </div>
+          </td>
+          <td>
+            <span class="badge {% if u.role == 'admin' %}badge-accent{% else %}badge-soft{% endif %}">
+              {{ u.role }}
+            </span>
+          </td>
+          <td>
+            {% if u.is_active %}
+              <span class="badge bg-success-subtle text-success border border-success-subtle">Actif</span>
+            {% else %}
+              <span class="badge bg-danger-subtle text-danger border border-danger-subtle">Bloqué</span>
+            {% endif %}
+          </td>
+          <td class="text-white">{{ u.max_concurrent_streams }} simultanés</td>
+          <td class="text-muted small">{{ u.last_login_at.strftime('%d/%m/%Y %H:%M') if u.last_login_at else 'Jamais' }}</td>
+          <td class="text-muted small">{{ u.created_at.strftime('%d/%m/%Y') if u.created_at else '--' }}</td>
+          <td class="text-end">
+            <button class="btn btn-sm btn-outline-light" onclick="toggleUserStatus({{ u.id }}, {{ 'false' if u.is_active else 'true' }})">
+              {% if u.is_active %}<i class="bi bi-lock me-1"></i>Bloquer{% else %}<i class="bi bi-unlock me-1"></i>Activer{% endif %}
+            </button>
+          </td>
+        </tr>
+        {% endfor %}
+      </tbody>
+    </table>
+  </div>
+</div>
+
+<!-- Modale : Créer un Utilisateur -->
+<div class="modal fade" id="modalCreateUser" tabindex="-1">
+  <div class="modal-dialog">
+    <div class="modal-content bg-dark text-white border-secondary">
+      <div class="modal-header border-secondary">
+        <h5 class="modal-title">Créer un Compte Utilisateur</h5>
+        <button type="button" class="btn-close btn-close-white" data-bs-dismiss="modal"></button>
+      </div>
+      <div class="modal-body">
+        <form onsubmit="submitCreateUser(event)">
+          <div class="mb-3">
+            <label class="form-label small">Nom d'utilisateur *</label>
+            <input type="text" id="newUsername" class="form-control" required minlength="3">
+          </div>
+          <div class="mb-3">
+            <label class="form-label small">Mot de passe *</label>
+            <input type="password" id="newPassword" class="form-control" required minlength="6">
+          </div>
+          <div class="mb-3">
+            <label class="form-label small">Rôle</label>
+            <select id="newRole" class="form-select">
+              <option value="user" selected>Utilisateur standard (Mobile)</option>
+              <option value="admin">Administrateur (StreamAdmin)</option>
+            </select>
+          </div>
+          <div class="mb-3">
+            <label class="form-label small">Nombre d'écrans simultanés autorisés</label>
+            <input type="number" id="newMaxStreams" class="form-control" value="2" min="1" max="10">
+          </div>
+          <button type="submit" class="btn btn-danger w-100">Créer le compte</button>
+        </form>
+      </div>
+    </div>
+  </div>
+</div>
+{% endblock %}
+
+{% block extra_scripts %}
+<script>
+async function submitCreateUser(e) {
+  e.preventDefault();
+  const username = document.getElementById('newUsername').value.trim();
+  const password = document.getElementById('newPassword').value;
+  const role = document.getElementById('newRole').value;
+  const maxStreams = parseInt(document.getElementById('newMaxStreams').value);
+
+  try {
+    const res = await fetch('/api/admin/users', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({
+        username: username,
+        password: password,
+        role: role,
+        max_concurrent_streams: maxStreams
+      })
+    });
+    if (res.ok) {
+      showToast('Utilisateur créé avec succès !', 'success');
+      setTimeout(() => location.reload(), 1000);
+    } else {
+      const err = await res.json();
+      showToast(err.detail || 'Erreur lors de la création', 'error');
+    }
+  } catch (err) {
+    showToast('Erreur serveur', 'error');
+  }
+}
+
+async function toggleUserStatus(userId, shouldActivate) {
+  try {
+    const res = await fetch(`/api/admin/users/${userId}`, {
+      method: 'PUT',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ is_active: shouldActivate })
+    });
+    if (res.ok) {
+      showToast('Statut mis à jour !', 'success');
+      setTimeout(() => location.reload(), 800);
+    }
+  } catch (err) {
+    showToast('Erreur serveur', 'error');
+  }
+}
+</script>
+{% endblock %}

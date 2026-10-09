@@ -1,0 +1,164 @@
+{% extends "base.html" %}
+
+{% block title %}StreamAdmin - Séries{% endblock %}
+
+{% block content %}
+<div class="d-flex flex-wrap align-items-center justify-content-between gap-3 mb-4">
+  <div>
+    <h1 class="h3 mb-1 fw-bold text-white" data-i18n="series">Gestion des Séries</h1>
+    <div class="text-muted small">Créez et organisez vos séries, saisons et épisodes diffusés sur l'application mobile.</div>
+  </div>
+  <button class="btn btn-danger btn-sm d-flex align-items-center gap-1 shadow-sm" data-bs-toggle="modal" data-bs-target="#modalCreateSeries">
+    <i class="bi bi-plus-lg"></i>
+    <span>Nouvelle Série</span>
+  </button>
+</div>
+
+<!-- Grille des séries -->
+<div class="row g-4">
+  {% for s in series_list %}
+  <div class="col-12 col-sm-6 col-md-4 col-xl-3">
+    <div class="card-dark h-100 overflow-hidden border border-secondary border-opacity-25 d-flex flex-column shadow-sm">
+      <div class="position-relative" style="height: 220px; background: #121A2B;">
+        {% if s.poster_path %}
+          <img src="{{ s.poster_path }}" alt="{{ s.title_fr }}" class="w-100 h-100 object-fit-cover">
+        {% else %}
+          <div class="w-100 h-100 d-flex flex-column align-items-center justify-content-center text-muted">
+            <i class="bi bi-film fs-1 mb-2"></i>
+            <span class="small">Pas d'affiche</span>
+          </div>
+        {% endif %}
+        <div class="position-absolute top-0 end-0 p-2 d-flex gap-1">
+          {% if s.visibility == 'published' %}
+            <span class="badge bg-success shadow-sm">Publié</span>
+          {% else %}
+            <span class="badge bg-warning text-dark shadow-sm">Brouillon</span>
+          {% endif %}
+        </div>
+      </div>
+
+      <div class="p-3 d-flex flex-column flex-grow-1">
+        <h2 class="h6 fw-bold text-white mb-1 text-truncate" title="{{ s.title_fr }}">{{ s.title_fr }}</h2>
+        <div class="text-muted small mb-2">{{ s.year_start or 'N/A' }} · {{ s.seasons_count }} saison(s)</div>
+        <p class="text-muted small mb-3 flex-grow-1" style="display: -webkit-box; -webkit-line-clamp: 2; -webkit-box-orient: vertical; overflow: hidden;">
+          {{ s.synopsis_fr or 'Aucun synopsis disponible.' }}
+        </p>
+
+        <div class="d-flex gap-2 mt-auto">
+          <a href="/admin/series/{{ s.id }}" class="btn btn-sm btn-outline-danger w-100">
+            <i class="bi bi-gear me-1"></i>Gérer
+          </a>
+        </div>
+      </div>
+    </div>
+  </div>
+  {% else %}
+  <div class="col-12 text-center py-5">
+    <div class="p-4 rounded-4 card-dark mx-auto" style="max-width: 480px;">
+      <i class="bi bi-film fs-1 text-danger mb-3"></i>
+      <h3 class="h5 fw-bold text-white">Aucune série enregistrée</h3>
+      <p class="text-muted small mb-3">Commencez par ajouter votre première série pour organiser les épisodes de vos canaux Telegram.</p>
+      <button class="btn btn-danger btn-sm" data-bs-toggle="modal" data-bs-target="#modalCreateSeries">
+        <i class="bi bi-plus-lg me-1"></i>Créer une série
+      </button>
+    </div>
+  </div>
+  {% endfor %}
+</div>
+
+<!-- Modale : Créer une nouvelle série -->
+<div class="modal fade" id="modalCreateSeries" tabindex="-1">
+  <div class="modal-dialog">
+    <div class="modal-content bg-dark text-white border-secondary">
+      <div class="modal-header border-secondary">
+        <h5 class="modal-title">Créer une Série</h5>
+        <button type="button" class="btn-close btn-close-white" data-bs-dismiss="modal"></button>
+      </div>
+      <div class="modal-body">
+        <form id="formCreateSeries" onsubmit="submitCreateSeries(event)">
+          <div class="mb-3">
+            <label class="form-label small">Titre (Français) *</label>
+            <input type="text" id="seriesTitleFr" class="form-control" placeholder="ex: Breaking Bad" required>
+          </div>
+          <div class="mb-3">
+            <label class="form-label small">Titre (Arabe - optionnel)</label>
+            <input type="text" id="seriesTitleAr" class="form-control" dir="rtl" placeholder="اختياري">
+          </div>
+          <div class="row g-2 mb-3">
+            <div class="col-6">
+              <label class="form-label small">Année</label>
+              <input type="number" id="seriesYear" class="form-control" placeholder="2024" min="1950" max="2035">
+            </div>
+            <div class="col-6">
+              <label class="form-label small">Note (0 à 10)</label>
+              <input type="number" id="seriesRating" class="form-control" placeholder="8.5" step="0.1" min="0" max="10">
+            </div>
+          </div>
+          <div class="mb-3">
+            <label class="form-label small">URL Affiche (Poster)</label>
+            <input type="url" id="seriesPoster" class="form-control" placeholder="https://image.tmdb.org/...">
+          </div>
+          <div class="mb-3">
+            <label class="form-label small">URL Bannière (Backdrop)</label>
+            <input type="url" id="seriesBanner" class="form-control" placeholder="https://image.tmdb.org/...">
+          </div>
+          <div class="mb-3">
+            <label class="form-label small">Synopsis</label>
+            <textarea id="seriesSynopsis" class="form-control" rows="3" placeholder="Résumé de l'histoire..."></textarea>
+          </div>
+          <div class="mb-3 form-check">
+            <input type="checkbox" id="seriesPublishImmediate" class="form-check-input">
+            <label class="form-check-label small" for="seriesPublishImmediate">Publier immédiatement sur l'application mobile</label>
+          </div>
+          <button type="submit" class="btn btn-danger w-100">Créer la série</button>
+        </form>
+      </div>
+    </div>
+  </div>
+</div>
+{% endblock %}
+
+{% block extra_scripts %}
+<script>
+async function submitCreateSeries(e) {
+  e.preventDefault();
+  const title = document.getElementById('seriesTitleFr').value.trim();
+  const titleAr = document.getElementById('seriesTitleAr').value.trim();
+  const year = document.getElementById('seriesYear').value ? parseInt(document.getElementById('seriesYear').value) : null;
+  const rating = document.getElementById('seriesRating').value ? parseFloat(document.getElementById('seriesRating').value) : null;
+  const poster = document.getElementById('seriesPoster').value.trim();
+  const banner = document.getElementById('seriesBanner').value.trim();
+  const synopsis = document.getElementById('seriesSynopsis').value.trim();
+  const isPub = document.getElementById('seriesPublishImmediate').checked;
+
+  const payload = {
+    title_fr: title,
+    title_ar: titleAr || null,
+    year_start: year,
+    rating: rating,
+    poster_path: poster || null,
+    banner_path: banner || null,
+    synopsis_fr: synopsis || null,
+    visibility: isPub ? 'published' : 'draft',
+  };
+
+  try {
+    const res = await fetch('/api/admin/series', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify(payload)
+    });
+    if (res.ok) {
+      const data = await res.json();
+      showToast('Série créée avec succès !', 'success');
+      setTimeout(() => location.href = `/admin/series/${data.id}`, 800);
+    } else {
+      const err = await res.json();
+      showToast(err.detail || 'Erreur lors de la création', 'error');
+    }
+  } catch (e) {
+    showToast('Erreur serveur', 'error');
+  }
+}
+</script>
+{% endblock %}

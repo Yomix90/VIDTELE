@@ -1,0 +1,388 @@
+{% extends "base.html" %}
+
+{% block title %}StreamAdmin - {{ series.title_fr }}{% endblock %}
+
+{% block content %}
+<!-- Fil d'Ariane -->
+<nav aria-label="breadcrumb" class="mb-3">
+  <ol class="breadcrumb mb-0 small">
+    <li class="breadcrumb-item"><a href="/admin" class="text-decoration-none text-muted">Tableau de bord</a></li>
+    <li class="breadcrumb-item"><a href="/admin/series" class="text-decoration-none text-muted">Séries</a></li>
+    <li class="breadcrumb-item active text-white" aria-current="page">{{ series.title_fr }}</li>
+  </ol>
+</nav>
+
+<!-- Bannière Héro de la Série -->
+<section class="card-dark p-4 p-lg-5 mb-4 position-relative overflow-hidden border border-secondary border-opacity-25" 
+  style="background: linear-gradient(90deg, rgba(7,10,18,0.95) 0%, rgba(7,10,18,0.7) 60%, rgba(7,10,18,0.3) 100%), url('{{ series.banner_path or '/static/img/default_banner.jpg' }}') center/cover no-repeat; min-height: 280px;">
+  
+  <div class="row align-items-center">
+    <div class="col-12 col-lg-8">
+      <div class="d-flex flex-wrap gap-2 mb-3">
+        <span class="badge badge-accent">Série</span>
+        {% if series.visibility == 'published' %}
+          <span class="badge badge-success-soft">Publié sur Mobile</span>
+        {% else %}
+          <span class="badge badge-warning-soft">Brouillon (Masqué)</span>
+        {% endif %}
+        <span class="badge badge-soft">{{ series.status }}</span>
+        {% if series.is_featured %}
+          <span class="badge badge-accent">À la une</span>
+        {% endif %}
+      </div>
+
+      <h1 class="display-6 fw-bold text-white mb-2">{{ series.title_fr }}</h1>
+      {% if series.title_ar %}
+        <div class="text-muted mb-3 fs-5" dir="rtl">{{ series.title_ar }}</div>
+      {% endif %}
+
+      <p class="text-light text-opacity-75 mb-4" style="max-width: 680px;">
+        {{ series.synopsis_fr or 'Aucun synopsis renseigné.' }}
+      </p>
+
+      <div class="d-flex flex-wrap gap-2">
+        <button class="btn btn-danger btn-sm d-flex align-items-center gap-1" onclick="togglePublishSeries({{ series.id }})">
+          <i class="bi bi-broadcast"></i>
+          <span>{% if series.visibility == 'published' %}Passer en Brouillon{% else %}Publier sur Mobile{% endif %}</span>
+        </button>
+        <button class="btn btn-outline-light btn-sm d-flex align-items-center gap-1" data-bs-toggle="modal" data-bs-target="#modalAddSeason">
+          <i class="bi bi-folder-plus"></i>
+          <span>Ajouter une saison</span>
+        </button>
+        <button class="btn btn-outline-light btn-sm d-flex align-items-center gap-1" data-bs-toggle="modal" data-bs-target="#modalAddEpisode">
+          <i class="bi bi-plus-circle"></i>
+          <span>Ajouter un épisode</span>
+        </button>
+      </div>
+
+      <div class="d-flex flex-wrap gap-3 text-muted small mt-4">
+        <span><i class="bi bi-calendar3 me-1"></i>{{ series.year_start or 'N/A' }}</span>
+        <span><i class="bi bi-star-fill text-warning me-1"></i>{{ series.rating or 'N/A' }} / 10</span>
+        <span><i class="bi bi-collection me-1"></i>{{ series.seasons|length }} saison(s)</span>
+      </div>
+    </div>
+
+    <!-- Affiche Agrandie -->
+    <div class="col-12 col-lg-4 d-none d-lg-flex justify-content-end">
+      <div class="rounded-4 overflow-hidden shadow-lg border border-secondary border-opacity-25" style="width: 180px; height: 260px; background: #121A2B;">
+        {% if series.poster_path %}
+          <img src="{{ series.poster_path }}" alt="{{ series.title_fr }}" class="w-100 h-100 object-fit-cover">
+        {% else %}
+          <div class="w-100 h-100 d-flex flex-column align-items-center justify-content-center text-muted">
+            <i class="bi bi-image fs-1 mb-2"></i>
+            <span class="small">Affiche 2:3</span>
+          </div>
+        {% endif %}
+      </div>
+    </div>
+  </div>
+</section>
+
+<!-- Gestion des Saisons et Épisodes -->
+<div class="card-dark p-3 p-lg-4">
+  <h2 class="h5 fw-bold text-white mb-3">Saisons & Épisodes</h2>
+
+  <!-- Onglets des Saisons -->
+  <ul class="nav nav-pills gap-2 mb-4" id="seasonsTab" role="tablist">
+    {% for s in series.seasons %}
+    <li class="nav-item" role="presentation">
+      <button class="nav-link {% if loop.first %}active bg-danger text-white{% else %}btn-outline-secondary text-light{% endif %} rounded-pill px-4" 
+              id="tab-season-{{ s.id }}" 
+              data-bs-toggle="pill" 
+              data-bs-target="#content-season-{{ s.id }}" 
+              type="button" 
+              role="tab">
+        {{ s.title_fr or 'Saison ' ~ s.number }}
+      </button>
+    </li>
+    {% else %}
+    <li class="nav-item">
+      <span class="text-muted">Aucune saison créée.</span>
+    </li>
+    {% endfor %}
+  </ul>
+
+  <!-- Contenu des Saisons -->
+  <div class="tab-content" id="seasonsTabContent">
+    {% for s in series.seasons %}
+    <div class="tab-pane fade {% if loop.first %}show active{% endif %}" id="content-season-{{ s.id }}" role="tabpanel">
+      <div class="d-flex justify-content-between align-items-center mb-3">
+        <div class="text-muted small">
+          {{ s.episodes|length }} épisode(s) dans cette saison
+        </div>
+        <button class="btn btn-sm btn-outline-info" onclick="openAddEpisodeForSeason({{ s.id }}, {{ s.number }})">
+          <i class="bi bi-plus-lg me-1"></i>Ajouter un épisode à la Saison {{ s.number }}
+        </button>
+      </div>
+
+      <div class="table-responsive">
+        <table class="table table-dark table-hover align-middle mb-0">
+          <thead>
+            <tr class="text-muted small">
+              <th style="width: 70px;">N°</th>
+              <th>Titre de l'épisode</th>
+              <th>Vidéo Telegram rattachée</th>
+              <th>Durée</th>
+              <th class="text-end">Actions</th>
+            </tr>
+          </thead>
+          <tbody>
+            {% for ep in s.episodes %}
+            <tr>
+              <td class="fw-bold text-white fs-6">E{{ "%02d"|format(ep.number) }}</td>
+              <td>
+                <div class="fw-semibold text-white">{{ ep.title_fr or 'Épisode ' ~ ep.number }}</div>
+                {% if ep.synopsis_fr %}
+                  <div class="text-muted small text-truncate" style="max-width: 380px;">{{ ep.synopsis_fr }}</div>
+                {% endif %}
+              </td>
+              <td>
+                {% if ep.telegram_video_id and ep.video %}
+                  <span class="badge bg-success-subtle text-success border border-success-subtle d-inline-flex align-items-center gap-1">
+                    <i class="bi bi-check-circle-fill"></i>
+                    <span class="text-truncate" style="max-width: 220px;" title="{{ ep.video.title }}">{{ ep.video.title }}</span>
+                  </span>
+                {% else %}
+                  <span class="badge bg-warning-subtle text-warning border border-warning-subtle">
+                    <i class="bi bi-exclamation-circle me-1"></i>En attente de vidéo
+                  </span>
+                {% endif %}
+              </td>
+              <td class="text-muted small">
+                {% if ep.duration_sec %}
+                  {{ (ep.duration_sec / 60) | round | int }} min
+                {% else %}
+                  --
+                {% endif %}
+              </td>
+              <td class="text-end">
+                <button class="btn btn-sm btn-outline-light" onclick="openAssignModal({{ ep.id }}, {{ ep.number }})">
+                  <i class="bi bi-link-45deg me-1"></i>Lier vidéo Telegram
+                </button>
+              </td>
+            </tr>
+            {% else %}
+            <tr>
+              <td colspan="5" class="text-center text-muted py-4">Aucun épisode dans cette saison pour le moment.</td>
+            </tr>
+            {% endfor %}
+          </tbody>
+        </table>
+      </div>
+    </div>
+    {% endfor %}
+  </div>
+</div>
+
+<!-- Modale : Ajouter une Saison -->
+<div class="modal fade" id="modalAddSeason" tabindex="-1">
+  <div class="modal-dialog">
+    <div class="modal-content bg-dark text-white border-secondary">
+      <div class="modal-header border-secondary">
+        <h5 class="modal-title">Ajouter une Saison</h5>
+        <button type="button" class="btn-close btn-close-white" data-bs-dismiss="modal"></button>
+      </div>
+      <div class="modal-body">
+        <form id="formAddSeason" onsubmit="submitAddSeason(event)">
+          <div class="mb-3">
+            <label class="form-label small">Numéro de la saison</label>
+            <input type="number" id="seasonNum" class="form-control" value="{{ (series.seasons|length) + 1 }}" min="1" required>
+          </div>
+          <div class="mb-3">
+            <label class="form-label small">Titre (optionnel)</label>
+            <input type="text" id="seasonTitle" class="form-control" placeholder="ex: Saison 2">
+          </div>
+          <button type="submit" class="btn btn-danger w-100">Créer la saison</button>
+        </form>
+      </div>
+    </div>
+  </div>
+</div>
+
+<!-- Modale : Ajouter un Épisode -->
+<div class="modal fade" id="modalAddEpisode" tabindex="-1">
+  <div class="modal-dialog">
+    <div class="modal-content bg-dark text-white border-secondary">
+      <div class="modal-header border-secondary">
+        <h5 class="modal-title">Ajouter un Épisode</h5>
+        <button type="button" class="btn-close btn-close-white" data-bs-dismiss="modal"></button>
+      </div>
+      <div class="modal-body">
+        <form id="formAddEpisode" onsubmit="submitAddEpisode(event)">
+          <div class="mb-3">
+            <label class="form-label small">Choisir la saison</label>
+            <select id="epSeasonSelect" class="form-select" required>
+              {% for s in series.seasons %}
+                <option value="{{ s.id }}">Saison {{ s.number }}</option>
+              {% endfor %}
+            </select>
+          </div>
+          <div class="mb-3">
+            <label class="form-label small">Numéro de l'épisode</label>
+            <input type="number" id="epNumber" class="form-control" value="1" min="0" required>
+          </div>
+          <div class="mb-3">
+            <label class="form-label small">Titre de l'épisode</label>
+            <input type="text" id="epTitle" class="form-control" placeholder="ex: Le commencement">
+          </div>
+          <div class="mb-3">
+            <label class="form-label small">Rattacher une vidéo Telegram brute (optionnel)</label>
+            <select id="epRawVideoSelect" class="form-select">
+              <option value="">-- Aucune (rattacher plus tard) --</option>
+              {% for rv in raw_videos %}
+                <option value="{{ rv.id }}">{{ rv.title }} (Msg {{ rv.telegram_message_id }})</option>
+              {% endfor %}
+            </select>
+          </div>
+          <button type="submit" class="btn btn-danger w-100">Enregistrer l'épisode</button>
+        </form>
+      </div>
+    </div>
+  </div>
+</div>
+
+<!-- Modale : Lier Vidéo Telegram à un Épisode -->
+<div class="modal fade" id="modalAssignVideo" tabindex="-1">
+  <div class="modal-dialog modal-lg">
+    <div class="modal-content bg-dark text-white border-secondary">
+      <div class="modal-header border-secondary">
+        <h5 class="modal-title">Lier une Vidéo Telegram à l'Épisode <span id="assignEpNum"></span></h5>
+        <button type="button" class="btn-close btn-close-white" data-bs-dismiss="modal"></button>
+      </div>
+      <div class="modal-body">
+        <input type="hidden" id="assignEpId">
+        <div class="mb-3">
+          <label class="form-label small">Sélectionnez la vidéo synchronisée depuis Telegram :</label>
+          <div class="list-group" style="max-height: 380px; overflow-y: auto;">
+            {% for rv in raw_videos %}
+            <label class="list-group-item bg-dark text-white border-secondary d-flex align-items-center gap-3">
+              <input type="radio" name="selectedRawVideo" value="{{ rv.id }}" class="form-check-input">
+              <div class="flex-grow-1 overflow-hidden">
+                <div class="fw-semibold text-truncate">{{ rv.title }}</div>
+                <div class="text-muted small">Taille: {{ (rv.file_size_bytes / 1024 / 1024) | round(1) }} Mo · Msg ID: {{ rv.telegram_message_id }}</div>
+              </div>
+            </label>
+            {% else %}
+            <div class="text-center text-muted py-3">Aucune vidéo Telegram brute disponible. Lancez une synchronisation.</div>
+            {% endfor %}
+          </div>
+        </div>
+        <button type="button" class="btn btn-danger w-100" onclick="submitAssignVideo()">Valider l'association</button>
+      </div>
+    </div>
+  </div>
+</div>
+{% endblock %}
+
+{% block extra_scripts %}
+<script>
+const seriesId = {{ series.id }};
+
+async function togglePublishSeries(id) {
+  try {
+    const res = await fetch(`/api/admin/series/${id}/toggle-visibility`, { method: 'POST' });
+    const data = await res.json();
+    if (res.ok) {
+      showToast(data.message, 'success');
+      setTimeout(() => location.reload(), 1000);
+    }
+  } catch (e) {
+    showToast('Erreur serveur', 'error');
+  }
+}
+
+async function submitAddSeason(e) {
+  e.preventDefault();
+  const num = parseInt(document.getElementById('seasonNum').value);
+  const title = document.getElementById('seasonTitle').value.trim();
+
+  try {
+    const res = await fetch(`/api/admin/series/${seriesId}/seasons`, {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ number: num, title_fr: title })
+    });
+    if (res.ok) {
+      showToast('Saison ajoutée avec succès !', 'success');
+      setTimeout(() => location.reload(), 1000);
+    } else {
+      const err = await res.json();
+      showToast(err.detail || 'Erreur', 'error');
+    }
+  } catch (err) {
+    showToast('Erreur de requête', 'error');
+  }
+}
+
+function openAddEpisodeForSeason(seasonId, seasonNum) {
+  const sel = document.getElementById('epSeasonSelect');
+  if (sel) sel.value = seasonId;
+  const modal = new bootstrap.Modal(document.getElementById('modalAddEpisode'));
+  modal.show();
+}
+
+async function submitAddEpisode(e) {
+  e.preventDefault();
+  const seasonId = document.getElementById('epSeasonSelect').value;
+  const epNum = parseInt(document.getElementById('epNumber').value);
+  const title = document.getElementById('epTitle').value.trim();
+  const rawVidVal = document.getElementById('epRawVideoSelect').value;
+
+  const payload = {
+    number: epNum,
+    title_fr: title || `Épisode ${epNum}`,
+    telegram_video_id: rawVidVal ? parseInt(rawVidVal) : null,
+  };
+
+  try {
+    const res = await fetch(`/api/admin/seasons/${seasonId}/episodes`, {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify(payload)
+    });
+    if (res.ok) {
+      showToast('Épisode enregistré !', 'success');
+      setTimeout(() => location.reload(), 1000);
+    } else {
+      const err = await res.json();
+      showToast(err.detail || 'Erreur', 'error');
+    }
+  } catch (err) {
+    showToast('Erreur de requête', 'error');
+  }
+}
+
+function openAssignModal(epId, epNum) {
+  document.getElementById('assignEpId').value = epId;
+  document.getElementById('assignEpNum').textContent = epNum;
+  const modal = new bootstrap.Modal(document.getElementById('modalAssignVideo'));
+  modal.show();
+}
+
+async function submitAssignVideo() {
+  const epId = document.getElementById('assignEpId').value;
+  const selected = document.querySelector('input[name="selectedRawVideo"]:checked');
+  if (!selected) {
+    alert('Veuillez sélectionner une vidéo Telegram dans la liste.');
+    return;
+  }
+
+  try {
+    const res = await fetch(`/api/admin/episodes/${epId}/assign-video`, {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ telegram_video_id: parseInt(selected.value) })
+    });
+    if (res.ok) {
+      showToast('Vidéo Telegram associée avec succès !', 'success');
+      setTimeout(() => location.reload(), 1000);
+    } else {
+      const err = await res.json();
+      showToast(err.detail || 'Erreur', 'error');
+    }
+  } catch (e) {
+    showToast('Erreur de requête', 'error');
+  }
+}
+</script>
+{% endblock %}

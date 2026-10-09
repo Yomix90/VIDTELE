@@ -1,0 +1,56 @@
+{% extends "base.html" %}
+
+{% block title %}StreamAdmin - Paramètres{% endblock %}
+
+{% block content %}
+<div class="d-flex flex-wrap align-items-center justify-content-between gap-3 mb-4">
+  <div>
+    <h1 class="h3 mb-1 fw-bold text-white" data-i18n="settings">Paramètres du Système</h1>
+    <div class="text-muted small">Configuration globale du stockage, du lecteur vidéo et de la sécurité.</div>
+  </div>
+</div>
+
+<div class="row g-4">
+  <div class="col-12 col-lg-6">
+    <div class="card-dark p-4 border border-secondary border-opacity-25 h-100">
+      <h2 class="h6 fw-bold text-white mb-3"><i class="bi bi-hdd-rack me-2 text-info"></i>Stockage & Streaming</h2>
+      <div class="mb-3">
+        <label class="form-label small text-muted">Taille max du cache disque</label>
+        <div class="input-group">
+          <input type="text" class="form-control" value="20 Go" readonly>
+        </div>
+      </div>
+      <div class="mb-3">
+        <label class="form-label small text-muted">Durée de validité des jetons de streaming</label>
+        <div class="input-group">
+          <input type="text" class="form-control" value="7200 secondes (2 heures)" readonly>
+        </div>
+      </div>
+      <div class="mb-3">
+        <label class="form-label small text-muted">Flux simultanés par défaut / utilisateur</label>
+        <div class="input-group">
+          <input type="text" class="form-control" value="2 flux" readonly>
+        </div>
+      </div>
+    </div>
+  </div>
+
+  <div class="col-12 col-lg-6">
+    <div class="card-dark p-4 border border-secondary border-opacity-25 h-100">
+      <h2 class="h6 fw-bold text-white mb-3"><i class="bi bi-shield-lock me-2 text-danger"></i>Sécurité & Authentification</h2>
+      <div class="mb-3">
+        <label class="form-label small text-muted">Algorithme JWT</label>
+        <input type="text" class="form-control" value="HS256" readonly>
+      </div>
+      <div class="mb-3">
+        <label class="form-label small text-muted">Protection Anti Brute-Force</label>
+        <input type="text" class="form-control" value="Actif (5 tentatives max / 15 min de blocage)" readonly>
+      </div>
+      <div class="mb-3">
+        <label class="form-label small text-muted">Mode Dokploy / Docker</label>
+        <input type="text" class="form-control" value="Production (Port 8000)" readonly>
+      </div>
+    </div>
+  </div>
+</div>
+{% endblock %}

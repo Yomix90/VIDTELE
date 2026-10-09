@@ -1,0 +1,150 @@
+{% extends "base.html" %}
+
+{% block title %}StreamAdmin - Configuration Telegram MTProto{% endblock %}
+
+{% block content %}
+<div class="d-flex flex-wrap align-items-center justify-content-between gap-3 mb-4">
+  <div>
+    <h1 class="h3 mb-1 fw-bold text-white" data-i18n="telegram">Connexion Telegram & Canaux</h1>
+    <div class="text-muted small">Surveillez l'état de la session MTProto Telethon et configurez votre canal privé de stockage.</div>
+  </div>
+  <button class="btn btn-primary btn-sm d-flex align-items-center gap-2" onclick="triggerSync()">
+    <i class="bi bi-arrow-repeat" id="syncIcon"></i>
+    <span data-i18n="sync_btn">Synchroniser Telegram</span>
+  </button>
+</div>
+
+<!-- État MTProto Direct -->
+<div class="row g-4 mb-4">
+  <div class="col-12 col-lg-6">
+    <div class="card-dark p-4 h-100 border border-secondary border-opacity-25">
+      <h2 class="h6 fw-bold text-white mb-3 d-flex align-items-center gap-2">
+        <i class="bi bi-shield-check text-info"></i>
+        <span>Statut de la Session MTProto</span>
+      </h2>
+
+      <div class="d-flex align-items-center gap-3 mb-4 p-3 rounded-3" style="background: rgba(255,255,255,0.02); border: 1px solid rgba(255,255,255,0.06);">
+        <div class="p-3 rounded-circle {% if telegram.connected %}bg-success bg-opacity-20 text-success{% else %}bg-warning bg-opacity-20 text-warning{% endif %} fs-3">
+          <i class="bi bi-telegram"></i>
+        </div>
+        <div>
+          <div class="fw-bold fs-5 text-white">
+            {% if telegram.connected %}Session Active (Connecté){% else %}En attente / Session locale{% endif %}
+          </div>
+          <div class="text-muted small">
+            Compte : <strong class="text-white">{{ telegram.user_name or 'Youssef' }}</strong> 
+            {% if telegram.user_id %}(ID: <code>{{ telegram.user_id }}</code>){% endif %}
+          </div>
+        </div>
+      </div>
+
+      <div class="text-muted small">
+        <p class="mb-1"><i class="bi bi-check2 text-success me-1"></i>Client Telethon configuré en mode natif.</p>
+        <p class="mb-1"><i class="bi bi-check2 text-success me-1"></i>Écoute en temps réel des nouveaux messages activée.</p>
+        <p class="mb-0"><i class="bi bi-check2 text-success me-1"></i>Téléchargement par blocs HTTP Range 206 pour le streaming mobile.</p>
+      </div>
+    </div>
+  </div>
+
+  <!-- Canal Actif -->
+  <div class="col-12 col-lg-6">
+    <div class="card-dark p-4 h-100 border border-secondary border-opacity-25">
+      <h2 class="h6 fw-bold text-white mb-3 d-flex align-items-center gap-2">
+        <i class="bi bi-broadcast text-danger"></i>
+        <span>Canal de Stockage Actif</span>
+      </h2>
+
+      <div class="p-3 rounded-3 mb-4" style="background: rgba(255,255,255,0.02); border: 1px solid rgba(255,255,255,0.06);">
+        <div class="text-muted small">Titre du canal :</div>
+        <div class="fs-5 fw-bold text-white">{{ telegram.channel_title or 'My App [TD]' }}</div>
+        <div class="text-muted small mt-1">
+          Identifiant Telegram : <code>{{ telegram.channel_id or '-1004234167037' }}</code>
+        </div>
+      </div>
+
+      <!-- Formulaire pour changer le canal -->
+      <form onsubmit="submitChangeChannel(event)">
+        <label class="form-label small text-white">Modifier l'identifiant du canal privé</label>
+        <div class="input-group mb-2">
+          <input type="text" id="targetChannelInput" class="form-control" placeholder="ex: -1004234167037 ou -4234167037" value="{{ telegram.channel_id or '' }}" required>
+          <button type="button" class="btn btn-outline-info" onclick="testChannel()">Tester</button>
+          <button type="submit" class="btn btn-danger">Appliquer</button>
+        </div>
+        <div class="text-muted" style="font-size: 0.78rem;">
+          Format accepté : ID brut (ex: -4234167037) ou ID avec préfixe bot (-1004234167037) ou @nomducanal.
+        </div>
+      </form>
+    </div>
+  </div>
+</div>
+{% endblock %}
+
+{% block extra_scripts %}
+<script>
+async function testChannel() {
+  const target = document.getElementById('targetChannelInput').value.trim();
+  if (!target) return alert('Veuillez saisir un identifiant de canal.');
+
+  showToast('Test d\'accès en cours...', 'info');
+  try {
+    const res = await fetch('/api/admin/telegram/test-channel', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ channel_target: target })
+    });
+    const data = await res.json();
+    if (data.success) {
+      alert(`Canal vérifié avec succès !\n\n- Titre: ${data.title}\n- ID: ${data.formatted_id || data.id}\n- Type: ${data.type}`);
+    } else {
+      alert(`Échec de vérification :\n${data.error}`);
+    }
+  } catch (e) {
+    showToast('Erreur serveur', 'error');
+  }
+}
+
+async function submitChangeChannel(e) {
+  e.preventDefault();
+  const target = document.getElementById('targetChannelInput').value.trim();
+  if (!target) return;
+
+  try {
+    const res = await fetch('/api/admin/telegram/set-channel', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ channel_id: target })
+    });
+    const data = await res.json();
+    if (res.ok) {
+      showToast(data.message || 'Canal configuré avec succès !', 'success');
+      setTimeout(() => location.reload(), 1500);
+    } else {
+      showToast(data.detail || 'Erreur lors du changement de canal', 'error');
+    }
+  } catch (err) {
+    showToast('Erreur réseau', 'error');
+  }
+}
+
+async function triggerSync() {
+  const icon = document.getElementById('syncIcon');
+  if (icon) icon.classList.add('spin-animation');
+  showToast('Synchronisation Telegram lancée...', 'info');
+
+  try {
+    const res = await fetch('/api/admin/telegram/sync', { method: 'POST' });
+    const data = await res.json();
+    if (res.ok) {
+      showToast(`Synchronisation terminée : ${data.added || 0} nouvelle(s) vidéo(s) trouvée(s).`, 'success');
+      setTimeout(() => location.reload(), 1500);
+    } else {
+      showToast(data.detail || 'Erreur lors de la synchronisation', 'error');
+    }
+  } catch (err) {
+    showToast('Erreur serveur', 'error');
+  } finally {
+    if (icon) icon.classList.remove('spin-animation');
+  }
+}
+</script>
+{% endblock %}
