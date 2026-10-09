@@ -96,10 +96,15 @@
     </div>
 </div>
 
-<!-- Onglets Principaux (Utilisateurs & Invitations) -->
+<!-- Onglets Principaux (Canal Telegram, Utilisateurs & Invitations) -->
 <ul class="nav nav-tabs mb-3" id="adminTab" role="tablist">
     <li class="nav-item" role="presentation">
-        <button class="nav-link active" id="users-tab" data-bs-toggle="tab" data-bs-target="#tab-users" type="button" role="tab">
+        <button class="nav-link active" id="telegram-tab" data-bs-toggle="tab" data-bs-target="#tab-telegram" type="button" role="tab">
+            <i class="bi bi-telegram me-1 text-info"></i> <span id="tab-title-telegram">Canal Telegram</span>
+        </button>
+    </li>
+    <li class="nav-item" role="presentation">
+        <button class="nav-link" id="users-tab" data-bs-toggle="tab" data-bs-target="#tab-users" type="button" role="tab">
             <i class="bi bi-people me-1"></i> <span id="tab-title-users">Gestion Utilisateurs</span>
         </button>
     </li>
@@ -111,8 +116,121 @@
 </ul>
 
 <div class="tab-content" id="adminTabContent">
-    <!-- Onglet 1: Utilisateurs -->
-    <div class="tab-pane fade show active" id="tab-users" role="tabpanel">
+    <!-- Onglet 1: Configuration et Vérification Canal Telegram -->
+    <div class="tab-pane fade show active" id="tab-telegram" role="tabpanel">
+        <div class="row g-3 mb-3">
+            <!-- État actuel du compte & canal -->
+            <div class="col-12 col-lg-5">
+                <div class="card p-3 shadow-sm h-100 border-start border-4 {% if telegram.is_connected %}border-success{% else %}border-warning{% endif %}">
+                    <h5 class="fw-bold mb-3 d-flex align-items-center gap-2">
+                        <i class="bi bi-telegram text-primary"></i>
+                        <span>État Telegram MTProto</span>
+                    </h5>
+                    
+                    <div class="mb-3">
+                        <div class="small text-secondary mb-1">Statut de Connexion</div>
+                        {% if telegram.is_connected %}
+                            <span class="badge bg-success fs-6"><i class="bi bi-check-circle me-1"></i> Connecté & Opérationnel</span>
+                        {% elif telegram.session_exists %}
+                            <span class="badge bg-warning text-dark fs-6"><i class="bi bi-hourglass-split me-1"></i> Session prête (en attente)</span>
+                        {% else %}
+                            <span class="badge bg-danger fs-6"><i class="bi bi-x-circle me-1"></i> Session non connectée</span>
+                        {% endif %}
+                    </div>
+
+                    {% if telegram.account %}
+                    <div class="mb-3 p-2 bg-dark rounded border border-secondary border-opacity-25">
+                        <div class="small text-secondary mb-1">Compte Connecté</div>
+                        <div class="fw-semibold text-light">{{ telegram.account.first_name }} <span class="text-info">(@{{ telegram.account.username or 'sans_username' }})</span></div>
+                        <div class="small text-secondary">ID Utilisateur : <code>{{ telegram.account.id }}</code></div>
+                    </div>
+                    {% endif %}
+
+                    <div class="p-2 bg-dark rounded border border-secondary border-opacity-25 mb-3">
+                        <div class="small text-secondary mb-1">Canal Actuellement Actif</div>
+                        <div class="fs-6 fw-bold text-light" id="display-channel-title">
+                            {{ telegram.current_channel_title or 'Canal Privé' }}
+                        </div>
+                        <div class="small text-secondary">ID Actuel : <code class="text-warning fs-6" id="display-channel-id">{{ telegram.current_channel_id }}</code></div>
+                    </div>
+
+                    <div class="mt-auto">
+                        <button class="btn btn-outline-info w-100 btn-sm d-flex align-items-center justify-content-center gap-2" onclick="scanMyChannels()">
+                            <i class="bi bi-search" id="scan-icon"></i>
+                            <span id="txt-btn-scan">Scanner mes canaux Telegram</span>
+                        </button>
+                    </div>
+                </div>
+            </div>
+
+            <!-- Configuration & Test du Canal -->
+            <div class="col-12 col-lg-7">
+                <div class="card p-3 shadow-sm h-100">
+                    <h5 class="fw-bold mb-3 d-flex align-items-center gap-2">
+                        <i class="bi bi-sliders text-info"></i>
+                        <span>Configurer & Vérifier un Canal</span>
+                    </h5>
+
+                    <p class="text-secondary small mb-3">
+                        Renseignez l'identifiant du canal privé (ex: <code>-4234167037</code> ou <code>-1004234167037</code>) ou un nom d'utilisateur public (ex: <code>@moncanal</code>).
+                    </p>
+
+                    <div class="mb-3">
+                        <label class="form-label fw-semibold">Identifiant ou Lien du Canal</label>
+                        <div class="input-group">
+                            <input type="text" class="form-control" id="input-channel-id" value="{{ telegram.current_channel_id }}" placeholder="-4234167037">
+                            <button class="btn btn-primary d-flex align-items-center gap-2" type="button" id="btn-test-channel" onclick="testChannelAccess()">
+                                <i class="bi bi-shield-check" id="test-icon"></i>
+                                <span id="txt-btn-test-ch">Vérifier l'accès</span>
+                            </button>
+                        </div>
+                    </div>
+
+                    <!-- Zone de résultat du test dynamique -->
+                    <div id="channel-test-result" class="d-none mb-3"></div>
+
+                    <!-- Boutons d'action -->
+                    <div class="d-flex gap-2 flex-wrap mt-auto">
+                        <button class="btn btn-success d-flex align-items-center gap-2" id="btn-save-channel" onclick="saveActiveChannel()">
+                            <i class="bi bi-check2-circle"></i>
+                            <span id="txt-btn-save-ch">Enregistrer & Activer ce Canal</span>
+                        </button>
+                        <button class="btn btn-outline-primary d-flex align-items-center gap-2" onclick="triggerSync()">
+                            <i class="bi bi-arrow-repeat"></i>
+                            <span>Synchroniser les Vidéos</span>
+                        </button>
+                    </div>
+                </div>
+            </div>
+
+            <!-- Liste des canaux détectés (affichée au clic sur Scanner) -->
+            <div class="col-12 d-none" id="section-detected-channels">
+                <div class="card p-3 shadow-sm border-info">
+                    <div class="d-flex justify-content-between align-items-center mb-2">
+                        <h6 class="fw-bold m-0 text-info"><i class="bi bi-list-check me-2"></i>Canaux et Groupes Détectés sur votre Compte</h6>
+                        <button class="btn btn-sm btn-outline-secondary" onclick="hideDetectedChannels()">Fermer</button>
+                    </div>
+                    <div class="table-responsive">
+                        <table class="table table-dark table-hover align-middle mb-0">
+                            <thead>
+                                <tr>
+                                    <th>Nom du Canal</th>
+                                    <th>Type</th>
+                                    <th>Identifiant (ID)</th>
+                                    <th>Action</th>
+                                </tr>
+                            </thead>
+                            <tbody id="detected-channels-tbody">
+                            </tbody>
+                        </table>
+                    </div>
+                </div>
+            </div>
+        </div>
+    </div>
+
+    <!-- Onglet 2: Utilisateurs -->
+    <div class="tab-pane fade" id="tab-users" role="tabpanel">
         <div class="card p-3 shadow-sm">
             <div class="d-flex justify-content-between align-items-center mb-3">
                 <h5 class="m-0 fw-bold" id="txt-users-list">Liste des Comptes</h5>
@@ -300,6 +418,7 @@
             lblViews: 'Total Vues',
             lblUsers: 'Utilisateurs Actifs',
             lblStreams: 'Lectures Simultanées',
+            tabTelegram: 'Canal Telegram',
             tabUsers: 'Gestion Utilisateurs',
             tabInvites: "Codes d'Invitation",
             addUserBtn: 'Créer un utilisateur',
@@ -316,6 +435,7 @@
             lblViews: 'إجمالي المشاهدات',
             lblUsers: 'المستخدمون النشطون',
             lblStreams: 'البث المتزامن',
+            tabTelegram: 'قناة تيليجرام',
             tabUsers: 'إدارة المستخدمين',
             tabInvites: 'رموز الدعوة',
             addUserBtn: 'إضافة مستخدم جديد',
@@ -343,6 +463,8 @@
         document.getElementById('lbl-views').innerText = t.lblViews;
         document.getElementById('lbl-users').innerText = t.lblUsers;
         document.getElementById('lbl-streams').innerText = t.lblStreams;
+        const tabTel = document.getElementById('tab-title-telegram');
+        if (tabTel) tabTel.innerText = t.tabTelegram;
         document.getElementById('tab-title-users').innerText = t.tabUsers;
         document.getElementById('tab-title-invites').innerText = t.tabInvites;
         document.getElementById('txt-btn-add-user').innerText = t.addUserBtn;
@@ -565,6 +687,161 @@
     function copyToClipboard(text) {
         navigator.clipboard.writeText(text);
         showAlert(translations[currentLang].copied, 'info');
+    }
+
+    // Gestion Dynamique du Canal Telegram
+    async function testChannelAccess() {
+        const channelTarget = document.getElementById('input-channel-id').value.trim();
+        const resultDiv = document.getElementById('channel-test-result');
+        const testIcon = document.getElementById('test-icon');
+
+        if (!channelTarget) {
+            alert('Veuillez entrer un identifiant ou lien de canal.');
+            return;
+        }
+
+        testIcon.classList.add('bi-spin');
+        resultDiv.classList.remove('d-none');
+        resultDiv.innerHTML = `
+            <div class="alert alert-info d-flex align-items-center gap-2 mb-0">
+                <span class="spinner-border spinner-border-sm" role="status"></span>
+                <span>Vérification de la connexion au canal en cours...</span>
+            </div>
+        `;
+
+        try {
+            const res = await fetch('/api/admin/telegram/test-channel', {
+                method: 'POST',
+                headers: getAuthHeaders(),
+                body: JSON.stringify({ channel_target: channelTarget })
+            });
+            const data = await res.json();
+
+            if (res.ok && data.success) {
+                resultDiv.innerHTML = `
+                    <div class="alert alert-success mb-0 border-2">
+                        <div class="d-flex align-items-center gap-2 fw-bold mb-1 fs-6">
+                            <i class="bi bi-check-circle-fill text-success fs-5"></i>
+                            <span>Canal Accessible et Validé avec Succès !</span>
+                        </div>
+                        <ul class="mb-0 small ps-3">
+                            <li><strong>Titre du Canal :</strong> ${data.title}</li>
+                            <li><strong>Identifiant Résolu :</strong> <code class="text-warning">${data.formatted_id || data.id}</code></li>
+                            <li><strong>Lecture des Vidéos :</strong> ${data.can_read_messages ? '<span class="text-success fw-bold">✅ Autorisée</span>' : '<span class="text-warning fw-bold">⚠️ Messages restreints</span>'}</li>
+                            <li><strong>Échantillon de messages détectés :</strong> ${data.sample_messages_found}</li>
+                        </ul>
+                    </div>
+                `;
+                if (data.formatted_id) {
+                    document.getElementById('input-channel-id').value = data.formatted_id;
+                }
+            } else {
+                resultDiv.innerHTML = `
+                    <div class="alert alert-danger mb-0 border-2">
+                        <div class="d-flex align-items-center gap-2 fw-bold mb-1">
+                            <i class="bi bi-exclamation-triangle-fill text-danger fs-5"></i>
+                            <span>Échec de Connexion au Canal</span>
+                        </div>
+                        <div class="small">${data.error || data.detail || 'Impossible d\'accéder à ce canal.'}</div>
+                        <div class="small text-muted mt-1">Conseil : Vérifiez que le compte Telegram connecté est bien membre ou administrateur de ce canal.</div>
+                    </div>
+                `;
+            }
+        } catch (e) {
+            resultDiv.innerHTML = `
+                <div class="alert alert-danger mb-0">
+                    <i class="bi bi-x-circle me-1"></i> Erreur réseau lors de la vérification.
+                </div>
+            `;
+        } finally {
+            testIcon.classList.remove('bi-spin');
+        }
+    }
+
+    async function saveActiveChannel() {
+        const channelId = document.getElementById('input-channel-id').value.trim();
+        if (!channelId) {
+            alert('Veuillez entrer un identifiant de canal.');
+            return;
+        }
+
+        try {
+            const res = await fetch('/api/admin/telegram/set-channel', {
+                method: 'POST',
+                headers: getAuthHeaders(),
+                body: JSON.stringify({ channel_id: channelId })
+            });
+            const data = await res.json();
+            if (res.ok && data.success) {
+                showAlert(`✅ ${data.message}`);
+                const formatted = data.channel.formatted_id || data.channel.id;
+                document.getElementById('display-channel-id').innerText = formatted;
+                document.getElementById('display-channel-title').innerText = data.channel.title || 'Canal Privé';
+                document.getElementById('input-channel-id').value = formatted;
+                
+                if (confirm("Canal configuré avec succès ! Souhaitez-vous déclencher la synchronisation des vidéos maintenant ?")) {
+                    triggerSync();
+                }
+            } else {
+                showAlert(`❌ Erreur : ${data.detail || data.error || 'Échec de la configuration'}`, 'danger');
+            }
+        } catch (e) {
+            showAlert(`Erreur de connexion réseau`, 'danger');
+        }
+    }
+
+    async function scanMyChannels() {
+        const icon = document.getElementById('scan-icon');
+        const section = document.getElementById('section-detected-channels');
+        const tbody = document.getElementById('detected-channels-tbody');
+
+        icon.classList.add('bi-spin');
+        try {
+            const res = await fetch('/api/admin/telegram/channels', {
+                method: 'GET',
+                headers: getAuthHeaders()
+            });
+            const channels = await res.json();
+
+            if (res.ok && Array.isArray(channels)) {
+                if (channels.length === 0) {
+                    alert("Aucun canal ou groupe trouvé sur ce compte Telegram.");
+                    return;
+                }
+                tbody.innerHTML = '';
+                channels.forEach(ch => {
+                    const tr = document.createElement('tr');
+                    tr.innerHTML = `
+                        <td class="fw-semibold text-light">${ch.title}</td>
+                        <td><span class="badge ${ch.is_channel ? 'bg-primary' : 'bg-secondary'}">${ch.is_channel ? 'Canal' : 'Groupe'}</span></td>
+                        <td><code class="text-warning">${ch.id}</code></td>
+                        <td>
+                            <button class="btn btn-sm btn-outline-info" onclick="selectDetectedChannel('${ch.id}', '${ch.title.replace(/'/g, "\\'")}')">
+                                <i class="bi bi-check-lg me-1"></i> Choisir ce canal
+                            </button>
+                        </td>
+                    `;
+                    tbody.appendChild(tr);
+                });
+                section.classList.remove('d-none');
+                section.scrollIntoView({ behavior: 'smooth' });
+            } else {
+                alert("Impossible de lister les canaux : " + (channels.detail || "Erreur"));
+            }
+        } catch (e) {
+            alert("Erreur réseau lors de la détection des canaux.");
+        } finally {
+            icon.classList.remove('bi-spin');
+        }
+    }
+
+    function selectDetectedChannel(id, title) {
+        document.getElementById('input-channel-id').value = id;
+        testChannelAccess();
+    }
+
+    function hideDetectedChannels() {
+        document.getElementById('section-detected-channels').classList.add('d-none');
     }
 </script>
 {% endblock %}

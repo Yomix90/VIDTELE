@@ -12,6 +12,8 @@ from app.database import get_db
 from app.models import InviteCode, User, Video
 from app.services.cache_service import cache_service
 from app.services.stream_manager import stream_manager
+from app.telegram_client import telegram_manager
+
 
 templates_dir = Path(__file__).resolve().parent.parent / "templates"
 templates = Jinja2Templates(directory=str(templates_dir))
@@ -64,6 +66,9 @@ async def admin_dashboard_page(
     admin_stmt = select(User).where(User.role == "admin").limit(1)
     current_admin = (await db.execute(admin_stmt)).scalar_one_or_none()
 
+    # 5. État Telegram MTProto
+    telegram_status = await telegram_manager.get_connection_status()
+
     return templates.TemplateResponse(
         request=request,
         name="dashboard.html",
@@ -72,5 +77,7 @@ async def admin_dashboard_page(
             "users": users,
             "invites": invites,
             "current_user": current_admin or (users[0] if users else None),
+            "telegram": telegram_status,
         },
     )
+

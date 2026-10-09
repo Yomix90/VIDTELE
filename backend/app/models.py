@@ -126,3 +126,13 @@ class ActiveStream(Base):
 
     # Relations
     user: Mapped["User"] = relationship("User", back_populates="active_streams")
+
+
+class SystemSetting(Base):
+    """Paramètres système dynamiques persistés en base de données."""
+    __tablename__ = "system_settings"
+
+    key: Mapped[str] = mapped_column(String(64), primary_key=True, index=True)
+    value: Mapped[str] = mapped_column(Text, nullable=False)
+    updated_at: Mapped[datetime] = mapped_column(DateTime, default=utc_now, onupdate=utc_now, nullable=False)
+

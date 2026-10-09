@@ -291,3 +291,106 @@ async def purge_cache(
     """Purge complète des fichiers vidéo du cache disque (libère l'espace disque du VPS)."""
     deleted_count = cache_service.clear_all()
     return MessageResponse(message=f"Cache disque vidé avec succès : {deleted_count} fichiers supprimés.")
+
+
+# -------------------------------------------------------------
+# 6. Gestion Dynamique des Canaux Telegram MTProto
+# -------------------------------------------------------------
+
+from pydantic import BaseModel
+
+class ChannelTestRequest(BaseModel):
+    channel_target: str
+
+class ChannelSetRequest(BaseModel):
+    channel_id: str
+
+
+@router.get("/telegram/status")
+async def get_telegram_status(
+    current_admin: User = Depends(get_current_admin),
+):
+    """Retourne l'état de connexion MTProto et le canal configuré."""
+    return await telegram_manager.get_connection_status()
+
+
+@router.get("/telegram/channels")
+async def list_telegram_channels(
+    current_admin: User = Depends(get_current_admin),
+):
+    """Liste tous les canaux et groupes auxquels le compte Telegram connecté a accès."""
+    return await telegram_manager.list_available_channels()
+
+
+@router.post("/telegram/test-channel")
+async def test_telegram_channel(
+    req: ChannelTestRequest,
+    current_admin: User = Depends(get_current_admin),
+):
+    """Vérifie si un canal ou groupe spécifique est accessible par VidTele."""
+    result = await telegram_manager.test_channel(req.channel_target)
+    return result
+
+
+@router.post("/telegram/set-channel")
+async def set_telegram_channel(
+    req: ChannelSetRequest,
+    current_admin: User = Depends(get_current_admin),
+    db: AsyncSession = Depends(get_db),
+):
+    """Enregistre le nouveau canal Telegram actif (en base et mémoire)."""
+    clean_target = req.channel_id.strip()
+    try:
+        cid = int(clean_target)
+    except ValueError:
+        test_res = await telegram_manager.test_channel(clean_target)
+        if not test_res.get("success"):
+            raise HTTPException(
+                status_code=status.HTTP_400_BAD_REQUEST,
+                detail=test_res.get("error", "Identifiant de canal invalide."),
+            )
+        cid = int(test_res.get("formatted_id") or test_res.get("id"))
+
+    # Test d'accès
+    test_res = await telegram_manager.test_channel(cid)
+    if not test_res.get("success"):
+        raise HTTPException(
+            status_code=status.HTTP_400_BAD_REQUEST,
+            detail=f"Impossible de valider ce canal : {test_res.get('error')}",
+        )
+
+    # 1. Mise à jour en mémoire
+    await telegram_manager.set_active_channel(cid)
+
+    # 2. Sauvegarde persistante en base SQLite (SystemSetting)
+    from app.models import SystemSetting
+    stmt = select(SystemSetting).where(SystemSetting.key == "TELEGRAM_CHANNEL_ID")
+    existing = (await db.execute(stmt)).scalar_one_or_none()
+    if existing:
+        existing.value = str(cid)
+    else:
+        db.add(SystemSetting(key="TELEGRAM_CHANNEL_ID", value=str(cid)))
+    await db.commit()
+
+    # 3. Sauvegarde dans .env si accessible
+    try:
+        from pathlib import Path
+        import re
+        for p in [Path(__file__).resolve().parent.parent.parent / ".env", Path("/app/data/.env"), Path(".env")]:
+            if p.exists():
+                txt = p.read_text(encoding="utf-8")
+                if "TELEGRAM_CHANNEL_ID=" in txt:
+                    txt = re.sub(r"TELEGRAM_CHANNEL_ID=.*", f"TELEGRAM_CHANNEL_ID={cid}", txt)
+                else:
+                    txt += f"\nTELEGRAM_CHANNEL_ID={cid}\n"
+                p.write_text(txt, encoding="utf-8")
+                break
+    except Exception:
+        pass
+
+    return {
+        "success": True,
+        "message": f"Canal configuré avec succès : '{test_res.get('title')}' (ID: {cid})",
+        "channel": test_res,
+    }
+
