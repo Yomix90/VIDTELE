@@ -30,7 +30,7 @@ class VideoModel {
     required this.isCompleted,
   });
 
-  /// Durée formatée (ex: "1h 12m" ou "3m 45s")
+  /// Durée formatée par défaut (ex: "1h 12m" ou "3m 45s")
   String get formattedDuration {
     if (durationSeconds <= 0) return 'Court clip';
     final minutes = durationSeconds ~/ 60;
@@ -40,6 +40,25 @@ class VideoModel {
       final remMinutes = minutes % 60;
       return '${hours}h ${remMinutes}m';
     }
+    return '${minutes}m ${seconds}s';
+  }
+
+  /// Durée formatée selon la langue (FR, EN, AR)
+  String formattedDurationWithLocale(String langCode) {
+    if (durationSeconds <= 0) {
+      if (langCode == 'ar') return 'مقطع قصير';
+      if (langCode == 'en') return 'Short clip';
+      return 'Court clip';
+    }
+    final minutes = durationSeconds ~/ 60;
+    final seconds = durationSeconds % 60;
+    if (minutes >= 60) {
+      final hours = minutes ~/ 60;
+      final remMinutes = minutes % 60;
+      if (langCode == 'ar') return '$hours س $remMinutes د';
+      return '${hours}h ${remMinutes}m';
+    }
+    if (langCode == 'ar') return '$minutes د $seconds ث';
     return '${minutes}m ${seconds}s';
   }
 

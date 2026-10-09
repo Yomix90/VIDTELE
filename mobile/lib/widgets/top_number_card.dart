@@ -35,9 +35,10 @@ class TopNumberCard extends StatelessWidget {
             child: Stack(
               clipBehavior: Clip.none,
               children: [
-                // 1. Chiffre géant calligraphié Netflix (Arrière-plan gauche)
-                Positioned(
-                  left: 0,
+                // 1. Chiffre géant calligraphié Netflix (Arrière-plan start)
+                Positioned.directional(
+                  textDirection: Directionality.of(context),
+                  start: 0,
                   bottom: -15,
                   child: Stack(
                     children: [
@@ -68,9 +69,10 @@ class TopNumberCard extends StatelessWidget {
                   ),
                 ),
 
-                // 2. Affiche vidéo (Alignée à droite du chiffre géant)
-                Positioned(
-                  right: 0,
+                // 2. Affiche vidéo (Alignée end)
+                Positioned.directional(
+                  textDirection: Directionality.of(context),
+                  end: 0,
                   top: 0,
                   bottom: 0,
                   width: 125,

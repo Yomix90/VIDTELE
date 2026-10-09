@@ -1,10 +1,11 @@
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import '../../core/api/api_client.dart';
+import '../../core/localization/app_localizations.dart';
 import '../../core/theme/app_theme.dart';
 import '../../providers/video_provider.dart';
 
-/// Écran d'administration mobile pour les administrateurs VidTele
+/// Écran d'administration mobile pour les administrateurs VidTele (support trilingue FR / EN / AR)
 class AdminScreen extends ConsumerStatefulWidget {
   const AdminScreen({super.key});
 
@@ -40,6 +41,7 @@ class _AdminScreenState extends ConsumerState<AdminScreen> {
   }
 
   Future<void> _triggerSync() async {
+    final l10n = context.l10n;
     setState(() {
       _isSyncing = true;
       _syncMessage = null;
@@ -49,15 +51,18 @@ class _AdminScreenState extends ConsumerState<AdminScreen> {
       final res = await apiClient.dio.post('/api/admin/sync');
       final data = res.data;
       setState(() {
-        _syncMessage =
-            "Sync réussie ! +${data['added']} ajoutées, ${data['updated']} mises à jour (${data['total_messages']} messages scannés).";
+        _syncMessage = l10n.syncSuccessMessage(
+          data['added'] ?? 0,
+          data['updated'] ?? 0,
+          data['total_messages'] ?? 0,
+        );
       });
       // Rafraîchir les vidéos
       ref.invalidate(videoListProvider);
       _fetchStats();
     } catch (e) {
       setState(() {
-        _syncMessage = "Erreur de synchronisation : $e";
+        _syncMessage = "Erreur : $e";
       });
     } finally {
       setState(() => _isSyncing = false);
@@ -65,24 +70,25 @@ class _AdminScreenState extends ConsumerState<AdminScreen> {
   }
 
   Future<void> _clearCache() async {
+    final l10n = context.l10n;
     final confirm = await showDialog<bool>(
       context: context,
       builder: (ctx) => AlertDialog(
         backgroundColor: AppTheme.netflixCard,
-        title: const Text('Purger le cache local ?', style: TextStyle(color: Colors.white)),
-        content: const Text(
-          'Les fichiers vidéo mis en cache seront supprimés du serveur. Ils seront re-téléchargés automatiquement à la prochaine lecture.',
-          style: TextStyle(color: Colors.white70),
+        title: Text(l10n.clearCacheConfirmTitle, style: const TextStyle(color: Colors.white)),
+        content: Text(
+          l10n.clearCacheConfirmDesc,
+          style: const TextStyle(color: Colors.white70),
         ),
         actions: [
           TextButton(
             onPressed: () => Navigator.pop(ctx, false),
-            child: const Text('Annuler', style: TextStyle(color: Colors.white60)),
+            child: Text(l10n.cancel, style: const TextStyle(color: Colors.white60)),
           ),
           ElevatedButton(
             onPressed: () => Navigator.pop(ctx, true),
             style: ElevatedButton.styleFrom(backgroundColor: AppTheme.netflixRed),
-            child: const Text('Purger'),
+            child: Text(l10n.clearButton),
           ),
         ],
       ),
@@ -95,7 +101,7 @@ class _AdminScreenState extends ConsumerState<AdminScreen> {
       await apiClient.dio.post('/api/admin/cache/clear');
       if (mounted) {
         ScaffoldMessenger.of(context).showSnackBar(
-          const SnackBar(content: Text('Cache purgé avec succès !')),
+          SnackBar(content: Text(l10n.cacheClearedSuccess)),
         );
       }
       _fetchStats();
@@ -111,6 +117,7 @@ class _AdminScreenState extends ConsumerState<AdminScreen> {
   }
 
   Future<void> _createInviteCode() async {
+    final l10n = context.l10n;
     final codeController = TextEditingController();
     final usesController = TextEditingController(text: '1');
 
@@ -118,16 +125,16 @@ class _AdminScreenState extends ConsumerState<AdminScreen> {
       context: context,
       builder: (ctx) => AlertDialog(
         backgroundColor: AppTheme.netflixCard,
-        title: const Text('Créer un code d\'invitation', style: TextStyle(color: Colors.white)),
+        title: Text(l10n.createInviteModalTitle, style: const TextStyle(color: Colors.white)),
         content: Column(
           mainAxisSize: MainAxisSize.min,
           children: [
             TextField(
               controller: codeController,
               style: const TextStyle(color: Colors.white),
-              decoration: const InputDecoration(
-                labelText: 'Code (laisser vide pour auto-générer)',
-                labelStyle: TextStyle(color: Colors.white60),
+              decoration: InputDecoration(
+                labelText: l10n.inviteCodeInputLabel,
+                labelStyle: const TextStyle(color: Colors.white60),
               ),
             ),
             const SizedBox(height: 12),
@@ -135,9 +142,9 @@ class _AdminScreenState extends ConsumerState<AdminScreen> {
               controller: usesController,
               keyboardType: TextInputType.number,
               style: const TextStyle(color: Colors.white),
-              decoration: const InputDecoration(
-                labelText: 'Nombre d\'utilisations max',
-                labelStyle: TextStyle(color: Colors.white60),
+              decoration: InputDecoration(
+                labelText: l10n.maxUsesInputLabel,
+                labelStyle: const TextStyle(color: Colors.white60),
               ),
             ),
           ],
@@ -145,7 +152,7 @@ class _AdminScreenState extends ConsumerState<AdminScreen> {
         actions: [
           TextButton(
             onPressed: () => Navigator.pop(ctx),
-            child: const Text('Annuler', style: TextStyle(color: Colors.white60)),
+            child: Text(l10n.cancel, style: const TextStyle(color: Colors.white60)),
           ),
           ElevatedButton(
             onPressed: () async {
@@ -164,7 +171,7 @@ class _AdminScreenState extends ConsumerState<AdminScreen> {
                 nav.pop();
                 messenger.showSnackBar(
                   SnackBar(
-                    content: Text('Code créé : ${res.data['code']}'),
+                    content: Text(l10n.inviteCreatedSuccess(res.data['code'] ?? '')),
                     backgroundColor: Colors.green,
                   ),
                 );
@@ -175,7 +182,7 @@ class _AdminScreenState extends ConsumerState<AdminScreen> {
               }
             },
             style: ElevatedButton.styleFrom(backgroundColor: AppTheme.netflixRed),
-            child: const Text('Générer'),
+            child: Text(l10n.generateButton),
           ),
         ],
       ),
@@ -184,15 +191,17 @@ class _AdminScreenState extends ConsumerState<AdminScreen> {
 
   @override
   Widget build(BuildContext context) {
+    final l10n = context.l10n;
+
     return Scaffold(
       backgroundColor: AppTheme.netflixBlack,
       appBar: AppBar(
-        title: const Text('Administration VidTele'),
+        title: Text(l10n.adminScreenTitle),
         backgroundColor: Colors.black.withValues(alpha: 0.8),
         actions: [
           IconButton(
             icon: const Icon(Icons.refresh),
-            tooltip: 'Rafraîchir les stats',
+            tooltip: l10n.refresh,
             onPressed: _fetchStats,
           ),
         ],
@@ -203,9 +212,9 @@ class _AdminScreenState extends ConsumerState<AdminScreen> {
           crossAxisAlignment: CrossAxisAlignment.start,
           children: [
             // Cartes de statistiques serveur
-            const Text(
-              'Statistiques du Serveur',
-              style: TextStyle(
+            Text(
+              l10n.serverStatsHeader,
+              style: const TextStyle(
                 color: Colors.white,
                 fontSize: 18,
                 fontWeight: FontWeight.bold,
@@ -229,25 +238,25 @@ class _AdminScreenState extends ConsumerState<AdminScreen> {
                 mainAxisSpacing: 12,
                 children: [
                   _buildStatCard(
-                    'Utilisateurs',
+                    l10n.statUsers,
                     '${_stats!['total_users']}',
                     Icons.people_outline,
                     Colors.blueAccent,
                   ),
                   _buildStatCard(
-                    'Vidéos Indexées',
+                    l10n.statVideos,
                     '${_stats!['total_videos']}',
                     Icons.movie_outlined,
                     Colors.orangeAccent,
                   ),
                   _buildStatCard(
-                    'Streams Actifs',
+                    l10n.statStreams,
                     '${_stats!['active_streams']} / 15',
                     Icons.stream,
                     Colors.greenAccent,
                   ),
                   _buildStatCard(
-                    'Cache Disque',
+                    l10n.statCache,
                     '${((_stats!['cache_size_mb'] ?? 0) / 1024).toStringAsFixed(1)} / ${_stats!['max_cache_gb']} Go',
                     Icons.storage_outlined,
                     Colors.purpleAccent,
@@ -257,9 +266,9 @@ class _AdminScreenState extends ConsumerState<AdminScreen> {
             const SizedBox(height: 24),
 
             // Actions d'administration
-            const Text(
-              'Actions Rapides',
-              style: TextStyle(
+            Text(
+              l10n.quickActionsHeader,
+              style: const TextStyle(
                 color: Colors.white,
                 fontSize: 18,
                 fontWeight: FontWeight.bold,
@@ -278,13 +287,13 @@ class _AdminScreenState extends ConsumerState<AdminScreen> {
                       child: CircularProgressIndicator(strokeWidth: 2, color: AppTheme.netflixRed),
                     )
                   : const Icon(Icons.sync, color: Colors.white),
-              title: const Text(
-                'Synchroniser le Canal Telegram',
-                style: TextStyle(color: Colors.white, fontWeight: FontWeight.bold),
+              title: Text(
+                l10n.syncTelegramAction,
+                style: const TextStyle(color: Colors.white, fontWeight: FontWeight.bold),
               ),
-              subtitle: const Text(
-                'Scanne les nouveaux médias postés sur Telegram',
-                style: TextStyle(color: Colors.white60, fontSize: 12),
+              subtitle: Text(
+                l10n.syncTelegramDesc,
+                style: const TextStyle(color: Colors.white60, fontSize: 12),
               ),
               trailing: const Icon(Icons.chevron_right, color: Colors.white38),
               onTap: _isSyncing ? null : _triggerSync,
@@ -311,13 +320,13 @@ class _AdminScreenState extends ConsumerState<AdminScreen> {
               tileColor: AppTheme.netflixCard,
               shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(8)),
               leading: const Icon(Icons.vpn_key_outlined, color: Colors.amber),
-              title: const Text(
-                'Générer un Code d\'Invitation',
-                style: TextStyle(color: Colors.white, fontWeight: FontWeight.bold),
+              title: Text(
+                l10n.generateInviteAction,
+                style: const TextStyle(color: Colors.white, fontWeight: FontWeight.bold),
               ),
-              subtitle: const Text(
-                'Créer un code VIP pour un nouvel utilisateur',
-                style: TextStyle(color: Colors.white60, fontSize: 12),
+              subtitle: Text(
+                l10n.generateInviteDesc,
+                style: const TextStyle(color: Colors.white60, fontSize: 12),
               ),
               trailing: const Icon(Icons.chevron_right, color: Colors.white38),
               onTap: _createInviteCode,
@@ -335,13 +344,13 @@ class _AdminScreenState extends ConsumerState<AdminScreen> {
                       child: CircularProgressIndicator(strokeWidth: 2, color: Colors.redAccent),
                     )
                   : const Icon(Icons.delete_sweep_outlined, color: Colors.redAccent),
-              title: const Text(
-                'Purger le Cache Vidéo',
-                style: TextStyle(color: Colors.redAccent, fontWeight: FontWeight.bold),
+              title: Text(
+                l10n.clearCacheAction,
+                style: const TextStyle(color: Colors.redAccent, fontWeight: FontWeight.bold),
               ),
-              subtitle: const Text(
-                'Supprime les fichiers temporaires pour libérer de l\'espace disque',
-                style: TextStyle(color: Colors.white60, fontSize: 12),
+              subtitle: Text(
+                l10n.clearCacheDesc,
+                style: const TextStyle(color: Colors.white60, fontSize: 12),
               ),
               trailing: const Icon(Icons.chevron_right, color: Colors.white38),
               onTap: _isClearingCache ? null : _clearCache,

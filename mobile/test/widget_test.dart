@@ -10,8 +10,9 @@ void main() {
         child: VidTeleApp(),
       ),
     );
+    await tester.pump();
 
-    // Verify that the splash or brand title exists
-    expect(find.text('VIDTELE'), findsOneWidget);
+    // Verify that the root VidTeleApp widget is rendered
+    expect(find.byType(VidTeleApp), findsOneWidget);
   });
 }

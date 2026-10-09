@@ -2,28 +2,30 @@ import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:cached_network_image/cached_network_image.dart';
 import '../../core/constants/api_constants.dart';
+import '../../core/localization/app_localizations.dart';
 import '../../core/storage/storage_service.dart';
 import '../../core/theme/app_theme.dart';
 import '../../providers/library_provider.dart';
 import '../player/video_player_screen.dart';
 
-/// Écran Historique de lecture avec état d'avancement et reprise directe
+/// Écran Historique de lecture avec état d'avancement et reprise directe (support trilingue FR / EN / AR)
 class HistoryScreen extends ConsumerWidget {
   const HistoryScreen({super.key});
 
   @override
   Widget build(BuildContext context, WidgetRef ref) {
     final historyAsync = ref.watch(historyProvider);
+    final l10n = context.l10n;
 
     return Scaffold(
       backgroundColor: AppTheme.netflixBlack,
       appBar: AppBar(
-        title: const Text('Historique de lecture'),
+        title: Text(l10n.historyTitle),
         backgroundColor: Colors.black.withValues(alpha: 0.8),
         actions: [
           IconButton(
             icon: const Icon(Icons.refresh),
-            tooltip: 'Rafraîchir',
+            tooltip: l10n.refresh,
             onPressed: () => ref.read(historyProvider.notifier).fetchHistory(),
           ),
         ],
@@ -41,14 +43,14 @@ class HistoryScreen extends ConsumerWidget {
                 const Icon(Icons.error_outline, color: Colors.redAccent, size: 48),
                 const SizedBox(height: 12),
                 Text(
-                  'Impossible de charger l\'historique : $err',
+                  'Erreur : $err',
                   textAlign: TextAlign.center,
                   style: const TextStyle(color: Colors.white70),
                 ),
                 const SizedBox(height: 16),
                 ElevatedButton(
                   onPressed: () => ref.read(historyProvider.notifier).fetchHistory(),
-                  child: const Text('Réessayer'),
+                  child: Text(l10n.retry),
                 ),
               ],
             ),
@@ -75,19 +77,19 @@ class HistoryScreen extends ConsumerWidget {
                       ),
                     ),
                     const SizedBox(height: 24),
-                    const Text(
-                      'Aucun historique de visionnage',
-                      style: TextStyle(
+                    Text(
+                      l10n.historyEmptyTitle,
+                      style: const TextStyle(
                         color: Colors.white,
                         fontSize: 20,
                         fontWeight: FontWeight.bold,
                       ),
                     ),
                     const SizedBox(height: 12),
-                    const Text(
-                      'Les vidéos que vous regardez apparaîtront ici avec votre progression pour reprendre là où vous vous êtes arrêté.',
+                    Text(
+                      l10n.historyEmptySubtitle,
                       textAlign: TextAlign.center,
-                      style: TextStyle(color: Colors.white54, fontSize: 14),
+                      style: const TextStyle(color: Colors.white54, fontSize: 14),
                     ),
                   ],
                 ),
@@ -244,8 +246,8 @@ class HistoryScreen extends ConsumerWidget {
                                       const SizedBox(width: 8),
                                       Text(
                                         item.isCompleted
-                                            ? 'Visionné'
-                                            : '${(item.progressFraction * 100).toInt()}% terminé',
+                                            ? l10n.watchedBadge
+                                            : l10n.percentCompleted((item.progressFraction * 100).toInt()),
                                         style: TextStyle(
                                           color: item.isCompleted
                                               ? Colors.greenAccent

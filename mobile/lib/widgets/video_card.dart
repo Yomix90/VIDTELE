@@ -102,10 +102,11 @@ class VideoCard extends StatelessWidget {
                     ),
                   ),
 
-                  // 3. Badge Catégorie en haut à gauche
-                  Positioned(
+                  // 3. Badge Catégorie
+                  Positioned.directional(
+                    textDirection: Directionality.of(context),
                     top: 6,
-                    left: 6,
+                    start: 6,
                     child: Container(
                       padding: const EdgeInsets.symmetric(horizontal: 6, vertical: 2),
                       decoration: BoxDecoration(
@@ -124,10 +125,11 @@ class VideoCard extends StatelessWidget {
                     ),
                   ),
 
-                  // 4. Durée en bas à droite
-                  Positioned(
+                  // 4. Durée
+                  Positioned.directional(
+                    textDirection: Directionality.of(context),
                     bottom: showProgress ? 12 : 8,
-                    right: 8,
+                    end: 8,
                     child: Container(
                       padding: const EdgeInsets.symmetric(horizontal: 5, vertical: 2),
                       decoration: BoxDecoration(
@@ -135,7 +137,9 @@ class VideoCard extends StatelessWidget {
                         borderRadius: BorderRadius.circular(3),
                       ),
                       child: Text(
-                        video.formattedDuration,
+                        video.formattedDurationWithLocale(
+                          Localizations.localeOf(context).languageCode,
+                        ),
                         style: const TextStyle(
                           color: Colors.white70,
                           fontSize: 10,

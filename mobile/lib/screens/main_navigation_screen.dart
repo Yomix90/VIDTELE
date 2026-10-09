@@ -1,7 +1,7 @@
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
+import '../core/localization/app_localizations.dart';
 import '../core/theme/app_theme.dart';
-import '../providers/locale_provider.dart';
 import 'home/home_screen.dart';
 import 'library/favorites_screen.dart';
 import 'library/history_screen.dart';
@@ -27,8 +27,7 @@ class _MainNavigationScreenState extends ConsumerState<MainNavigationScreen> {
 
   @override
   Widget build(BuildContext context) {
-    final currentLocale = ref.watch(localeProvider);
-    final isArabic = currentLocale.languageCode == 'ar';
+    final l10n = context.l10n;
 
     return Scaffold(
       backgroundColor: AppTheme.netflixBlack,
@@ -49,22 +48,22 @@ class _MainNavigationScreenState extends ConsumerState<MainNavigationScreen> {
           BottomNavigationBarItem(
             icon: const Icon(Icons.home_outlined),
             activeIcon: const Icon(Icons.home_filled),
-            label: isArabic ? 'الرئيسية' : 'Accueil',
+            label: l10n.navHome,
           ),
           BottomNavigationBarItem(
             icon: const Icon(Icons.bookmark_border),
             activeIcon: const Icon(Icons.bookmark),
-            label: isArabic ? 'قائمتي' : 'Ma Liste',
+            label: l10n.navMyList,
           ),
           BottomNavigationBarItem(
             icon: const Icon(Icons.history_outlined),
             activeIcon: const Icon(Icons.history),
-            label: isArabic ? 'السجل' : 'Historique',
+            label: l10n.navHistory,
           ),
           BottomNavigationBarItem(
             icon: const Icon(Icons.settings_outlined),
             activeIcon: const Icon(Icons.settings),
-            label: isArabic ? 'الإعدادات' : 'Paramètres',
+            label: l10n.navSettings,
           ),
         ],
       ),

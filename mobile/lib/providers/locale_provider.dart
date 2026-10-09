@@ -3,7 +3,7 @@ import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:shared_preferences/shared_preferences.dart';
 import '../core/constants/api_constants.dart';
 
-/// Notifier pour la gestion dynamique de la langue et du sens de lecture (RTL pour l'arabe)
+/// Notifier pour la gestion dynamique de la langue (Français, English, العربية avec RTL)
 class LocaleNotifier extends StateNotifier<Locale> {
   LocaleNotifier() : super(const Locale('fr')) {
     _loadSavedLocale();
@@ -12,10 +12,13 @@ class LocaleNotifier extends StateNotifier<Locale> {
   Future<void> _loadSavedLocale() async {
     final prefs = await SharedPreferences.getInstance();
     final langCode = prefs.getString(ApiConstants.keyLanguage) ?? 'fr';
-    state = Locale(langCode);
+    if (['fr', 'en', 'ar'].contains(langCode)) {
+      state = Locale(langCode);
+    }
   }
 
   Future<void> setLocale(String langCode) async {
+    if (!['fr', 'en', 'ar'].contains(langCode)) return;
     if (state.languageCode == langCode) return;
     state = Locale(langCode);
     final prefs = await SharedPreferences.getInstance();
@@ -23,6 +26,8 @@ class LocaleNotifier extends StateNotifier<Locale> {
   }
 
   bool get isArabic => state.languageCode == 'ar';
+  bool get isEnglish => state.languageCode == 'en';
+  bool get isFrench => state.languageCode == 'fr';
 }
 
 final localeProvider = StateNotifierProvider<LocaleNotifier, Locale>((ref) {

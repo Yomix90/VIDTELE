@@ -1,27 +1,29 @@
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
+import '../../core/localization/app_localizations.dart';
 import '../../core/theme/app_theme.dart';
 import '../../providers/library_provider.dart';
 import '../../widgets/video_card.dart';
 import '../player/video_player_screen.dart';
 
-/// Écran "Ma Liste" / Favoris au design Netflix
+/// Écran "Ma Liste" / Favoris au design Netflix avec support trilingue FR / EN / AR
 class FavoritesScreen extends ConsumerWidget {
   const FavoritesScreen({super.key});
 
   @override
   Widget build(BuildContext context, WidgetRef ref) {
     final favoritesAsync = ref.watch(favoritesProvider);
+    final l10n = context.l10n;
 
     return Scaffold(
       backgroundColor: AppTheme.netflixBlack,
       appBar: AppBar(
-        title: const Text('Ma Liste'),
+        title: Text(l10n.myListTitle),
         backgroundColor: Colors.black.withValues(alpha: 0.8),
         actions: [
           IconButton(
             icon: const Icon(Icons.refresh),
-            tooltip: 'Rafraîchir',
+            tooltip: l10n.refresh,
             onPressed: () => ref.read(favoritesProvider.notifier).fetchFavorites(),
           ),
         ],
@@ -39,14 +41,14 @@ class FavoritesScreen extends ConsumerWidget {
                 const Icon(Icons.error_outline, color: Colors.redAccent, size: 48),
                 const SizedBox(height: 12),
                 Text(
-                  'Impossible de charger vos favoris : $err',
+                  '${l10n.favoritesLoadError} : $err',
                   textAlign: TextAlign.center,
                   style: const TextStyle(color: Colors.white70),
                 ),
                 const SizedBox(height: 16),
                 ElevatedButton(
                   onPressed: () => ref.read(favoritesProvider.notifier).fetchFavorites(),
-                  child: const Text('Réessayer'),
+                  child: Text(l10n.retry),
                 ),
               ],
             ),
@@ -73,19 +75,19 @@ class FavoritesScreen extends ConsumerWidget {
                       ),
                     ),
                     const SizedBox(height: 24),
-                    const Text(
-                      'Votre liste est vide',
-                      style: TextStyle(
+                    Text(
+                      l10n.myListEmptyTitle,
+                      style: const TextStyle(
                         color: Colors.white,
                         fontSize: 20,
                         fontWeight: FontWeight.bold,
                       ),
                     ),
                     const SizedBox(height: 12),
-                    const Text(
-                      'Ajoutez des films et séries à votre liste pour les retrouver facilement et les regarder plus tard.',
+                    Text(
+                      l10n.myListEmptySubtitle,
                       textAlign: TextAlign.center,
-                      style: TextStyle(color: Colors.white54, fontSize: 14),
+                      style: const TextStyle(color: Colors.white54, fontSize: 14),
                     ),
                   ],
                 ),

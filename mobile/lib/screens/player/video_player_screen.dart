@@ -8,6 +8,7 @@ import 'package:dio/dio.dart';
 
 import '../../core/api/api_client.dart';
 import '../../core/constants/api_constants.dart';
+import '../../core/localization/app_localizations.dart';
 import '../../core/storage/storage_service.dart';
 import '../../core/theme/app_theme.dart';
 import '../../models/video_model.dart';
@@ -32,7 +33,8 @@ class _VideoPlayerScreenState extends ConsumerState<VideoPlayerScreen> {
   ChewieController? _chewieController;
 
   bool _isLoading = true;
-  String? _errorMessage;
+  int? _errorCode;
+  String? _customError;
   Timer? _progressTimer;
   bool _isDisposed = false;
 
@@ -46,7 +48,8 @@ class _VideoPlayerScreenState extends ConsumerState<VideoPlayerScreen> {
   Future<void> _initPlayer() async {
     setState(() {
       _isLoading = true;
-      _errorMessage = null;
+      _errorCode = null;
+      _customError = null;
     });
 
     try {
@@ -66,7 +69,7 @@ class _VideoPlayerScreenState extends ConsumerState<VideoPlayerScreen> {
       }
 
       if (streamToken == null) {
-        throw Exception("Impossible d'obtenir un jeton d'autorisation de streaming.");
+        throw Exception("Auth token missing");
       }
 
       // 2. Construction de l'URL de streaming avec jeton
@@ -125,6 +128,7 @@ class _VideoPlayerScreenState extends ConsumerState<VideoPlayerScreen> {
           ),
         ),
         errorBuilder: (context, errorMessage) {
+          final l10n = context.l10n;
           return Center(
             child: Padding(
               padding: const EdgeInsets.all(24.0),
@@ -134,7 +138,7 @@ class _VideoPlayerScreenState extends ConsumerState<VideoPlayerScreen> {
                   const Icon(Icons.error_outline, color: Colors.redAccent, size: 54),
                   const SizedBox(height: 16),
                   Text(
-                    'Erreur de lecture : $errorMessage',
+                    '${l10n.playbackErrorTitle} : $errorMessage',
                     textAlign: TextAlign.center,
                     style: const TextStyle(color: Colors.white, fontSize: 16),
                   ),
@@ -142,7 +146,7 @@ class _VideoPlayerScreenState extends ConsumerState<VideoPlayerScreen> {
                   ElevatedButton(
                     onPressed: _initPlayer,
                     style: ElevatedButton.styleFrom(backgroundColor: AppTheme.netflixRed),
-                    child: const Text('Réessayer'),
+                    child: Text(l10n.retry),
                   ),
                 ],
               ),
@@ -161,21 +165,15 @@ class _VideoPlayerScreenState extends ConsumerState<VideoPlayerScreen> {
       _startProgressTimer();
     } on DioException catch (e) {
       if (_isDisposed) return;
-      String msg = "Erreur de connexion au serveur de streaming.";
-      if (e.response?.statusCode == 429) {
-        msg = "Limite de flux simultanés atteinte (15 max sur le serveur ou 2 par compte). Veuillez patienter qu'une session se libère.";
-      } else if (e.response?.statusCode == 404) {
-        msg = "Cette vidéo n'est plus disponible sur le canal Telegram.";
-      }
       setState(() {
         _isLoading = false;
-        _errorMessage = msg;
+        _errorCode = e.response?.statusCode;
       });
     } catch (e) {
       if (_isDisposed) return;
       setState(() {
         _isLoading = false;
-        _errorMessage = "Impossible de lancer la vidéo : ${e.toString()}";
+        _customError = e.toString();
       });
     }
   }
@@ -238,6 +236,17 @@ class _VideoPlayerScreenState extends ConsumerState<VideoPlayerScreen> {
 
   @override
   Widget build(BuildContext context) {
+    final l10n = context.l10n;
+
+    String? displayError;
+    if (_errorCode == 429) {
+      displayError = l10n.streamLimitReached;
+    } else if (_errorCode == 404) {
+      displayError = l10n.videoNotFound;
+    } else if (_errorCode != null || _customError != null) {
+      displayError = _customError ?? l10n.cannotPlayVideo;
+    }
+
     return Scaffold(
       backgroundColor: Colors.black,
       body: SafeArea(
@@ -246,18 +255,18 @@ class _VideoPlayerScreenState extends ConsumerState<VideoPlayerScreen> {
             // Contenu principal du lecteur
             Center(
               child: _isLoading
-                  ? const Column(
+                  ? Column(
                       mainAxisSize: MainAxisSize.min,
                       children: [
-                        CircularProgressIndicator(color: AppTheme.netflixRed),
-                        SizedBox(height: 16),
+                        const CircularProgressIndicator(color: AppTheme.netflixRed),
+                        const SizedBox(height: 16),
                         Text(
-                          'Chargement du flux vidéo...',
-                          style: TextStyle(color: Colors.white70, fontSize: 14),
+                          l10n.loadingStream,
+                          style: const TextStyle(color: Colors.white70, fontSize: 14),
                         ),
                       ],
                     )
-                  : _errorMessage != null
+                  : displayError != null
                       ? Padding(
                           padding: const EdgeInsets.all(24.0),
                           child: Column(
@@ -266,7 +275,7 @@ class _VideoPlayerScreenState extends ConsumerState<VideoPlayerScreen> {
                               const Icon(Icons.cloud_off, color: Colors.orangeAccent, size: 56),
                               const SizedBox(height: 16),
                               Text(
-                                _errorMessage!,
+                                displayError,
                                 textAlign: TextAlign.center,
                                 style: const TextStyle(color: Colors.white, fontSize: 15),
                               ),
@@ -278,7 +287,7 @@ class _VideoPlayerScreenState extends ConsumerState<VideoPlayerScreen> {
                                   padding: const EdgeInsets.symmetric(horizontal: 20, vertical: 12),
                                 ),
                                 icon: const Icon(Icons.refresh),
-                                label: const Text('Réessayer'),
+                                label: Text(l10n.retry),
                               ),
                             ],
                           ),
@@ -289,7 +298,7 @@ class _VideoPlayerScreenState extends ConsumerState<VideoPlayerScreen> {
                           : const SizedBox.shrink(),
             ),
 
-            // Bouton retour flottant en haut à gauche
+            // Bouton retour flottant
             Positioned(
               top: 12,
               left: 12,
@@ -305,7 +314,7 @@ class _VideoPlayerScreenState extends ConsumerState<VideoPlayerScreen> {
               ),
             ),
 
-            // Titre et métadonnées de la vidéo en haut au centre
+            // Titre de la vidéo en haut au centre
             Positioned(
               top: 18,
               left: 70,

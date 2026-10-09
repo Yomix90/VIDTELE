@@ -2,10 +2,10 @@ import 'package:cached_network_image/cached_network_image.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import '../../core/constants/api_constants.dart';
+import '../../core/localization/app_localizations.dart';
 import '../../core/storage/storage_service.dart';
 import '../../core/theme/app_theme.dart';
 import '../../models/video_model.dart';
-import '../../providers/auth_provider.dart';
 import '../../providers/video_provider.dart';
 import '../../widgets/top_number_card.dart';
 import '../../widgets/video_card.dart';
@@ -46,6 +46,7 @@ class _HomeScreenState extends ConsumerState<HomeScreen> {
     final top5Videos = ref.watch(top5VideosProvider);
     final categoriesAsync = ref.watch(categoriesProvider);
     final searchResults = ref.watch(searchResultsProvider);
+    final l10n = context.l10n;
 
     return Scaffold(
       backgroundColor: AppTheme.netflixBlack,
@@ -69,11 +70,11 @@ class _HomeScreenState extends ConsumerState<HomeScreen> {
                       controller: _searchController,
                       autofocus: true,
                       style: const TextStyle(color: Colors.white),
-                      decoration: const InputDecoration(
-                        hintText: 'Rechercher un film, une série, un hashtag...',
-                        hintStyle: TextStyle(color: Colors.white54, fontSize: 14),
+                      decoration: InputDecoration(
+                        hintText: l10n.searchPlaceholder,
+                        hintStyle: const TextStyle(color: Colors.white54, fontSize: 14),
                         border: InputBorder.none,
-                        prefixIcon: Icon(Icons.search, color: Colors.white70),
+                        prefixIcon: const Icon(Icons.search, color: Colors.white70),
                       ),
                       onChanged: (val) {
                         ref.read(searchQueryProvider.notifier).state = val;
@@ -89,7 +90,11 @@ class _HomeScreenState extends ConsumerState<HomeScreen> {
                           ),
                           child: const Text(
                             'V',
-                            style: TextStyle(color: Colors.white, fontWeight: FontWeight.w900, fontSize: 20),
+                            style: TextStyle(
+                              color: Colors.white,
+                              fontWeight: FontWeight.w900,
+                              fontSize: 20,
+                            ),
                           ),
                         ),
                         const SizedBox(width: 8),
@@ -118,162 +123,198 @@ class _HomeScreenState extends ConsumerState<HomeScreen> {
                   },
                 ),
                 IconButton(
-                  icon: const Icon(Icons.logout, color: Colors.white70),
-                  tooltip: 'Déconnexion',
+                  icon: const Icon(Icons.refresh, color: Colors.white70),
+                  tooltip: l10n.refresh,
                   onPressed: () {
-                    ref.read(authProvider.notifier).logout();
+                    ref.invalidate(videoListProvider);
+                    ref.invalidate(categoriesProvider);
                   },
                 ),
               ],
             ),
 
-            // 2. Vue Résultats de recherche si recherche active
-            if (_isSearching && _searchController.text.isNotEmpty)
+            // 2. Si l'utilisateur est en train de chercher : afficher les résultats en grille
+            if (_isSearching)
               SliverPadding(
                 padding: const EdgeInsets.all(16),
                 sliver: searchResults.isEmpty
-                    ? const SliverToBoxAdapter(
-                        child: Center(
-                          child: Padding(
-                            padding: EdgeInsets.only(top: 80),
-                            child: Text(
-                              'Aucune vidéo trouvée pour cette recherche.',
-                              style: TextStyle(color: Colors.white60, fontSize: 16),
+                    ? SliverToBoxAdapter(
+                        child: Padding(
+                          padding: const EdgeInsets.only(top: 60),
+                          child: Center(
+                            child: Column(
+                              children: [
+                                const Icon(Icons.search_off, size: 54, color: Colors.white38),
+                                const SizedBox(height: 12),
+                                Text(
+                                  l10n.noResultsFor(_searchController.text),
+                                  textAlign: TextAlign.center,
+                                  style: const TextStyle(color: Colors.white60, fontSize: 15),
+                                ),
+                              ],
                             ),
                           ),
                         ),
                       )
                     : SliverGrid(
                         gridDelegate: const SliverGridDelegateWithFixedCrossAxisCount(
-                          crossAxisCount: 2,
-                          childAspectRatio: 0.7,
-                          crossAxisSpacing: 12,
+                          crossAxisCount: 3,
+                          childAspectRatio: 0.65,
+                          crossAxisSpacing: 10,
                           mainAxisSpacing: 12,
                         ),
                         delegate: SliverChildBuilderDelegate(
                           (context, index) {
-                            final vid = searchResults[index];
+                            final video = searchResults[index];
                             return VideoCard(
-                              video: vid,
-                              onTap: () => _onVideoSelected(vid),
-                              width: double.infinity,
-                              height: double.infinity,
+                              video: video,
+                              onTap: () => _onVideoSelected(video),
                             );
                           },
                           childCount: searchResults.length,
                         ),
                       ),
               )
-            else
-              // 3. Contenu d'accueil classique style Netflix
-              SliverList(
-                delegate: SliverChildListDelegate([
-                  // A. Grande Bannière Hero en Vedette (Featured Video)
-                  if (featuredVideo != null)
-                    _buildHeroBanner(featuredVideo)
-                  else if (videoListAsync.isLoading)
-                    Container(
-                      height: 420,
-                      color: const Color(0xFF1E1E1E),
-                      child: const Center(
+            else ...[
+              // 3. Bannière Hero (Vidéo mise en avant tout en haut façon Netflix)
+              if (featuredVideo != null)
+                SliverToBoxAdapter(
+                  child: _buildHeroBanner(featuredVideo, l10n),
+                )
+              else
+                SliverToBoxAdapter(
+                  child: videoListAsync.when(
+                    loading: () => const SizedBox(
+                      height: 380,
+                      child: Center(
                         child: CircularProgressIndicator(color: AppTheme.netflixRed),
                       ),
                     ),
-
-                  const SizedBox(height: 18),
-
-                  // B. Rangée "Continuer la lecture" (si historique en cours)
-                  if (continueWatching.isNotEmpty) ...[
-                    _buildSectionHeader('Continuer la lecture'),
-                    SizedBox(
-                      height: 195,
-                      child: ListView.builder(
-                        scrollDirection: Axis.horizontal,
-                        padding: const EdgeInsets.symmetric(horizontal: 16),
-                        itemCount: continueWatching.length,
-                        itemBuilder: (context, index) {
-                          final vid = continueWatching[index];
-                          return VideoCard(
-                            video: vid,
-                            showProgress: true,
-                            width: 135,
-                            height: 190,
-                            onTap: () => _onVideoSelected(vid),
-                          );
-                        },
+                    error: (err, _) => SizedBox(
+                      height: 250,
+                      child: Center(
+                        child: Column(
+                          mainAxisSize: MainAxisSize.min,
+                          children: [
+                            const Icon(Icons.wifi_off, color: Colors.redAccent, size: 40),
+                            const SizedBox(height: 8),
+                            Text(
+                              l10n.catalogLoadError,
+                              style: const TextStyle(color: Colors.white70),
+                            ),
+                            const SizedBox(height: 12),
+                            ElevatedButton(
+                              onPressed: () => ref.invalidate(videoListProvider),
+                              child: Text(l10n.retry),
+                            ),
+                          ],
+                        ),
                       ),
                     ),
-                    const SizedBox(height: 24),
-                  ],
-
-                  // C. Rangée "Top 5 des Tendances" (grands chiffres Netflix)
-                  if (top5Videos.isNotEmpty) ...[
-                    _buildSectionHeader('Top 5 des Vidéos les plus regardées'),
-                    SizedBox(
-                      height: 200,
-                      child: ListView.builder(
-                        scrollDirection: Axis.horizontal,
-                        padding: const EdgeInsets.symmetric(horizontal: 16),
-                        itemCount: top5Videos.length,
-                        itemBuilder: (context, index) {
-                          final vid = top5Videos[index];
-                          return TopNumberCard(
-                            rank: index + 1,
-                            video: vid,
-                            onTap: () => _onVideoSelected(vid),
-                          );
-                        },
-                      ),
-                    ),
-                    const SizedBox(height: 24),
-                  ],
-
-                  // D. Rangées Dynamiques par Catégorie (Films, Séries, etc.)
-                  categoriesAsync.when(
-                    data: (categories) {
-                      return Column(
-                        children: categories.map((cat) {
-                          return Consumer(
-                            builder: (context, ref, _) {
-                              final catVideos = ref.watch(videosByCategoryProvider(cat.name));
-                              if (catVideos.isEmpty) return const SizedBox.shrink();
-
-                              return Column(
-                                crossAxisAlignment: CrossAxisAlignment.start,
-                                children: [
-                                  _buildSectionHeader('${cat.name} (${cat.count})'),
-                                  SizedBox(
-                                    height: 195,
-                                    child: ListView.builder(
-                                      scrollDirection: Axis.horizontal,
-                                      padding: const EdgeInsets.symmetric(horizontal: 16),
-                                      itemCount: catVideos.length,
-                                      itemBuilder: (context, index) {
-                                        final vid = catVideos[index];
-                                        return VideoCard(
-                                          video: vid,
-                                          width: 135,
-                                          height: 190,
-                                          onTap: () => _onVideoSelected(vid),
-                                        );
-                                      },
-                                    ),
-                                  ),
-                                  const SizedBox(height: 24),
-                                ],
-                              );
-                            },
-                          );
-                        }).toList(),
-                      );
-                    },
-                    loading: () => const SizedBox.shrink(),
-                    error: (_, __) => const SizedBox.shrink(),
+                    data: (_) => const SizedBox.shrink(),
                   ),
+                ),
 
-                  const SizedBox(height: 60),
-                ]),
+              // 4. Contenu déroulant façon Netflix
+              SliverToBoxAdapter(
+                child: Column(
+                  crossAxisAlignment: CrossAxisAlignment.start,
+                  children: [
+                    const SizedBox(height: 18),
+
+                    // A. Rangée "Continuer la lecture" (si historique en cours)
+                    if (continueWatching.isNotEmpty) ...[
+                      _buildSectionHeader(l10n.continueWatching),
+                      SizedBox(
+                        height: 195,
+                        child: ListView.builder(
+                          scrollDirection: Axis.horizontal,
+                          padding: const EdgeInsets.symmetric(horizontal: 16),
+                          itemCount: continueWatching.length,
+                          itemBuilder: (context, index) {
+                            final vid = continueWatching[index];
+                            return VideoCard(
+                              video: vid,
+                              showProgress: true,
+                              width: 135,
+                              height: 190,
+                              onTap: () => _onVideoSelected(vid),
+                            );
+                          },
+                        ),
+                      ),
+                      const SizedBox(height: 24),
+                    ],
+
+                    // B. Rangée "Top 5 des Tendances" (grands chiffres Netflix)
+                    if (top5Videos.isNotEmpty) ...[
+                      _buildSectionHeader(l10n.top5Trending),
+                      SizedBox(
+                        height: 200,
+                        child: ListView.builder(
+                          scrollDirection: Axis.horizontal,
+                          padding: const EdgeInsets.symmetric(horizontal: 16),
+                          itemCount: top5Videos.length,
+                          itemBuilder: (context, index) {
+                            final vid = top5Videos[index];
+                            return TopNumberCard(
+                              rank: index + 1,
+                              video: vid,
+                              onTap: () => _onVideoSelected(vid),
+                            );
+                          },
+                        ),
+                      ),
+                      const SizedBox(height: 24),
+                    ],
+
+                    // C. Rangées Dynamiques par Catégorie (Films, Séries, etc.)
+                    categoriesAsync.when(
+                      data: (categories) {
+                        return Column(
+                          children: categories.map((cat) {
+                            return Consumer(
+                              builder: (context, ref, _) {
+                                final catVideos = ref.watch(videosByCategoryProvider(cat.name));
+                                if (catVideos.isEmpty) return const SizedBox.shrink();
+
+                                return Column(
+                                  crossAxisAlignment: CrossAxisAlignment.start,
+                                  children: [
+                                    _buildSectionHeader('${cat.name} (${cat.count})'),
+                                    SizedBox(
+                                      height: 195,
+                                      child: ListView.builder(
+                                        scrollDirection: Axis.horizontal,
+                                        padding: const EdgeInsets.symmetric(horizontal: 16),
+                                        itemCount: catVideos.length,
+                                        itemBuilder: (context, index) {
+                                          final vid = catVideos[index];
+                                          return VideoCard(
+                                            video: vid,
+                                            width: 135,
+                                            height: 190,
+                                            onTap: () => _onVideoSelected(vid),
+                                          );
+                                        },
+                                      ),
+                                    ),
+                                    const SizedBox(height: 24),
+                                  ],
+                                );
+                              },
+                            );
+                          }).toList(),
+                        );
+                      },
+                      loading: () => const SizedBox.shrink(),
+                      error: (_, __) => const SizedBox.shrink(),
+                    ),
+                    const SizedBox(height: 32),
+                  ],
+                ),
               ),
+            ],
           ],
         ),
       ),
@@ -297,7 +338,7 @@ class _HomeScreenState extends ConsumerState<HomeScreen> {
   }
 
   /// Affiche principale Hero Banner
-  Widget _buildHeroBanner(VideoModel video) {
+  Widget _buildHeroBanner(VideoModel video, AppLocalizations l10n) {
     return FutureBuilder<String>(
       future: storageService.getServerUrl(),
       builder: (context, snapshot) {
@@ -315,32 +356,38 @@ class _HomeScreenState extends ConsumerState<HomeScreen> {
                   ? CachedNetworkImage(
                       imageUrl: thumbUrl,
                       fit: BoxFit.cover,
-                      errorWidget: (context, url, error) => Container(color: const Color(0xFF1F1F1F)),
+                      errorWidget: (context, url, error) =>
+                          Container(color: const Color(0xFF1F1F1F)),
                     )
-                  : Container(color: const Color(0xFF1F1F1F)),
+                  : Container(
+                      color: const Color(0xFF1F1F1F),
+                      child: const Center(
+                        child: Icon(Icons.movie, size: 100, color: Colors.white24),
+                      ),
+                    ),
             ),
 
-            // Dégradé sombre immersif
+            // Dégradé noir vertical (du transparent au noir pur façon Netflix)
             Container(
               height: 440,
               decoration: const BoxDecoration(
                 gradient: LinearGradient(
                   colors: [
                     Colors.transparent,
-                    Color(0x33000000),
-                    Color(0xCC141414),
+                    Colors.transparent,
+                    Color(0xCC000000),
                     AppTheme.netflixBlack,
                   ],
-                  stops: [0.0, 0.4, 0.8, 1.0],
+                  stops: [0.0, 0.45, 0.75, 1.0],
                   begin: Alignment.topCenter,
                   end: Alignment.bottomCenter,
                 ),
               ),
             ),
 
-            // Informations & Bouton de lecture
+            // Métadonnées & Boutons centrés en bas de la bannière
             Padding(
-              padding: const EdgeInsets.symmetric(horizontal: 24, vertical: 16),
+              padding: const EdgeInsets.symmetric(horizontal: 20, vertical: 16),
               child: Column(
                 mainAxisSize: MainAxisSize.min,
                 children: [
@@ -357,13 +404,13 @@ class _HomeScreenState extends ConsumerState<HomeScreen> {
                         color: Colors.white,
                         fontSize: 11,
                         fontWeight: FontWeight.w900,
-                        letterSpacing: 1,
+                        letterSpacing: 1.2,
                       ),
                     ),
                   ),
                   const SizedBox(height: 8),
 
-                  // Titre
+                  // Titre du contenu
                   Text(
                     video.title,
                     textAlign: TextAlign.center,
@@ -372,10 +419,10 @@ class _HomeScreenState extends ConsumerState<HomeScreen> {
                     style: const TextStyle(
                       color: Colors.white,
                       fontSize: 24,
-                      fontWeight: FontWeight.w900,
+                      fontWeight: FontWeight.bold,
                       letterSpacing: 0.5,
                       shadows: [
-                        Shadow(color: Colors.black, blurRadius: 8),
+                        Shadow(color: Colors.black, blurRadius: 10, offset: Offset(0, 2)),
                       ],
                     ),
                   ),
@@ -395,14 +442,14 @@ class _HomeScreenState extends ConsumerState<HomeScreen> {
                           shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(4)),
                         ),
                         icon: const Icon(Icons.play_arrow, size: 28),
-                        label: const Text(
-                          'Lecture',
-                          style: TextStyle(fontSize: 16, fontWeight: FontWeight.bold),
+                        label: Text(
+                          l10n.play,
+                          style: const TextStyle(fontSize: 16, fontWeight: FontWeight.bold),
                         ),
                       ),
                       const SizedBox(width: 16),
 
-                      // Bouton Info
+                      // Bouton Info / Détails
                       OutlinedButton.icon(
                         onPressed: () => _onVideoSelected(video),
                         style: OutlinedButton.styleFrom(
@@ -412,7 +459,7 @@ class _HomeScreenState extends ConsumerState<HomeScreen> {
                           shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(4)),
                         ),
                         icon: const Icon(Icons.info_outline, size: 22),
-                        label: const Text('Détails'),
+                        label: Text(l10n.details),
                       ),
                     ],
                   ),

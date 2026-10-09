@@ -1,5 +1,6 @@
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
+import '../../core/localization/app_localizations.dart';
 import '../../core/storage/storage_service.dart';
 import '../../core/theme/app_theme.dart';
 import '../../providers/auth_provider.dart';
@@ -7,7 +8,7 @@ import '../../providers/locale_provider.dart';
 import '../admin/admin_screen.dart';
 import '../auth/login_screen.dart';
 
-/// Écran des Paramètres et Profil avec support bilingue FR/AR (RTL)
+/// Écran des Paramètres et Profil avec support trilingue FR / EN / AR (RTL)
 class SettingsScreen extends ConsumerWidget {
   const SettingsScreen({super.key});
 
@@ -16,12 +17,12 @@ class SettingsScreen extends ConsumerWidget {
     final authState = ref.watch(authProvider);
     final user = authState.user;
     final currentLocale = ref.watch(localeProvider);
-    final isArabic = currentLocale.languageCode == 'ar';
+    final l10n = context.l10n;
 
     return Scaffold(
       backgroundColor: AppTheme.netflixBlack,
       appBar: AppBar(
-        title: Text(isArabic ? 'الإعدادات والملف الشخصي' : 'Paramètres & Profil'),
+        title: Text(l10n.settingsTitle),
         backgroundColor: Colors.black.withValues(alpha: 0.8),
       ),
       body: ListView(
@@ -58,7 +59,7 @@ class SettingsScreen extends ConsumerWidget {
                     crossAxisAlignment: CrossAxisAlignment.start,
                     children: [
                       Text(
-                        user?.username ?? 'Utilisateur',
+                        user?.username ?? l10n.defaultUsername,
                         style: const TextStyle(
                           color: Colors.white,
                           fontSize: 18,
@@ -81,8 +82,8 @@ class SettingsScreen extends ConsumerWidget {
                             ),
                             child: Text(
                               user?.isAdmin == true
-                                  ? (isArabic ? 'مسؤول النظام' : 'ADMINISTRATEUR')
-                                  : (isArabic ? 'عضو مميز' : 'MEMBRE VIP'),
+                                  ? l10n.roleAdminBadge
+                                  : l10n.roleVipBadge,
                               style: TextStyle(
                                 color: user?.isAdmin == true ? Colors.amber : Colors.blueAccent,
                                 fontSize: 11,
@@ -102,7 +103,7 @@ class SettingsScreen extends ConsumerWidget {
 
           // Section Préférences
           Text(
-            isArabic ? 'التفضيلات' : 'Préférences Générales',
+            l10n.preferencesHeader,
             style: const TextStyle(
               color: Colors.white70,
               fontSize: 13,
@@ -112,17 +113,17 @@ class SettingsScreen extends ConsumerWidget {
           ),
           const SizedBox(height: 10),
 
-          // Sélecteur de langue (Français / Arabe RTL)
+          // Sélecteur de langue trilingue (Français 🇫🇷 / English 🇬🇧 / العربية 🇲🇦)
           ListTile(
             tileColor: AppTheme.netflixCard,
             shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(8)),
             leading: const Icon(Icons.language, color: Colors.white),
             title: Text(
-              isArabic ? 'اللغة' : 'Langue d\'affichage',
+              l10n.displayLanguage,
               style: const TextStyle(color: Colors.white),
             ),
             subtitle: Text(
-              isArabic ? 'العربية (من اليمين لليسار)' : 'Français',
+              l10n.currentLangName,
               style: const TextStyle(color: Colors.white60, fontSize: 13),
             ),
             trailing: DropdownButton<String>(
@@ -133,7 +134,8 @@ class SettingsScreen extends ConsumerWidget {
               style: const TextStyle(color: Colors.white),
               items: const [
                 DropdownMenuItem(value: 'fr', child: Text('Français 🇫🇷')),
-                DropdownMenuItem(value: 'ar', child: Text('العربية 🇲🇦')),
+                DropdownMenuItem(value: 'en', child: Text('English 🇬🇧')),
+                DropdownMenuItem(value: 'ar', child: Text('العربية 🇲🇦 (RTL)')),
               ],
               onChanged: (newLang) {
                 if (newLang != null) {
@@ -150,7 +152,7 @@ class SettingsScreen extends ConsumerWidget {
             shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(8)),
             leading: const Icon(Icons.dns_outlined, color: Colors.white),
             title: Text(
-              isArabic ? 'عنوان الخادم' : 'Adresse du Serveur Backend',
+              l10n.serverAddressOption,
               style: const TextStyle(color: Colors.white),
             ),
             subtitle: FutureBuilder<String>(
@@ -161,14 +163,14 @@ class SettingsScreen extends ConsumerWidget {
               ),
             ),
             trailing: const Icon(Icons.edit, color: Colors.white38, size: 20),
-            onTap: () => _editServerUrl(context),
+            onTap: () => _editServerUrl(context, l10n),
           ),
           const SizedBox(height: 24),
 
           // Section Administration (visible si admin)
           if (user?.isAdmin == true) ...[
             Text(
-              isArabic ? 'إدارة المنصة' : 'Panneau d\'Administration',
+              l10n.adminPanelHeader,
               style: const TextStyle(
                 color: Colors.white70,
                 fontSize: 13,
@@ -182,13 +184,11 @@ class SettingsScreen extends ConsumerWidget {
               shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(8)),
               leading: const Icon(Icons.admin_panel_settings, color: Colors.amber),
               title: Text(
-                isArabic ? 'لوحة التحكم والعمليات' : 'Gestion du Serveur & Sync',
+                l10n.adminServerAndSync,
                 style: const TextStyle(color: Colors.white, fontWeight: FontWeight.bold),
               ),
               subtitle: Text(
-                isArabic
-                    ? 'المزامنة، دعوات التسجيل، وتفريغ الذاكرة'
-                    : 'Synchronisation Telegram, invitations VIP, cache',
+                l10n.adminServerAndSyncDesc,
                 style: const TextStyle(color: Colors.white60, fontSize: 12),
               ),
               trailing: const Icon(Icons.chevron_right, color: Colors.white38),
@@ -211,15 +211,14 @@ class SettingsScreen extends ConsumerWidget {
             ),
             child: Column(
               children: [
-                const Text(
-                  'VidTele Mobile v1.0.0 (Production)',
-                  style: TextStyle(color: Colors.white38, fontSize: 12),
+                Text(
+                  l10n.appVersionInfo,
+                  style: const TextStyle(color: Colors.white38, fontSize: 12),
                 ),
                 const SizedBox(height: 4),
                 Text(
-                  isArabic
-                      ? 'بث مباشر عالي السرعة من تيليغرام'
-                      : 'Moteur MTProto Streaming HTTP 206 partiel',
+                  l10n.engineInfo,
+                  textAlign: TextAlign.center,
                   style: const TextStyle(color: Colors.white24, fontSize: 11),
                 ),
               ],
@@ -229,7 +228,7 @@ class SettingsScreen extends ConsumerWidget {
 
           // Bouton Déconnexion
           ElevatedButton.icon(
-            onPressed: () => _confirmLogout(context, ref, isArabic),
+            onPressed: () => _confirmLogout(context, ref, l10n),
             style: ElevatedButton.styleFrom(
               backgroundColor: const Color(0xFF2E2E2E),
               foregroundColor: Colors.redAccent,
@@ -238,7 +237,7 @@ class SettingsScreen extends ConsumerWidget {
             ),
             icon: const Icon(Icons.logout, size: 20),
             label: Text(
-              isArabic ? 'تسجيل الخروج' : 'Se déconnecter',
+              l10n.logOutButton,
               style: const TextStyle(fontSize: 15, fontWeight: FontWeight.bold),
             ),
           ),
@@ -247,7 +246,7 @@ class SettingsScreen extends ConsumerWidget {
     );
   }
 
-  void _editServerUrl(BuildContext context) async {
+  void _editServerUrl(BuildContext context, AppLocalizations l10n) async {
     final currentUrl = await storageService.getServerUrl();
     final controller = TextEditingController(text: currentUrl);
 
@@ -257,7 +256,7 @@ class SettingsScreen extends ConsumerWidget {
       context: context,
       builder: (ctx) => AlertDialog(
         backgroundColor: AppTheme.netflixCard,
-        title: const Text('Modifier l\'URL du serveur', style: TextStyle(color: Colors.white)),
+        title: Text(l10n.editServerAddressTitle, style: const TextStyle(color: Colors.white)),
         content: TextField(
           controller: controller,
           style: const TextStyle(color: Colors.white),
@@ -269,7 +268,7 @@ class SettingsScreen extends ConsumerWidget {
         actions: [
           TextButton(
             onPressed: () => Navigator.pop(ctx),
-            child: const Text('Annuler', style: TextStyle(color: Colors.white60)),
+            child: Text(l10n.cancel, style: const TextStyle(color: Colors.white60)),
           ),
           ElevatedButton(
             onPressed: () async {
@@ -280,33 +279,31 @@ class SettingsScreen extends ConsumerWidget {
               }
             },
             style: ElevatedButton.styleFrom(backgroundColor: AppTheme.netflixRed),
-            child: const Text('Enregistrer'),
+            child: Text(l10n.save),
           ),
         ],
       ),
     );
   }
 
-  void _confirmLogout(BuildContext context, WidgetRef ref, bool isArabic) {
+  void _confirmLogout(BuildContext context, WidgetRef ref, AppLocalizations l10n) {
     showDialog(
       context: context,
       builder: (ctx) => AlertDialog(
         backgroundColor: AppTheme.netflixCard,
         title: Text(
-          isArabic ? 'تسجيل الخروج ؟' : 'Confirmer la déconnexion ?',
+          l10n.confirmLogoutTitle,
           style: const TextStyle(color: Colors.white),
         ),
         content: Text(
-          isArabic
-              ? 'هل أنت متأكد من رغبتك في تسجيل الخروج من هذا الجهاز؟'
-              : 'Êtes-vous sûr de vouloir quitter votre session actuelle ?',
+          l10n.confirmLogoutMessage,
           style: const TextStyle(color: Colors.white70),
         ),
         actions: [
           TextButton(
             onPressed: () => Navigator.pop(ctx),
             child: Text(
-              isArabic ? 'إلغاء' : 'Annuler',
+              l10n.cancel,
               style: const TextStyle(color: Colors.white60),
             ),
           ),
@@ -321,7 +318,7 @@ class SettingsScreen extends ConsumerWidget {
               );
             },
             style: ElevatedButton.styleFrom(backgroundColor: AppTheme.netflixRed),
-            child: Text(isArabic ? 'خروج' : 'Déconnexion'),
+            child: Text(l10n.logOutButton),
           ),
         ],
       ),

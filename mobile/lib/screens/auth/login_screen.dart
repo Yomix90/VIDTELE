@@ -1,10 +1,13 @@
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
+import '../../core/localization/app_localizations.dart';
 import '../../core/storage/storage_service.dart';
 import '../../core/theme/app_theme.dart';
 import '../../providers/auth_provider.dart';
+import '../../providers/locale_provider.dart';
 
-/// Écran de connexion et inscription style Netflix avec configurateur d'URL serveur.
+/// Écran de connexion et inscription style Netflix avec configurateur d'URL serveur
+/// et sélecteur de langue trilingue FR / EN / AR.
 class LoginScreen extends ConsumerStatefulWidget {
   const LoginScreen({super.key});
 
@@ -29,6 +32,7 @@ class _LoginScreenState extends ConsumerState<LoginScreen> {
   }
 
   void _showServerConfigDialog() async {
+    final l10n = context.l10n;
     final currentUrl = await storageService.getServerUrl();
     _serverUrlController.text = currentUrl;
 
@@ -37,14 +41,14 @@ class _LoginScreenState extends ConsumerState<LoginScreen> {
       context: context,
       builder: (context) => AlertDialog(
         backgroundColor: AppTheme.netflixDarkGray,
-        title: const Text('Adresse du Serveur VidTele'),
+        title: Text(l10n.serverUrlDialogTitle),
         content: Column(
           mainAxisSize: MainAxisSize.min,
           crossAxisAlignment: CrossAxisAlignment.start,
           children: [
-            const Text(
-              'Entrez l\'URL de votre serveur (ex: http://192.168.1.100:8000 pour un téléphone physique, ou http://10.0.2.2:8000 pour l\'émulateur Android) :',
-              style: TextStyle(fontSize: 12, color: Colors.white70),
+            Text(
+              l10n.serverUrlDialogDesc,
+              style: const TextStyle(fontSize: 12, color: Colors.white70),
             ),
             const SizedBox(height: 12),
             TextField(
@@ -59,7 +63,7 @@ class _LoginScreenState extends ConsumerState<LoginScreen> {
         actions: [
           TextButton(
             onPressed: () => Navigator.pop(context),
-            child: const Text('Annuler', style: TextStyle(color: Colors.white60)),
+            child: Text(l10n.cancel, style: const TextStyle(color: Colors.white60)),
           ),
           ElevatedButton(
             onPressed: () async {
@@ -70,11 +74,11 @@ class _LoginScreenState extends ConsumerState<LoginScreen> {
               if (mounted) {
                 navigator.pop();
                 messenger.showSnackBar(
-                  SnackBar(content: Text('Serveur mis à jour : $newUrl')),
+                  SnackBar(content: Text(l10n.serverUpdated(newUrl))),
                 );
               }
             },
-            child: const Text('Enregistrer'),
+            child: Text(l10n.save),
           ),
         ],
       ),
@@ -82,13 +86,14 @@ class _LoginScreenState extends ConsumerState<LoginScreen> {
   }
 
   void _handleSubmit() async {
+    final l10n = context.l10n;
     final username = _usernameController.text.trim();
     final password = _passwordController.text;
     final inviteCode = _inviteCodeController.text.trim();
 
     if (username.isEmpty || password.isEmpty) {
       ScaffoldMessenger.of(context).showSnackBar(
-        const SnackBar(content: Text('Veuillez renseigner vos identifiants')),
+        SnackBar(content: Text(l10n.fillAllFields)),
       );
       return;
     }
@@ -96,7 +101,7 @@ class _LoginScreenState extends ConsumerState<LoginScreen> {
     if (_isSignUp) {
       if (inviteCode.isEmpty) {
         ScaffoldMessenger.of(context).showSnackBar(
-          const SnackBar(content: Text('Un code d\'invitation valide est requis')),
+          SnackBar(content: Text(l10n.fillAllFields)),
         );
         return;
       }
@@ -109,6 +114,8 @@ class _LoginScreenState extends ConsumerState<LoginScreen> {
   @override
   Widget build(BuildContext context) {
     final authState = ref.watch(authProvider);
+    final currentLocale = ref.watch(localeProvider);
+    final l10n = context.l10n;
 
     return Scaffold(
       body: Stack(
@@ -124,14 +131,48 @@ class _LoginScreenState extends ConsumerState<LoginScreen> {
             ),
           ),
 
-          // 2. Bouton Paramètres Serveur en haut à droite
+          // 2. Boutons Supérieurs : Sélecteur de Langue & Paramètres Serveur
           SafeArea(
-            child: Align(
-              alignment: Alignment.topRight,
-              child: IconButton(
-                icon: const Icon(Icons.settings, color: Colors.white70),
-                tooltip: 'Configurer l\'URL du serveur',
-                onPressed: _showServerConfigDialog,
+            child: Padding(
+              padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 8),
+              child: Row(
+                mainAxisAlignment: MainAxisAlignment.spaceBetween,
+                children: [
+                  // Menu Déroulant Langue Trilingue
+                  Container(
+                    padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 2),
+                    decoration: BoxDecoration(
+                      color: Colors.black.withValues(alpha: 0.5),
+                      borderRadius: BorderRadius.circular(20),
+                      border: Border.all(color: Colors.white24),
+                    ),
+                    child: DropdownButtonHideUnderline(
+                      child: DropdownButton<String>(
+                        value: currentLocale.languageCode,
+                        dropdownColor: AppTheme.netflixDarkGray,
+                        icon: const Icon(Icons.arrow_drop_down, color: Colors.white70),
+                        style: const TextStyle(color: Colors.white, fontSize: 13),
+                        items: const [
+                          DropdownMenuItem(value: 'fr', child: Text('FR 🇫🇷')),
+                          DropdownMenuItem(value: 'en', child: Text('EN 🇬🇧')),
+                          DropdownMenuItem(value: 'ar', child: Text('AR 🇲🇦')),
+                        ],
+                        onChanged: (lang) {
+                          if (lang != null) {
+                            ref.read(localeProvider.notifier).setLocale(lang);
+                          }
+                        },
+                      ),
+                    ),
+                  ),
+
+                  // Bouton Paramètres Serveur
+                  IconButton(
+                    icon: const Icon(Icons.settings, color: Colors.white70),
+                    tooltip: l10n.configureBackendServer,
+                    onPressed: _showServerConfigDialog,
+                  ),
+                ],
               ),
             ),
           ),
@@ -176,9 +217,10 @@ class _LoginScreenState extends ConsumerState<LoginScreen> {
                     ],
                   ),
                   const SizedBox(height: 8),
-                  const Text(
-                    'Streaming Vidéo Privé Telegram',
-                    style: TextStyle(color: Colors.white54, fontSize: 13),
+                  Text(
+                    l10n.welcomeSubtitle,
+                    textAlign: TextAlign.center,
+                    style: const TextStyle(color: Colors.white54, fontSize: 13),
                   ),
                   const SizedBox(height: 36),
 
@@ -209,9 +251,9 @@ class _LoginScreenState extends ConsumerState<LoginScreen> {
                   // Champ Nom d'utilisateur
                   TextField(
                     controller: _usernameController,
-                    decoration: const InputDecoration(
-                      labelText: 'Nom d\'utilisateur',
-                      prefixIcon: Icon(Icons.person_outline, color: Colors.white54),
+                    decoration: InputDecoration(
+                      labelText: l10n.username,
+                      prefixIcon: const Icon(Icons.person_outline, color: Colors.white54),
                     ),
                   ),
                   const SizedBox(height: 14),
@@ -220,9 +262,9 @@ class _LoginScreenState extends ConsumerState<LoginScreen> {
                   TextField(
                     controller: _passwordController,
                     obscureText: true,
-                    decoration: const InputDecoration(
-                      labelText: 'Mot de passe',
-                      prefixIcon: Icon(Icons.lock_outline, color: Colors.white54),
+                    decoration: InputDecoration(
+                      labelText: l10n.password,
+                      prefixIcon: const Icon(Icons.lock_outline, color: Colors.white54),
                     ),
                   ),
                   const SizedBox(height: 14),
@@ -231,9 +273,12 @@ class _LoginScreenState extends ConsumerState<LoginScreen> {
                   if (_isSignUp) ...[
                     TextField(
                       controller: _inviteCodeController,
-                      decoration: const InputDecoration(
-                        labelText: 'Code d\'invitation (Obligatoire)',
-                        prefixIcon: Icon(Icons.confirmation_number_outlined, color: Colors.white54),
+                      decoration: InputDecoration(
+                        labelText: l10n.inviteCodeVip,
+                        prefixIcon: const Icon(
+                          Icons.confirmation_number_outlined,
+                          color: Colors.white54,
+                        ),
                       ),
                     ),
                     const SizedBox(height: 14),
@@ -254,7 +299,7 @@ class _LoginScreenState extends ConsumerState<LoginScreen> {
                               child: CircularProgressIndicator(color: Colors.white, strokeWidth: 2),
                             )
                           : Text(
-                              _isSignUp ? 'Créer mon compte' : 'S\'identifier',
+                              _isSignUp ? l10n.registerButton : l10n.connectButton,
                               style: const TextStyle(fontSize: 16, fontWeight: FontWeight.bold),
                             ),
                     ),
@@ -268,20 +313,13 @@ class _LoginScreenState extends ConsumerState<LoginScreen> {
                         _isSignUp = !_isSignUp;
                       });
                     },
-                    child: RichText(
-                      text: TextSpan(
-                        text: _isSignUp ? 'Déjà membre ? ' : 'Nouveau sur VidTele ? ',
-                        style: const TextStyle(color: Colors.white60, fontSize: 14),
-                        children: [
-                          TextSpan(
-                            text: _isSignUp ? 'S\'identifier' : 'S\'inscrire avec un code',
-                            style: const TextStyle(
-                              color: Colors.white,
-                              fontWeight: FontWeight.bold,
-                              decoration: TextDecoration.underline,
-                            ),
-                          ),
-                        ],
+                    child: Text(
+                      _isSignUp ? l10n.alreadyAccountPrompt : l10n.noAccountPrompt,
+                      style: const TextStyle(
+                        color: Colors.white,
+                        fontSize: 14,
+                        fontWeight: FontWeight.bold,
+                        decoration: TextDecoration.underline,
                       ),
                     ),
                   ),

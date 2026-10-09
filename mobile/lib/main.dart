@@ -3,6 +3,7 @@ import 'package:flutter/services.dart';
 import 'package:flutter_localizations/flutter_localizations.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 
+import 'core/localization/app_localizations.dart';
 import 'core/theme/app_theme.dart';
 import 'providers/auth_provider.dart';
 import 'providers/locale_provider.dart';
@@ -43,13 +44,15 @@ class VidTeleApp extends ConsumerWidget {
       theme: AppTheme.darkTheme,
       locale: currentLocale,
       localizationsDelegates: const [
+        AppLocalizations.delegate,
         GlobalMaterialLocalizations.delegate,
         GlobalWidgetsLocalizations.delegate,
         GlobalCupertinoLocalizations.delegate,
       ],
       supportedLocales: const [
         Locale('fr', ''), // Français (LTR)
-        Locale('ar', ''), // Arabe (RTL)
+        Locale('en', ''), // English (LTR)
+        Locale('ar', ''), // العربية (RTL)
       ],
       home: authState.isLoading
           ? const Scaffold(
