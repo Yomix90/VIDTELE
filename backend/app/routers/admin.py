@@ -762,3 +762,484 @@ async def detach_episode_from_media(
     await db.commit()
     return MessageResponse(message="Vidéo détachée avec succès (repositionnée en vidéo brute)")
 
+
+
+# =============================================================
+# 7. Gestion Avancée StreamAdmin : Séries, Saisons & Épisodes
+# =============================================================
+
+from app.models import (
+    Episode,
+    Genre,
+    HomeHeroItem,
+    HomeRow,
+    Movie,
+    Season,
+    Series,
+)
+from app.schemas import (
+    EpisodeCreate,
+    EpisodeResponse,
+    GenreResponse,
+    HomeRowCreate,
+    HomeRowResponse,
+    MovieCreate,
+    MovieResponse,
+    SeasonCreate,
+    SeasonDetailResponse,
+    SeasonResponse,
+    SeriesCreate,
+    SeriesDetailResponse,
+    SeriesResponse,
+)
+from app.services.parser_service import parser_service, slugify
+
+
+@router.get("/series", response_model=List[SeriesResponse])
+async def list_series(
+    search: Optional[str] = Query(None, description="Recherche par titre"),
+    visibility: Optional[str] = Query(None, pattern="^(published|draft|hidden)$"),
+    skip: int = Query(0, ge=0),
+    limit: int = Query(50, ge=1, le=100),
+    current_admin: User = Depends(get_current_admin),
+    db: AsyncSession = Depends(get_db),
+):
+    """Liste toutes les séries du catalogue avec nombre de saisons et épisodes."""
+    stmt = select(Series).order_by(desc(Series.created_at))
+    if search:
+        stmt = stmt.where(Series.title_fr.ilike(f"%{search.strip()}%"))
+    if visibility:
+        stmt = stmt.where(Series.visibility == visibility)
+
+    series_list = (await db.execute(stmt.offset(skip).limit(limit))).scalars().all()
+
+    items = []
+    for s in series_list:
+        # Compter les saisons et épisodes
+        seasons_res = await db.execute(select(Season.id).where(Season.series_id == s.id))
+        season_ids = [row[0] for row in seasons_res.all()]
+        s_count = len(season_ids)
+        ep_count = 0
+        if season_ids:
+            ep_stmt = select(func.count(Episode.id)).where(Episode.season_id.in_(season_ids))
+            ep_count = (await db.execute(ep_stmt)).scalar_one()
+
+        items.append(
+            SeriesResponse(
+                id=s.id,
+                slug=s.slug,
+                title_fr=s.title_fr,
+                title_ar=s.title_ar,
+                synopsis_fr=s.synopsis_fr,
+                year_start=s.year_start,
+                rating=s.rating,
+                status=s.status,
+                poster_path=s.poster_path,
+                banner_path=s.banner_path,
+                is_featured=s.is_featured,
+                visibility=s.visibility,
+                seasons_count=s_count,
+                episodes_count=ep_count,
+                created_at=s.created_at,
+            )
+        )
+    return items
+
+
+@router.post("/series", response_model=SeriesResponse, status_code=status.HTTP_201_CREATED)
+async def create_series(
+    data: SeriesCreate,
+    current_admin: User = Depends(get_current_admin),
+    db: AsyncSession = Depends(get_db),
+):
+    """Crée une nouvelle série et initialise automatiquement la Saison 1."""
+    base_slug = slugify(data.title_fr)
+    # Assurer l'unicité du slug
+    existing = (await db.execute(select(Series).where(Series.slug == base_slug))).scalar_one_or_none()
+    slug = f"{base_slug}-{secrets.token_hex(2)}" if existing else base_slug
+
+    new_series = Series(
+        slug=slug,
+        title_fr=data.title_fr.strip(),
+        title_ar=data.title_ar.strip() if data.title_ar else None,
+        synopsis_fr=data.synopsis_fr.strip() if data.synopsis_fr else None,
+        synopsis_ar=data.synopsis_ar.strip() if data.synopsis_ar else None,
+        year_start=data.year_start,
+        rating=data.rating,
+        status=data.status,
+        poster_path=data.poster_path.strip() if data.poster_path else None,
+        banner_path=data.banner_path.strip() if data.banner_path else None,
+        visibility=data.visibility,
+        is_featured=data.is_featured,
+    )
+    db.add(new_series)
+    await db.flush()
+
+    # Créer automatiquement la Saison 1
+    s1 = Season(
+        series_id=new_series.id,
+        number=1,
+        title_fr="Saison 1",
+        title_ar="الموسم 1",
+        order_index=1,
+    )
+    db.add(s1)
+    await db.commit()
+    await db.refresh(new_series)
+
+    return SeriesResponse(
+        id=new_series.id,
+        slug=new_series.slug,
+        title_fr=new_series.title_fr,
+        title_ar=new_series.title_ar,
+        synopsis_fr=new_series.synopsis_fr,
+        year_start=new_series.year_start,
+        rating=new_series.rating,
+        status=new_series.status,
+        poster_path=new_series.poster_path,
+        banner_path=new_series.banner_path,
+        is_featured=new_series.is_featured,
+        visibility=new_series.visibility,
+        seasons_count=1,
+        episodes_count=0,
+        created_at=new_series.created_at,
+    )
+
+
+@router.get("/series/{series_id}", response_model=SeriesDetailResponse)
+async def get_series_detail(
+    series_id: int,
+    current_admin: User = Depends(get_current_admin),
+    db: AsyncSession = Depends(get_db),
+):
+    """Récupère tous les détails d'une série avec ses saisons et épisodes ordonnés."""
+    stmt = select(Series).where(Series.id == series_id)
+    series = (await db.execute(stmt)).scalar_one_or_none()
+    if not series:
+        raise HTTPException(status_code=404, detail="Série introuvable")
+
+    seasons_stmt = select(Season).where(Season.series_id == series.id).order_by(Season.number)
+    seasons = (await db.execute(seasons_stmt)).scalars().all()
+
+    season_details = []
+    total_episodes = 0
+    for s in seasons:
+        ep_stmt = select(Episode).where(Episode.season_id == s.id).order_by(Episode.number)
+        episodes = (await db.execute(ep_stmt)).scalars().all()
+        total_episodes += len(episodes)
+        ep_responses = [EpisodeResponse.model_validate(ep) for ep in episodes]
+
+        season_details.append(
+            SeasonDetailResponse(
+                id=s.id,
+                series_id=s.series_id,
+                number=s.number,
+                title_fr=s.title_fr,
+                title_ar=s.title_ar,
+                poster_path=s.poster_path,
+                order_index=s.order_index,
+                episode_count=len(episodes),
+                episodes=ep_responses,
+            )
+        )
+
+    return SeriesDetailResponse(
+        id=series.id,
+        slug=series.slug,
+        title_fr=series.title_fr,
+        title_ar=series.title_ar,
+        synopsis_fr=series.synopsis_fr,
+        year_start=series.year_start,
+        rating=series.rating,
+        status=series.status,
+        poster_path=series.poster_path,
+        banner_path=series.banner_path,
+        is_featured=series.is_featured,
+        visibility=series.visibility,
+        seasons_count=len(seasons),
+        episodes_count=total_episodes,
+        created_at=series.created_at,
+        seasons=season_details,
+    )
+
+
+@router.post("/series/{series_id}/seasons", response_model=SeasonResponse, status_code=status.HTTP_201_CREATED)
+async def add_season_to_series(
+    series_id: int,
+    data: SeasonCreate,
+    current_admin: User = Depends(get_current_admin),
+    db: AsyncSession = Depends(get_db),
+):
+    """Ajoute une nouvelle saison à une série existante."""
+    series = (await db.execute(select(Series).where(Series.id == series_id))).scalar_one_or_none()
+    if not series:
+        raise HTTPException(status_code=404, detail="Série introuvable")
+
+    # Vérifier doublon de numéro
+    existing = (
+        await db.execute(select(Season).where(Season.series_id == series_id, Season.number == data.number))
+    ).scalar_one_or_none()
+    if existing:
+        raise HTTPException(status_code=400, detail=f"La saison {data.number} existe déjà pour cette série.")
+
+    season = Season(
+        series_id=series_id,
+        number=data.number,
+        title_fr=data.title_fr or f"Saison {data.number}",
+        title_ar=data.title_ar or f"الموسم {data.number}",
+        poster_path=data.poster_path,
+        order_index=data.number,
+    )
+    db.add(season)
+    await db.commit()
+    await db.refresh(season)
+
+    return SeasonResponse(
+        id=season.id,
+        series_id=season.series_id,
+        number=season.number,
+        title_fr=season.title_fr,
+        title_ar=season.title_ar,
+        poster_path=season.poster_path,
+        order_index=season.order_index,
+        episode_count=0,
+    )
+
+
+class AssignVideoRequest(BaseModel):
+    telegram_video_id: int
+
+
+@router.post("/seasons/{season_id}/episodes", response_model=EpisodeResponse, status_code=status.HTTP_201_CREATED)
+async def create_episode(
+    season_id: int,
+    data: EpisodeCreate,
+    current_admin: User = Depends(get_current_admin),
+    db: AsyncSession = Depends(get_db),
+):
+    """Crée un épisode dans une saison et peut lui rattacher immédiatement une vidéo Telegram."""
+    season = (await db.execute(select(Season).where(Season.id == season_id))).scalar_one_or_none()
+    if not season:
+        raise HTTPException(status_code=404, detail="Saison introuvable")
+
+    series = (await db.execute(select(Series).where(Series.id == season.series_id))).scalar_one_or_none()
+
+    # Si une vidéo est rattachée, valider son existence
+    if data.telegram_video_id:
+        v = (await db.execute(select(Video).where(Video.id == data.telegram_video_id))).scalar_one_or_none()
+        if not v:
+            raise HTTPException(status_code=404, detail="Vidéo Telegram introuvable")
+        v.is_published = (series.visibility == "published") if series else False
+        v.season_number = season.number
+        v.episode_number = data.number
+        v.episode_title = data.title_fr
+        if series:
+            ep_title = f" : {data.title_fr}" if data.title_fr else ""
+            v.title = f"{series.title_fr} - S{season.number:02d}E{data.number:02d}{ep_title}"
+
+    episode = Episode(
+        season_id=season_id,
+        number=data.number,
+        title_fr=data.title_fr or f"Épisode {data.number}",
+        title_ar=data.title_ar or f"الحلقة {data.number}",
+        synopsis_fr=data.synopsis_fr,
+        duration_sec=data.duration_sec,
+        thumbnail_path=data.thumbnail_path,
+        telegram_video_id=data.telegram_video_id,
+        order_index=data.number,
+    )
+    db.add(episode)
+    await db.commit()
+    await db.refresh(episode)
+    return EpisodeResponse.model_validate(episode)
+
+
+@router.post("/episodes/{episode_id}/assign-video", response_model=MessageResponse)
+async def assign_video_to_episode(
+    episode_id: int,
+    req: AssignVideoRequest,
+    current_admin: User = Depends(get_current_admin),
+    db: AsyncSession = Depends(get_db),
+):
+    """Associe ou remplace la vidéo Telegram d'un épisode."""
+    episode = (await db.execute(select(Episode).where(Episode.id == episode_id))).scalar_one_or_none()
+    if not episode:
+        raise HTTPException(status_code=404, detail="Épisode introuvable")
+
+    video = (await db.execute(select(Video).where(Video.id == req.telegram_video_id))).scalar_one_or_none()
+    if not video:
+        raise HTTPException(status_code=404, detail="Vidéo Telegram introuvable")
+
+    season = (await db.execute(select(Season).where(Season.id == episode.season_id))).scalar_one_or_none()
+    series = (await db.execute(select(Series).where(Series.id == season.series_id))).scalar_one_or_none() if season else None
+
+    episode.telegram_video_id = video.id
+    if video.duration_seconds and not episode.duration_sec:
+        episode.duration_sec = video.duration_seconds
+    if video.thumbnail_path and not episode.thumbnail_path:
+        episode.thumbnail_path = video.thumbnail_path
+
+    # Synchroniser l'état de publication de la vidéo avec la série
+    video.is_published = (series.visibility == "published") if series else False
+    if season:
+        video.season_number = season.number
+        video.episode_number = episode.number
+        if series:
+            ep_title = f" : {episode.title_fr}" if episode.title_fr else ""
+            video.title = f"{series.title_fr} - S{season.number:02d}E{episode.number:02d}{ep_title}"
+
+    await db.commit()
+    return MessageResponse(message=f"Vidéo '{video.title}' associée avec succès à l'épisode {episode.number}.")
+
+
+@router.post("/series/{series_id}/toggle-visibility")
+async def toggle_series_visibility(
+    series_id: int,
+    current_admin: User = Depends(get_current_admin),
+    db: AsyncSession = Depends(get_db),
+):
+    """Bascule la visibilité d'une série (published <-> draft) et répercute sur ses vidéos Telegram."""
+    series = (await db.execute(select(Series).where(Series.id == series_id))).scalar_one_or_none()
+    if not series:
+        raise HTTPException(status_code=404, detail="Série introuvable")
+
+    new_vis = "draft" if series.visibility == "published" else "published"
+    series.visibility = new_vis
+
+    # Mettre à jour toutes les vidéos rattachées à ses épisodes
+    seasons = (await db.execute(select(Season.id).where(Season.series_id == series.id))).scalars().all()
+    if seasons:
+        episodes = (await db.execute(select(Episode).where(Episode.season_id.in_(seasons)))).scalars().all()
+        vid_ids = [ep.telegram_video_id for ep in episodes if ep.telegram_video_id]
+        if vid_ids:
+            vids = (await db.execute(select(Video).where(Video.id.in_(vid_ids)))).scalars().all()
+            for v in vids:
+                v.is_published = (new_vis == "published")
+
+    await db.commit()
+    return {
+        "success": True,
+        "visibility": new_vis,
+        "message": f"Série '{series.title_fr}' est maintenant {'publiée sur mobile' if new_vis == 'published' else 'en brouillon'}.",
+    }
+
+
+# =============================================================
+# 8. Gestion Avancée StreamAdmin : Films
+# =============================================================
+
+@router.get("/movies", response_model=List[MovieResponse])
+async def list_movies(
+    search: Optional[str] = Query(None),
+    visibility: Optional[str] = Query(None, pattern="^(published|draft|hidden)$"),
+    skip: int = Query(0, ge=0),
+    limit: int = Query(50, ge=1, le=100),
+    current_admin: User = Depends(get_current_admin),
+    db: AsyncSession = Depends(get_db),
+):
+    """Liste tous les films du catalogue."""
+    stmt = select(Movie).order_by(desc(Movie.created_at))
+    if search:
+        stmt = stmt.where(Movie.title_fr.ilike(f"%{search.strip()}%"))
+    if visibility:
+        stmt = stmt.where(Movie.visibility == visibility)
+
+    movies = (await db.execute(stmt.offset(skip).limit(limit))).scalars().all()
+    return [MovieResponse.model_validate(m) for m in movies]
+
+
+@router.post("/movies", response_model=MovieResponse, status_code=status.HTTP_201_CREATED)
+async def create_movie(
+    data: MovieCreate,
+    current_admin: User = Depends(get_current_admin),
+    db: AsyncSession = Depends(get_db),
+):
+    """Crée un film dans le catalogue et peut lui rattacher immédiatement une vidéo Telegram."""
+    base_slug = slugify(data.title_fr)
+    existing = (await db.execute(select(Movie).where(Movie.slug == base_slug))).scalar_one_or_none()
+    slug = f"{base_slug}-{secrets.token_hex(2)}" if existing else base_slug
+
+    if data.telegram_video_id:
+        v = (await db.execute(select(Video).where(Video.id == data.telegram_video_id))).scalar_one_or_none()
+        if not v:
+            raise HTTPException(status_code=404, detail="Vidéo Telegram introuvable")
+        v.is_published = (data.visibility == "published")
+        v.title = data.title_fr
+        if data.poster_path and not v.thumbnail_path:
+            v.thumbnail_path = data.poster_path
+
+    movie = Movie(
+        slug=slug,
+        title_fr=data.title_fr.strip(),
+        title_ar=data.title_ar.strip() if data.title_ar else None,
+        synopsis_fr=data.synopsis_fr.strip() if data.synopsis_fr else None,
+        year=data.year,
+        duration_sec=data.duration_sec,
+        rating=data.rating,
+        poster_path=data.poster_path.strip() if data.poster_path else None,
+        banner_path=data.banner_path.strip() if data.banner_path else None,
+        telegram_video_id=data.telegram_video_id,
+        visibility=data.visibility,
+        is_featured=data.is_featured,
+    )
+    db.add(movie)
+    await db.commit()
+    await db.refresh(movie)
+    return MovieResponse.model_validate(movie)
+
+
+# =============================================================
+# 9. Genres & Rangées d'Accueil Mobile
+# =============================================================
+
+@router.get("/genres", response_model=List[GenreResponse])
+async def list_genres(
+    current_admin: User = Depends(get_current_admin),
+    db: AsyncSession = Depends(get_db),
+):
+    """Retourne la liste des genres disponibles."""
+    genres = (await db.execute(select(Genre).order_by(Genre.order_index))).scalars().all()
+    return [GenreResponse.model_validate(g) for g in genres]
+
+
+@router.get("/home-rows", response_model=List[HomeRowResponse])
+async def list_home_rows(
+    current_admin: User = Depends(get_current_admin),
+    db: AsyncSession = Depends(get_db),
+):
+    """Retourne les rangées configurées pour l'accueil de l'application mobile."""
+    rows = (await db.execute(select(HomeRow).order_by(HomeRow.order_index))).scalars().all()
+    return [HomeRowResponse.model_validate(r) for r in rows]
+
+
+# =============================================================
+# 10. Détection Automatique Intelligente pour Vidéos Brutes
+# =============================================================
+
+@router.post("/raw-videos/{video_id}/auto-detect")
+async def auto_detect_raw_video(
+    video_id: int,
+    current_admin: User = Depends(get_current_admin),
+    db: AsyncSession = Depends(get_db),
+):
+    """
+    Analyse le nom de fichier ou titre d'une vidéo Telegram avec parser_service
+    et propose automatiquement une série/film avec numéro de saison et épisode.
+    """
+    video = (await db.execute(select(Video).where(Video.id == video_id))).scalar_one_or_none()
+    if not video:
+        raise HTTPException(status_code=404, detail="Vidéo introuvable")
+
+    text_to_parse = video.file_name or video.title or video.caption or ""
+    parsed = parser_service.parse_video_title(text_to_parse)
+
+    # Vérifier si une série du même nom existe déjà dans le catalogue
+    existing_series = (
+        await db.execute(select(Series).where(Series.slug == parsed["slug"]))
+    ).scalar_one_or_none()
+
+    parsed["existing_series_id"] = existing_series.id if existing_series else None
+    parsed["video_id"] = video.id
+    parsed["original_text"] = text_to_parse
+
+    return parsed
