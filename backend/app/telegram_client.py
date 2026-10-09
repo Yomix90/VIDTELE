@@ -164,24 +164,27 @@ class TelegramManager:
             await self.start()
 
         is_conn = bool(self._client and self._client.is_connected())
+        is_auth = False
         account_info = None
         if is_conn:
             try:
-                me = await self._client.get_me()
-                if me:
-                    account_info = {
-                        "id": me.id,
-                        "first_name": getattr(me, "first_name", "") or "",
-                        "username": getattr(me, "username", "") or "",
-                        "phone": getattr(me, "phone", "") or "",
-                    }
+                is_auth = await self._client.is_user_authorized()
+                if is_auth:
+                    me = await self._client.get_me()
+                    if me:
+                        account_info = {
+                            "id": me.id,
+                            "first_name": getattr(me, "first_name", "") or "",
+                            "username": getattr(me, "username", "") or "",
+                            "phone": getattr(me, "phone", "") or "",
+                        }
             except Exception:
-                pass
+                is_auth = False
 
         channel_title = None
         if self._channel_entity:
             channel_title = getattr(self._channel_entity, "title", str(self._channel_entity))
-        elif is_conn and settings.TELEGRAM_CHANNEL_ID:
+        elif is_conn and is_auth and settings.TELEGRAM_CHANNEL_ID:
             entity = await self.get_channel_entity()
             if entity:
                 channel_title = getattr(entity, "title", str(entity))
@@ -189,7 +192,8 @@ class TelegramManager:
         return {
             "is_configured": self.is_configured(),
             "session_exists": self.session_exists(),
-            "is_connected": is_conn,
+            "is_connected": is_conn and is_auth,
+            "is_authorized": is_auth,
             "account": account_info,
             "current_channel_id": settings.TELEGRAM_CHANNEL_ID,
             "current_channel_title": channel_title,
@@ -200,7 +204,7 @@ class TelegramManager:
         if (not self._client or not self._client.is_connected()) and self.is_configured() and self.session_exists():
             await self.start()
 
-        if not self._client or not self._client.is_connected():
+        if not self._client or not self._client.is_connected() or not await self._client.is_user_authorized():
             return []
 
         channels = []
@@ -227,7 +231,13 @@ class TelegramManager:
         if not self._client or not self._client.is_connected():
             return {
                 "success": False,
-                "error": "Le client Telegram MTProto n'est pas connecté au serveur. Vérifiez vos identifiants API ou relancez login_telegram.py.",
+                "error": "Le client Telegram MTProto n'est pas connecté au serveur. Vérifiez vos identifiants API (TELEGRAM_API_ID / TELEGRAM_API_HASH).",
+            }
+
+        if not await self._client.is_user_authorized():
+            return {
+                "success": False,
+                "error": "Session Telegram non authentifiée. Votre compte Telegram n'a pas encore validé cette session. Veuillez exécuter 'python backend/login_telegram.py' sur votre PC pour vous connecter avec votre numéro et le code reçu sur Telegram, puis copier la clé StringSession dans Dokploy.",
             }
 
         target_str = str(channel_target).strip()
