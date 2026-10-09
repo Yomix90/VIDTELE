@@ -122,6 +122,13 @@ app.add_middleware(
     allow_headers=["*"],
 )
 
+# Fichiers statiques StreamAdmin (CSS, JS, images)
+from pathlib import Path
+from fastapi.staticfiles import StaticFiles
+static_dir = Path(__file__).resolve().parent / "static"
+static_dir.mkdir(parents=True, exist_ok=True)
+app.mount("/static", StaticFiles(directory=str(static_dir)), name="static")
+
 # Inclusion des routeurs
 app.include_router(auth.router)
 app.include_router(videos.router)
