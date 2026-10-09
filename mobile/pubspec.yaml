@@ -32,6 +32,9 @@ dependencies:
   # Internationalisation & Dates
   intl: ^0.20.3
 
+  # Lancement d'URLs et téléchargement APK
+  url_launcher: ^6.3.0
+
   # Icônes modernes
   cupertino_icons: ^1.0.8
 

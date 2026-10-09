@@ -25,7 +25,7 @@ document.addEventListener("DOMContentLoaded", function () {
   initLanguage();
 });
 
-// 2. Gestion de la Langue (Bilinguisme FR / AR)
+// 2. Gestion de la Langue (Trilinguisme FR / EN / AR)
 const I18N = {
   fr: {
     dashboard: "Tableau de bord",
@@ -45,6 +45,25 @@ const I18N = {
     syncing: "Synchronisation en cours...",
     toast_success: "Opération réussie",
     toast_error: "Une erreur est survenue",
+  },
+  en: {
+    dashboard: "Dashboard",
+    users: "Users",
+    invites: "Invite Codes",
+    telegram: "Telegram",
+    raw_videos: "Raw Library",
+    series: "TV Shows",
+    movies: "Movies",
+    mobile_home: "Mobile Home",
+    stats: "Statistics",
+    settings: "Settings",
+    search_placeholder: "Search TV shows, movies, users, or Telegram videos...",
+    logout: "Log Out",
+    sync_btn: "Sync Telegram",
+    purge_cache: "Purge Cache",
+    syncing: "Synchronizing in progress...",
+    toast_success: "Action completed successfully",
+    toast_error: "An error occurred",
   },
   ar: {
     dashboard: "لوحة التحكم",
@@ -67,13 +86,16 @@ const I18N = {
   }
 };
 
-function toggleLanguage() {
-  const currentLang = localStorage.getItem("streamadmin_lang") || "fr";
-  const newLang = currentLang === "fr" ? "ar" : "fr";
-  setLanguage(newLang);
-}
+const LANG_LABELS = {
+  fr: "🇫🇷 Français",
+  en: "🇬🇧 English",
+  ar: "🇲🇦 العربية"
+};
 
 function setLanguage(lang) {
+  if (!["fr", "en", "ar"].includes(lang)) {
+    lang = "fr";
+  }
   localStorage.setItem("streamadmin_lang", lang);
   const html = document.documentElement;
   html.setAttribute("lang", lang);
@@ -81,13 +103,14 @@ function setLanguage(lang) {
   if (lang === "ar") {
     html.setAttribute("dir", "rtl");
     document.body.classList.add("rtl-mode");
-    const langBtn = document.getElementById("langLabel");
-    if (langBtn) langBtn.textContent = "Français";
   } else {
     html.setAttribute("dir", "ltr");
     document.body.classList.remove("rtl-mode");
-    const langBtn = document.getElementById("langLabel");
-    if (langBtn) langBtn.textContent = "العربية";
+  }
+
+  const langLabel = document.getElementById("currentLangLabel");
+  if (langLabel) {
+    langLabel.textContent = LANG_LABELS[lang] || lang.toUpperCase();
   }
 
   // Mettre à jour les éléments annotés avec data-i18n

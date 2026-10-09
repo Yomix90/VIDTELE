@@ -7,6 +7,7 @@ import '../../providers/auth_provider.dart';
 import '../../providers/locale_provider.dart';
 import '../admin/admin_screen.dart';
 import '../auth/login_screen.dart';
+import '../../core/services/update_service.dart';
 
 /// Écran des Paramètres et Profil avec support trilingue FR / EN / AR (RTL)
 class SettingsScreen extends ConsumerWidget {
@@ -202,24 +203,40 @@ class SettingsScreen extends ConsumerWidget {
             const SizedBox(height: 24),
           ],
 
-          // Informations Version
+          // Informations Version & Vérification de mise à jour OTA
           Container(
-            padding: const EdgeInsets.all(12),
+            padding: const EdgeInsets.all(14),
             decoration: BoxDecoration(
               color: Colors.white.withValues(alpha: 0.04),
-              borderRadius: BorderRadius.circular(8),
+              borderRadius: BorderRadius.circular(10),
+              border: Border.all(color: Colors.white10),
             ),
             child: Column(
               children: [
                 Text(
                   l10n.appVersionInfo,
-                  style: const TextStyle(color: Colors.white38, fontSize: 12),
+                  style: const TextStyle(color: Colors.white70, fontSize: 13, fontWeight: FontWeight.bold),
                 ),
                 const SizedBox(height: 4),
                 Text(
                   l10n.engineInfo,
                   textAlign: TextAlign.center,
-                  style: const TextStyle(color: Colors.white24, fontSize: 11),
+                  style: const TextStyle(color: Colors.white38, fontSize: 11),
+                ),
+                const SizedBox(height: 12),
+                OutlinedButton.icon(
+                  onPressed: () => UpdateService.checkForUpdates(context, silentOnNoUpdate: false),
+                  style: OutlinedButton.styleFrom(
+                    foregroundColor: Colors.white70,
+                    side: const BorderSide(color: Colors.white24),
+                    padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 8),
+                    shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(8)),
+                  ),
+                  icon: const Icon(Icons.refresh, size: 16, color: AppTheme.netflixRed),
+                  label: Text(
+                    l10n.checkUpdateTitle,
+                    style: const TextStyle(fontSize: 12, fontWeight: FontWeight.w600),
+                  ),
                 ),
               ],
             ),
@@ -261,7 +278,7 @@ class SettingsScreen extends ConsumerWidget {
           controller: controller,
           style: const TextStyle(color: Colors.white),
           decoration: const InputDecoration(
-            hintText: 'http://192.168.1.X:8000',
+            hintText: 'https://vidtele.digitlab.dev',
             hintStyle: TextStyle(color: Colors.white38),
           ),
         ),

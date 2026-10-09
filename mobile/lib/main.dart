@@ -39,7 +39,7 @@ class VidTeleApp extends ConsumerWidget {
     final currentLocale = ref.watch(localeProvider);
 
     return MaterialApp(
-      title: 'VidTele',
+      title: 'Atlas Play',
       debugShowCheckedModeBanner: false,
       theme: AppTheme.darkTheme,
       locale: currentLocale,
@@ -71,7 +71,7 @@ class VidTeleApp extends ConsumerWidget {
                     ),
                     SizedBox(height: 20),
                     Text(
-                      'VIDTELE',
+                      'ATLAS PLAY',
                       style: TextStyle(
                         color: AppTheme.netflixRed,
                         fontSize: 24,

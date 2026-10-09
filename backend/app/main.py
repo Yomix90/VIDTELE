@@ -5,12 +5,14 @@ import asyncio
 import logging
 from contextlib import asynccontextmanager
 from datetime import datetime, timezone
-from fastapi import FastAPI, status
+from typing import Optional
+from fastapi import Depends, FastAPI, status
 from fastapi.middleware.cors import CORSMiddleware
 from sqlalchemy import select
+from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.config import settings
-from app.database import AsyncSessionLocal, init_db
+from app.database import AsyncSessionLocal, get_db, init_db
 from app.models import InviteCode, User
 from app.routers import admin, admin_web, auth, library, videos
 from app.security import hash_password
@@ -142,6 +144,72 @@ async def health_check():
     """Vérification de santé de l'API."""
     return {
         "status": "ok",
-        "app": "VidTele",
+        "app": "Atlas Play",
         "timestamp": datetime.now(timezone.utc).isoformat(),
+    }
+
+
+@app.get("/api/app/version", tags=["Application Mobile"])
+async def check_app_version(
+    current_version: Optional[str] = None,
+    db: AsyncSession = Depends(get_db),
+):
+    """
+    Endpoint public consulté au lancement de l'application mobile Atlas Play.
+    Vérifie si une mise à jour est disponible ou obligatoire.
+    """
+    from app.models import SystemSetting
+
+    def parse_semver(v: str) -> tuple:
+        parts = []
+        for x in str(v).strip().split("."):
+            try:
+                parts.append(int(x))
+            except ValueError:
+                parts.append(0)
+        while len(parts) < 3:
+            parts.append(0)
+        return tuple(parts[:3])
+
+    # Récupérer les paramètres système de mise à jour
+    settings_keys = [
+        "app_latest_version",
+        "app_min_version",
+        "app_update_url",
+        "app_update_title",
+        "app_update_notes",
+        "app_update_force",
+    ]
+    res = await db.execute(select(SystemSetting).where(SystemSetting.key.in_(settings_keys)))
+    settings_dict = {row.key: row.value for row in res.scalars().all()}
+
+    latest_ver = settings_dict.get("app_latest_version", "1.0.0")
+    min_ver = settings_dict.get("app_min_version", "1.0.0")
+    download_url = settings_dict.get("app_update_url", "")
+    title = settings_dict.get("app_update_title", "Nouvelle version disponible")
+    notes = settings_dict.get("app_update_notes", "")
+    force_update = settings_dict.get("app_update_force", "false").lower() == "true"
+
+    has_update = False
+    is_forced = force_update
+
+    if current_version:
+        try:
+            cur_v = parse_semver(current_version)
+            lat_v = parse_semver(latest_ver)
+            min_v = parse_semver(min_ver)
+            has_update = cur_v < lat_v
+            if cur_v < min_v:
+                is_forced = True
+        except Exception:
+            has_update = current_version != latest_ver
+
+    return {
+        "latest_version": latest_ver,
+        "min_version": min_ver,
+        "download_url": download_url,
+        "title": title,
+        "release_notes": notes,
+        "force_update": is_forced,
+        "has_update": has_update,
     }

@@ -3,7 +3,7 @@
 <head>
   <meta charset="utf-8">
   <meta name="viewport" content="width=device-width, initial-scale=1">
-  <title>{% block title %}StreamAdmin - VidTele{% endblock %}</title>
+  <title>{% block title %}Atlas Play - Console d'Administration{% endblock %}</title>
 
   <!-- Polices Google Fonts -->
   <link rel="preconnect" href="https://fonts.googleapis.com">
@@ -16,7 +16,7 @@
   <!-- Bootstrap Icons -->
   <link href="https://cdn.jsdelivr.net/npm/bootstrap-icons@1.11.3/font/bootstrap-icons.min.css" rel="stylesheet">
 
-  <!-- Charte Graphique StreamAdmin -->
+  <!-- Charte Graphique Atlas Play -->
   <link href="/static/css/preview.css" rel="stylesheet">
 
   <!-- Chart.js pour graphiques interactifs -->
@@ -53,17 +53,25 @@
       color: #38bdf8;
       border: 1px solid rgba(0, 136, 204, 0.3);
     }
+    .brand-logo-img {
+      height: 38px;
+      width: auto;
+      object-fit: contain;
+    }
   </style>
   {% block extra_head %}{% endblock %}
 </head>
 <body>
   <div class="app-shell" id="appShell">
 
-    <!-- Barre latérale StreamAdmin -->
+    <!-- Barre latérale Atlas Play -->
     <aside class="sidebar d-flex flex-column p-3">
-      <div class="brand mb-4">
-        <i class="bi bi-badge-sd-fill text-danger fs-3"></i>
-        <span class="fw-bold tracking-wide">StreamAdmin</span>
+      <div class="brand mb-4 d-flex align-items-center gap-2">
+        <img src="/static/img/atlas_play_icon.svg" alt="Atlas Play" style="width: 38px; height: 38px; border-radius: 9px;">
+        <div class="d-flex flex-column lh-1">
+          <span class="fw-bold tracking-wide text-white fs-5" style="letter-spacing: 1px;">ATLAS<span class="text-danger ms-1">PLAY</span></span>
+          <span class="text-muted" style="font-size: 0.65rem; letter-spacing: 2px;">ADMIN CONSOLE</span>
+        </div>
       </div>
 
       <nav class="nav flex-column gap-1">
@@ -135,11 +143,18 @@
         </div>
 
         <div class="ms-auto d-flex align-items-center gap-2">
-          <!-- Sélecteur de Langue FR / AR -->
-          <button class="btn btn-dark border border-secondary btn-sm d-flex align-items-center gap-1" id="btnToggleLang" onclick="toggleLanguage()">
-            <i class="bi bi-translate text-info"></i>
-            <span id="langLabel" class="small fw-semibold">العربية</span>
-          </button>
+          <!-- Sélecteur de Langue Trilingue (FR / EN / AR) -->
+          <div class="dropdown">
+            <button class="btn btn-dark border border-secondary btn-sm dropdown-toggle d-flex align-items-center gap-2" type="button" id="langDropdown" data-bs-toggle="dropdown" aria-expanded="false">
+              <i class="bi bi-translate text-info"></i>
+              <span id="currentLangLabel" class="small fw-semibold">Français</span>
+            </button>
+            <ul class="dropdown-menu dropdown-menu-end shadow-lg" aria-labelledby="langDropdown">
+              <li><button class="dropdown-item d-flex align-items-center gap-2" type="button" onclick="setLanguage('fr')"><span>🇫🇷</span> <span>Français</span></button></li>
+              <li><button class="dropdown-item d-flex align-items-center gap-2" type="button" onclick="setLanguage('en')"><span>🇬🇧</span> <span>English</span></button></li>
+              <li><button class="dropdown-item d-flex align-items-center gap-2" type="button" onclick="setLanguage('ar')"><span>🇲🇦</span> <span>العربية (RTL)</span></button></li>
+            </ul>
+          </div>
 
           <!-- Documentation Swagger API -->
           <a href="/docs" target="_blank" class="btn btn-outline-info btn-sm d-none d-md-flex align-items-center gap-1">

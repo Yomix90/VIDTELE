@@ -54,7 +54,7 @@ class _LoginScreenState extends ConsumerState<LoginScreen> {
             TextField(
               controller: _serverUrlController,
               decoration: const InputDecoration(
-                hintText: 'http://10.0.2.2:8000',
+                hintText: 'https://vidtele.digitlab.dev',
                 prefixIcon: Icon(Icons.dns, color: AppTheme.netflixRed),
               ),
             ),
@@ -184,34 +184,58 @@ class _LoginScreenState extends ConsumerState<LoginScreen> {
               child: Column(
                 mainAxisSize: MainAxisSize.min,
                 children: [
-                  // Logo VidTele stylisé Netflix
-                  Row(
-                    mainAxisAlignment: MainAxisAlignment.center,
+                  // Logo Atlas Play stylisé avec montages et play icon
+                  Column(
                     children: [
                       Container(
-                        padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 4),
+                        width: 76,
+                        height: 76,
                         decoration: BoxDecoration(
-                          color: AppTheme.netflixRed,
-                          borderRadius: BorderRadius.circular(4),
+                          gradient: const LinearGradient(
+                            colors: [Color(0xFFE50914), Color(0xFF990008)],
+                            begin: Alignment.topLeft,
+                            end: Alignment.bottomRight,
+                          ),
+                          borderRadius: BorderRadius.circular(20),
+                          boxShadow: [
+                            BoxShadow(
+                              color: AppTheme.netflixRed.withValues(alpha: 0.4),
+                              blurRadius: 20,
+                              offset: const Offset(0, 8),
+                            ),
+                          ],
                         ),
-                        child: const Text(
-                          'V',
-                          style: TextStyle(
+                        child: const Center(
+                          child: Icon(
+                            Icons.play_arrow_rounded,
+                            size: 52,
                             color: Colors.white,
-                            fontSize: 36,
-                            fontWeight: FontWeight.w900,
-                            letterSpacing: 2,
                           ),
                         ),
                       ),
-                      const SizedBox(width: 8),
-                      const Text(
-                        'IDTELE',
-                        style: TextStyle(
-                          color: AppTheme.netflixRed,
-                          fontSize: 32,
-                          fontWeight: FontWeight.w900,
-                          letterSpacing: 3,
+                      const SizedBox(height: 14),
+                      RichText(
+                        text: const TextSpan(
+                          children: [
+                            TextSpan(
+                              text: 'ATLAS ',
+                              style: TextStyle(
+                                color: Colors.white,
+                                fontSize: 28,
+                                fontWeight: FontWeight.w900,
+                                letterSpacing: 4,
+                              ),
+                            ),
+                            TextSpan(
+                              text: 'PLAY',
+                              style: TextStyle(
+                                color: AppTheme.netflixRed,
+                                fontSize: 28,
+                                fontWeight: FontWeight.w900,
+                                letterSpacing: 4,
+                              ),
+                            ),
+                          ],
                         ),
                       ),
                     ],

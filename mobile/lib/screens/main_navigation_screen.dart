@@ -6,6 +6,7 @@ import 'home/home_screen.dart';
 import 'library/favorites_screen.dart';
 import 'library/history_screen.dart';
 import 'settings/settings_screen.dart';
+import '../core/services/update_service.dart';
 
 /// Écran principal avec barre de navigation inférieure Netflix-style
 class MainNavigationScreen extends ConsumerStatefulWidget {
@@ -24,6 +25,14 @@ class _MainNavigationScreenState extends ConsumerState<MainNavigationScreen> {
     HistoryScreen(),
     SettingsScreen(),
   ];
+
+  @override
+  void initState() {
+    super.initState();
+    WidgetsBinding.instance.addPostFrameCallback((_) {
+      UpdateService.checkForUpdates(context);
+    });
+  }
 
   @override
   Widget build(BuildContext context) {

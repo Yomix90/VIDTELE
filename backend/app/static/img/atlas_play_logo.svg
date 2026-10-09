@@ -1,0 +1,45 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 760 180" width="100%" height="100%">
+  <defs>
+    <linearGradient id="logoAtlasFront" x1="0%" y1="0%" x2="100%" y2="100%">
+      <stop offset="0%" stop-color="#FF2E3B" />
+      <stop offset="50%" stop-color="#E50914" />
+      <stop offset="100%" stop-color="#990008" />
+    </linearGradient>
+
+    <linearGradient id="logoGoldPeak" x1="0%" y1="0%" x2="0%" y2="100%">
+      <stop offset="0%" stop-color="#FDE047" />
+      <stop offset="100%" stop-color="#D97706" />
+    </linearGradient>
+
+    <linearGradient id="textPlayGrad" x1="0%" y1="0%" x2="100%" y2="100%">
+      <stop offset="0%" stop-color="#FF414D" />
+      <stop offset="100%" stop-color="#E50914" />
+    </linearGradient>
+
+    <filter id="logoGlow" x="-20%" y="-20%" width="140%" height="140%">
+      <feDropShadow dx="0" dy="4" stdDeviation="8" flood-color="#E50914" flood-opacity="0.35" />
+    </filter>
+  </defs>
+
+  <!-- Symbole de gauche (Montagne + Play) -->
+  <g transform="translate(10, 10)" filter="url(#logoGlow)">
+    <!-- Fond Montagne stylisée (A) -->
+    <path d="M 15 150 L 80 30 L 145 150 L 105 150 L 80 102 L 55 150 Z" fill="url(#logoAtlasFront)" />
+    <!-- Sommet doré -->
+    <path d="M 80 30 L 92 52 L 80 48 L 68 52 Z" fill="url(#logoGoldPeak)" />
+    <!-- Triangle Play intégré -->
+    <polygon points="73,80 97,95 73,110" fill="#FFFFFF" />
+  </g>
+
+  <!-- Typographie ATLAS PLAY -->
+  <g transform="translate(180, 108)">
+    <!-- ATLAS (Blanc pur, gras, moderne) -->
+    <text font-family="'Inter', 'Poppins', -apple-system, sans-serif" font-size="72" font-weight="900" fill="#FFFFFF" letter-spacing="4">ATLAS</text>
+    
+    <!-- PLAY (Rouge streaming vibrant avec accent) -->
+    <text x="270" font-family="'Inter', 'Poppins', -apple-system, sans-serif" font-size="72" font-weight="900" fill="url(#textPlayGrad)" letter-spacing="4">PLAY</text>
+
+    <!-- Sous-titre streaming subtil -->
+    <text x="3" y="32" font-family="'Inter', -apple-system, sans-serif" font-size="16" font-weight="600" fill="#94A3B8" letter-spacing="8">PREMIUM STREAMING</text>
+  </g>
+</svg>

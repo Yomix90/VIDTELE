@@ -292,11 +292,33 @@ async def admin_settings_page(
     """Sert la page des paramètres."""
     admin_user = (await db.execute(select(User).where(User.role == "admin").limit(1))).scalar_one_or_none()
 
+    from app.models import SystemSetting
+    settings_keys = [
+        "app_latest_version",
+        "app_min_version",
+        "app_update_url",
+        "app_update_title",
+        "app_update_notes",
+        "app_update_force",
+    ]
+    res = await db.execute(select(SystemSetting).where(SystemSetting.key.in_(settings_keys)))
+    settings_dict = {row.key: row.value for row in res.scalars().all()}
+
+    app_update = {
+        "latest_version": settings_dict.get("app_latest_version", "1.0.0"),
+        "min_version": settings_dict.get("app_min_version", "1.0.0"),
+        "download_url": settings_dict.get("app_update_url", ""),
+        "title": settings_dict.get("app_update_title", "Mise à jour disponible"),
+        "release_notes": settings_dict.get("app_update_notes", ""),
+        "force_update": settings_dict.get("app_update_force", "false").lower() == "true",
+    }
+
     return templates.TemplateResponse(
         request=request,
         name="settings.html",
         context={
             "active_page": "settings",
             "current_user": admin_user,
+            "app_update": app_update,
         },
     )

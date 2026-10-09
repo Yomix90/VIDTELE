@@ -634,7 +634,7 @@ label {
   font-size: 0.88rem !important;
 }
 
-/* 2. Textes & Niveaux de contraste */
+/* 2. Textes & Niveaux de contraste (Haute Lisibilité) */
 body {
   color: #f8fafc !important;
   background-color: #070A12 !important;
@@ -642,7 +642,11 @@ body {
 
 .text-muted,
 .text-secondary {
-  color: #94a3b8 !important;
+  color: #a0aec0 !important; /* Gris clair parfaitement lisible sur fond noir (contraste WCAG AAA) */
+}
+
+.text-white-50 {
+  color: #cbd5e1 !important;
 }
 
 .text-white {
@@ -650,7 +654,15 @@ body {
 }
 
 .text-light {
-  color: #f1f5f9 !important;
+  color: #f8fafc !important;
+}
+
+/* Évite les collisions de classes sombres malencontreuses */
+.text-dark {
+  color: #f8fafc !important;
+}
+.bg-dark {
+  background-color: #0f172a !important;
 }
 
 h1, h2, h3, h4, h5, h6,

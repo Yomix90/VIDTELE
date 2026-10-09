@@ -20,15 +20,15 @@ class AppLocalizations {
   bool get isFrench => langCode == 'fr';
 
   // ==================== AUTH & LOGIN ====================
-  String get appTitle => 'VidTele';
+  String get appTitle => 'Atlas Play';
   String get welcomeTitle => isArabic
-      ? 'مرحبًا بك في VidTele'
-      : (isEnglish ? 'Welcome to VidTele' : 'Bienvenue sur VidTele');
+      ? 'مرحبًا بك في Atlas Play'
+      : (isEnglish ? 'Welcome to Atlas Play' : 'Bienvenue sur Atlas Play');
   String get welcomeSubtitle => isArabic
       ? 'بث فيديو خاص فائق السرعة على طريقة نتفليكس'
       : (isEnglish
-          ? 'Private high-speed Netflix-style streaming'
-          : 'Streaming privé façon Netflix haute vitesse');
+          ? 'Private high-speed cinematic streaming'
+          : 'Streaming privé cinématique haute vitesse');
   String get signIn => isArabic
       ? 'تسجيل الدخول'
       : (isEnglish ? 'Sign In' : 'Connexion');
@@ -220,12 +220,24 @@ class AppLocalizations {
       : (isEnglish
           ? 'Telegram sync, VIP invites, cache management'
           : 'Synchronisation Telegram, invitations VIP, cache');
-  String get appVersionInfo => 'VidTele Mobile v1.0.0 (Production)';
+  String get appVersionInfo => 'Atlas Play Mobile v1.0.0 (Production)';
   String get engineInfo => isArabic
       ? 'محرك بث MTProto عبر HTTP 206 مجزأ بدون تأخير'
       : (isEnglish
-          ? 'MTProto HTTP 206 chunked zero-lag streaming engine'
-          : 'Moteur MTProto Streaming HTTP 206 partiel');
+          ? 'Atlas Play high-performance streaming engine'
+          : 'Moteur Atlas Play Streaming HTTP 206 partiel');
+  String get checkUpdateTitle => isArabic
+      ? 'تحديث التطبيق'
+      : (isEnglish ? 'App Update' : 'Mise à jour de l\'application');
+  String get updateAvailablePrompt => isArabic
+      ? 'إصدار جديد متوفر الآن!'
+      : (isEnglish ? 'A new version is available!' : 'Une nouvelle version est disponible !');
+  String get updateNowButton => isArabic
+      ? 'تحديث الآن'
+      : (isEnglish ? 'Update Now' : 'Mettre à jour');
+  String get laterButton => isArabic
+      ? 'لاحقًا'
+      : (isEnglish ? 'Later' : 'Plus tard');
   String get logOutButton => isArabic
       ? 'تسجيل الخروج'
       : (isEnglish ? 'Log Out' : 'Se déconnecter');
@@ -240,8 +252,8 @@ class AppLocalizations {
 
   // ==================== ADMIN PANEL ====================
   String get adminScreenTitle => isArabic
-      ? 'إدارة VidTele'
-      : (isEnglish ? 'VidTele Administration' : 'Administration VidTele');
+      ? 'إدارة Atlas Play'
+      : (isEnglish ? 'Atlas Play Administration' : 'Administration Atlas Play');
   String get serverStatsHeader => isArabic
       ? 'إحصائيات الخادم'
       : (isEnglish ? 'Server Statistics' : 'Statistiques du Serveur');

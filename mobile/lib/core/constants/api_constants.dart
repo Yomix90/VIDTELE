@@ -1,8 +1,11 @@
-/// Constantes de configuration réseau et endpoints de l'API VidTele.
+/// Constantes de configuration réseau et endpoints de l'API Atlas Play.
 class ApiConstants {
-  // URL par défaut pour l'émulateur Android (10.0.2.2 redirige vers l'hôte local)
-  // Peut être modifiée dynamiquement dans l'application via les Paramètres ou l'écran de Login.
-  static const String defaultBaseUrl = 'http://10.0.2.2:8000';
+  // URL par défaut du serveur VPS en production
+  // Peut être modifiée dynamiquement dans l'application si nécessaire via les Paramètres.
+  static const String defaultBaseUrl = 'https://vidtele.digitlab.dev';
+
+  // Endpoint de mise à jour d'application
+  static const String appVersion = '/api/app/version';
 
   // Endpoints Authentification
   static const String login = '/api/auth/login';

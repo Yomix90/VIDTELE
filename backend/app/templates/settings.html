@@ -52,5 +52,92 @@
       </div>
     </div>
   </div>
+
+  <!-- Configuration des Mises à jour Mobile Atlas Play -->
+  <div class="col-12">
+    <div class="card-dark p-4 border border-secondary border-opacity-25">
+      <div class="d-flex align-items-center justify-content-between mb-3">
+        <div class="d-flex align-items-center gap-2">
+          <i class="bi bi-cloud-arrow-up text-warning fs-5"></i>
+          <div>
+            <h2 class="h6 fw-bold text-white mb-0">Mises à Jour de l'Application Mobile (Atlas Play)</h2>
+            <div class="text-muted small">Contrôlez les versions déployées et forcez les mises à jour sans passer par un store tiers.</div>
+          </div>
+        </div>
+        <span class="badge bg-warning bg-opacity-20 text-warning border border-warning border-opacity-25 px-2 py-1">OTA In-App</span>
+      </div>
+
+      <form id="appUpdateForm" onsubmit="saveAppUpdate(event)">
+        <div class="row g-3">
+          <div class="col-12 col-md-4">
+            <label class="form-label small">Dernière version disponible (Latest)</label>
+            <input type="text" id="upLatestVersion" class="form-control" placeholder="ex: 1.1.0" value="{{ app_update.latest_version }}" required>
+            <div class="text-muted" style="font-size: 0.75rem;">Version distribuée aux utilisateurs.</div>
+          </div>
+          <div class="col-12 col-md-4">
+            <label class="form-label small">Version minimale obligatoire (Min)</label>
+            <input type="text" id="upMinVersion" class="form-control" placeholder="ex: 1.0.0" value="{{ app_update.min_version }}" required>
+            <div class="text-muted" style="font-size: 0.75rem;">En dessous de cette version, l'accès est bloqué.</div>
+          </div>
+          <div class="col-12 col-md-4">
+            <label class="form-label small">Lien de téléchargement (APK Direct)</label>
+            <input type="url" id="upDownloadUrl" class="form-control" placeholder="https://digitlab.dev/atlas-play.apk" value="{{ app_update.download_url }}">
+            <div class="text-muted" style="font-size: 0.75rem;">URL directe de téléchargement ou lien de mise à jour.</div>
+          </div>
+          <div class="col-12 col-md-8">
+            <label class="form-label small">Titre de la mise à jour</label>
+            <input type="text" id="upTitle" class="form-control" placeholder="ex: Atlas Play 1.1.0 - Performances & Nouvelles Séries" value="{{ app_update.title }}">
+          </div>
+          <div class="col-12 col-md-4 d-flex align-items-center mt-md-4">
+            <div class="form-check form-switch pt-2">
+              <input class="form-check-input" type="checkbox" id="upForceUpdate" {% if app_update.force_update %}checked{% endif %}>
+              <label class="form-check-label fw-bold text-white small" for="upForceUpdate">Forcer la mise à jour (Bloquant)</label>
+            </div>
+          </div>
+          <div class="col-12">
+            <label class="form-label small">Nouveautés / Notes de version (Release Notes)</label>
+            <textarea id="upReleaseNotes" class="form-control" rows="3" placeholder="- Amélioration de la fluidité du lecteur&#10;- Support trilingue FR / EN / AR&#10;- Correction des métadonnées">{{ app_update.release_notes }}</textarea>
+          </div>
+          <div class="col-12 text-end">
+            <button type="submit" class="btn btn-danger px-4">
+              <i class="bi bi-save me-1"></i>Enregistrer la configuration de mise à jour
+            </button>
+          </div>
+        </div>
+      </form>
+    </div>
+  </div>
 </div>
+{% endblock %}
+
+{% block extra_scripts %}
+<script>
+async function saveAppUpdate(e) {
+  e.preventDefault();
+  const payload = {
+    latest_version: document.getElementById('upLatestVersion').value.trim(),
+    min_version: document.getElementById('upMinVersion').value.trim(),
+    download_url: document.getElementById('upDownloadUrl').value.trim(),
+    title: document.getElementById('upTitle').value.trim(),
+    release_notes: document.getElementById('upReleaseNotes').value.trim(),
+    force_update: document.getElementById('upForceUpdate').checked,
+  };
+
+  try {
+    const res = await fetch('/api/admin/app-update', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify(payload)
+    });
+    const data = await res.json();
+    if (res.ok) {
+      showToast(data.message || 'Mise à jour enregistrée !', 'success');
+    } else {
+      showToast(data.detail || 'Erreur lors de l\'enregistrement', 'error');
+    }
+  } catch (err) {
+    showToast('Erreur serveur', 'error');
+  }
+}
+</script>
 {% endblock %}

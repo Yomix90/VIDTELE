@@ -456,3 +456,28 @@ class HomeRowCreate(BaseModel):
     limit_items: int = 20
     is_active: bool = True
     order_index: int = 0
+
+
+# -------------------------------------------------------------
+# Schémas Mises à jour Application Mobile (Atlas Play)
+# -------------------------------------------------------------
+
+class AppUpdateInfo(BaseModel):
+    """Informations de version renvoyées à l'application mobile Flutter."""
+    latest_version: str = "1.0.0"
+    min_version: str = "1.0.0"
+    download_url: Optional[str] = None
+    title: str = "Mise à jour disponible"
+    release_notes: Optional[str] = None
+    force_update: bool = False
+    has_update: bool = False
+
+
+class AppUpdateConfig(BaseModel):
+    """Configuration soumise par l'administrateur dans le Dashboard."""
+    latest_version: str = Field(..., description="Dernière version disponible (ex: 1.1.0)")
+    min_version: str = Field(..., description="Version minimale obligatoire (ex: 1.0.0)")
+    download_url: Optional[str] = Field(None, description="Lien de téléchargement direct de l'APK")
+    title: Optional[str] = Field("Nouvelle mise à jour disponible", description="Titre du dialogue")
+    release_notes: Optional[str] = Field(None, description="Notes de mise à jour (changements)")
+    force_update: bool = Field(False, description="Bloquer l'utilisation de l'app si non mis à jour")
