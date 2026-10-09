@@ -71,3 +71,52 @@ async def init_db() -> None:
                     await conn.execute(text(f"ALTER TABLE videos ADD COLUMN {col_name} {col_def}"))
         except Exception:
             pass
+
+        # Migrations douces pour SQLite sur la table 'users'
+        user_cols_to_add = [
+            ("email", "VARCHAR(255)"),
+            ("full_name", "VARCHAR(255)"),
+            ("max_screens", "INTEGER DEFAULT 2 NOT NULL"),
+            ("expires_at", "DATETIME"),
+            ("invited_by", "INTEGER REFERENCES users(id) ON DELETE SET NULL"),
+        ]
+        try:
+            res_u = await conn.execute(text("PRAGMA table_info(users)"))
+            existing_user_cols = {row[1] for row in res_u.fetchall()}
+            for col_name, col_def in user_cols_to_add:
+                if col_name not in existing_user_cols:
+                    await conn.execute(text(f"ALTER TABLE users ADD COLUMN {col_name} {col_def}"))
+        except Exception:
+            pass
+
+        # Amorçage automatique des genres de référence si vide
+        try:
+            res_g = await conn.execute(text("SELECT count(*) FROM genres"))
+            if res_g.scalar_one() == 0:
+                await conn.execute(text("""
+                    INSERT OR IGNORE INTO genres (id, slug, name_fr, name_ar, icon, order_index) VALUES
+                    (1, 'action', 'Action', 'أكشن', 'bi-lightning-charge', 1),
+                    (2, 'drame', 'Drame', 'دراما', 'bi-mask', 2),
+                    (3, 'comedie', 'Comédie', 'كوميديا', 'bi-emoji-smile', 3),
+                    (4, 'policier', 'Policier', 'بوليسي', 'bi-shield-lock', 4),
+                    (5, 'mystere', 'Mystère', 'غموض', 'bi-question-circle', 5),
+                    (6, 'famille', 'Famille', 'عائلي', 'bi-people', 6),
+                    (7, 'science-fiction', 'Science-Fiction', 'خيال علمي', 'bi-rocket', 7),
+                    (8, 'animation', 'Animation', 'رسوم متحركة', 'bi-palette', 8)
+                """))
+        except Exception:
+            pass
+
+        # Amorçage automatique des rangées d'accueil par défaut si vide
+        try:
+            res_h = await conn.execute(text("SELECT count(*) FROM home_rows"))
+            if res_h.scalar_one() == 0:
+                await conn.execute(text("""
+                    INSERT OR IGNORE INTO home_rows (id, row_type, title_fr, title_ar, order_index) VALUES
+                    (1, 'hero', 'À l''affiche', 'مميز', 1),
+                    (2, 'recent', 'Nouveautés', 'أحدث الإضافات', 2),
+                    (3, 'series', 'Séries populaires', 'مسلسلات شائعة', 3),
+                    (4, 'movies', 'Films récents', 'أفلام حديثة', 4)
+                """))
+        except Exception:
+            pass
