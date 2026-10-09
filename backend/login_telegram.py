@@ -6,12 +6,35 @@ import asyncio
 import os
 import sys
 from pathlib import Path
-from dotenv import load_dotenv
-from telethon import TelegramClient
-from telethon.errors import SessionPasswordNeededError
+
+# Détection et inclusion automatique de l'environnement virtuel local (backend/venv)
+current_dir = Path(__file__).resolve().parent
+candidates = [
+    current_dir / "venv" / "Lib" / "site-packages",
+    current_dir.parent / "backend" / "venv" / "Lib" / "site-packages",
+    current_dir / "venv" / "lib" / f"python{sys.version_info.major}.{sys.version_info.minor}" / "site-packages",
+]
+for candidate in candidates:
+    if candidate.exists() and str(candidate) not in sys.path:
+        sys.path.insert(0, str(candidate))
+
+try:
+    from dotenv import load_dotenv
+    from telethon import TelegramClient
+    from telethon.errors import SessionPasswordNeededError
+except ImportError:
+    venv_python = current_dir / "venv" / "Scripts" / "python.exe"
+    if venv_python.exists():
+        import subprocess
+        result = subprocess.run([str(venv_python), str(__file__)] + sys.argv[1:])
+        sys.exit(result.returncode)
+    print("Erreur : Telethon ou python-dotenv n'est pas installé dans cet environnement.")
+    print("Veuillez exécuter avec l'environnement virtuel :")
+    print(r"  .\backend\venv\Scripts\python.exe backend/login_telegram.py")
+    sys.exit(1)
 
 # Chargement du fichier .env
-env_path = Path(__file__).resolve().parent / ".env"
+env_path = current_dir / ".env"
 load_dotenv(dotenv_path=env_path)
 
 API_ID = os.getenv("TELEGRAM_API_ID")

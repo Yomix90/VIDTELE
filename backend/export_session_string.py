@@ -6,17 +6,36 @@ passer la variable d'environnement TELEGRAM_STRING_SESSION au lieu d'un fichier 
 import os
 import sys
 from pathlib import Path
-from dotenv import load_dotenv
 
-env_path = Path(__file__).resolve().parent / ".env"
-load_dotenv(dotenv_path=env_path)
+# Détection et inclusion automatique de l'environnement virtuel local (backend/venv)
+current_dir = Path(__file__).resolve().parent
+candidates = [
+    current_dir / "venv" / "Lib" / "site-packages",
+    current_dir.parent / "backend" / "venv" / "Lib" / "site-packages",
+    current_dir / "venv" / "lib" / f"python{sys.version_info.major}.{sys.version_info.minor}" / "site-packages",
+]
+for candidate in candidates:
+    if candidate.exists() and str(candidate) not in sys.path:
+        sys.path.insert(0, str(candidate))
 
 try:
+    from dotenv import load_dotenv
     from telethon.sync import TelegramClient
     from telethon.sessions import StringSession
 except ImportError:
+    # Si le venv existe mais que l'interpréteur courant n'a pas accès aux paquets C/binaires
+    venv_python = current_dir / "venv" / "Scripts" / "python.exe"
+    if venv_python.exists():
+        import subprocess
+        result = subprocess.run([str(venv_python), str(__file__)] + sys.argv[1:])
+        sys.exit(result.returncode)
     print("Erreur : Telethon n'est pas installé dans cet environnement.")
+    print("Veuillez exécuter avec l'environnement virtuel :")
+    print(r"  .\backend\venv\Scripts\python.exe backend/export_session_string.py")
     sys.exit(1)
+
+env_path = current_dir / ".env"
+load_dotenv(dotenv_path=env_path)
 
 
 def main():
@@ -28,12 +47,12 @@ def main():
         print("[!] TELEGRAM_API_ID ou TELEGRAM_API_HASH manquant dans le fichier .env.")
         sys.exit(1)
 
-    session_path = Path(session_name) if Path(session_name).is_absolute() else Path(__file__).resolve().parent / session_name
+    session_path = Path(session_name) if Path(session_name).is_absolute() else current_dir / session_name
     session_file = Path(f"{session_path}.session")
 
     if not session_file.exists():
         print(f"[!] Fichier de session introuvable : {session_file}")
-        print("Veuillez d'abord exécuter 'python login_telegram.py' pour vous connecter.")
+        print("Veuillez d'abord exécuter 'python backend/login_telegram.py' pour vous connecter.")
         sys.exit(1)
 
     try:
