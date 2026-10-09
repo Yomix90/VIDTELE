@@ -45,7 +45,29 @@ async def get_db() -> AsyncGenerator[AsyncSession, None]:
             await session.close()
 
 
+from sqlalchemy import text
+
+
 async def init_db() -> None:
-    """Initialise les tables de la base de données si elles n'existent pas."""
+    """Initialise les tables de la base de données et applique les migrations douces si nécessaires."""
+    import app.models  # Assure le chargement de toutes les classes filles de Base
     async with engine.begin() as conn:
         await conn.run_sync(Base.metadata.create_all)
+
+        # Migrations douces pour SQLite sur la table 'videos'
+        columns_to_add = [
+            ("is_published", "BOOLEAN DEFAULT 0 NOT NULL"),
+            ("media_item_id", "INTEGER REFERENCES media_items(id) ON DELETE SET NULL"),
+            ("season_number", "INTEGER DEFAULT 1 NOT NULL"),
+            ("episode_number", "INTEGER DEFAULT 1 NOT NULL"),
+            ("episode_title", "VARCHAR(255)"),
+        ]
+
+        try:
+            res = await conn.execute(text("PRAGMA table_info(videos)"))
+            existing_cols = {row[1] for row in res.fetchall()}
+            for col_name, col_def in columns_to_add:
+                if col_name not in existing_cols:
+                    await conn.execute(text(f"ALTER TABLE videos ADD COLUMN {col_name} {col_def}"))
+        except Exception:
+            pass

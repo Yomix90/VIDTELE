@@ -113,17 +113,20 @@ class SyncService:
             thumbnail_rel_path = f"/api/videos/{message.id}/thumbnail"
 
         if video:
-            # Mise à jour
-            video.title = title
-            video.caption = caption
-            video.category = category
+            # Mise à jour technique (durée, taille, miniature)
             video.duration_seconds = duration
             video.file_size_bytes = file_size
             video.mime_type = mime_type
-            video.thumbnail_path = thumbnail_rel_path
+            if thumbnail_rel_path:
+                video.thumbnail_path = thumbnail_rel_path
             video.file_name = file_name
+            # Ne modifier le titre et la catégorie que si la vidéo n'est pas encore organisée dans un Film ou Série
+            if not video.media_item_id:
+                video.title = title
+                video.caption = caption
+                video.category = category
         else:
-            # Création
+            # Création : par défaut la vidéo arrive brute (non publiée sur mobile)
             video = Video(
                 telegram_message_id=message.id,
                 title=title,
@@ -135,6 +138,8 @@ class SyncService:
                 thumbnail_path=thumbnail_rel_path,
                 file_name=file_name,
                 telegram_date=msg_date,
+                is_published=False,  # En attente d'organisation par l'administrateur
+                media_item_id=None,
             )
             db.add(video)
 

@@ -34,7 +34,7 @@ async def get_videos(
     Récupère la liste paginée des vidéos avec recherche et filtrage.
     Inclut l'état de favori et la progression de lecture de l'utilisateur connecté.
     """
-    query = select(Video)
+    query = select(Video).where(Video.is_published == True)
 
     # Filtrage par mot-clé (insensible à la casse)
     if q:
@@ -114,6 +114,11 @@ async def get_videos(
                 file_name=v.file_name,
                 views_count=v.views_count,
                 telegram_date=v.telegram_date,
+                is_published=v.is_published,
+                media_item_id=v.media_item_id,
+                season_number=v.season_number,
+                episode_number=v.episode_number,
+                episode_title=v.episode_title,
                 is_favorite=(v.id in user_fav_ids),
                 watch_progress_seconds=pos,
                 is_completed=completed,
@@ -137,10 +142,11 @@ async def get_categories(
     db: AsyncSession = Depends(get_db),
 ):
     """
-    Récupère la liste de toutes les catégories avec le nombre de vidéos par catégorie.
+    Récupère la liste de toutes les catégories avec le nombre de vidéos publiées par catégorie.
     """
     stmt = (
         select(Video.category, func.count(Video.id).label("count"))
+        .where(Video.is_published == True)
         .group_by(Video.category)
         .order_by(desc("count"))
     )
@@ -160,16 +166,16 @@ async def get_video_detail(
     db: AsyncSession = Depends(get_db),
 ):
     """
-    Récupère les détails complets d'une vidéo spécifique.
+    Récupère les détails complets d'une vidéo spécifique (réservé aux vidéos publiées pour les non-admins).
     """
     stmt = select(Video).where(Video.id == video_id)
     result = await db.execute(stmt)
     video = result.scalar_one_or_none()
 
-    if not video:
+    if not video or (not video.is_published and current_user.role != "admin"):
         raise HTTPException(
             status_code=status.HTTP_404_NOT_FOUND,
-            detail="Vidéo introuvable",
+            detail="Vidéo introuvable ou non publiée",
         )
 
     # Favori
@@ -202,6 +208,11 @@ async def get_video_detail(
         file_name=video.file_name,
         views_count=video.views_count,
         telegram_date=video.telegram_date,
+        is_published=video.is_published,
+        media_item_id=video.media_item_id,
+        season_number=video.season_number,
+        episode_number=video.episode_number,
+        episode_title=video.episode_title,
         is_favorite=is_fav,
         watch_progress_seconds=pos,
         is_completed=completed,
@@ -250,10 +261,10 @@ async def get_stream_token(
     Génère un jeton signé temporaire pour le lecteur vidéo mobile.
     Permet la lecture sans avoir à configurer des en-têtes Authorization complexes dans le player.
     """
-    stmt = select(Video.id).where(Video.id == video_id)
-    exists = (await db.execute(stmt)).scalar_one_or_none()
-    if not exists:
-        raise HTTPException(status_code=404, detail="Vidéo introuvable")
+    stmt = select(Video).where(Video.id == video_id)
+    video = (await db.execute(stmt)).scalar_one_or_none()
+    if not video or (not video.is_published and current_user.role != "admin"):
+        raise HTTPException(status_code=404, detail="Vidéo introuvable ou non publiée")
 
     token = create_stream_token(user_id=current_user.id, video_id=video_id)
     return {
@@ -315,8 +326,8 @@ async def stream_video(
     result = await db.execute(stmt)
     video = result.scalar_one_or_none()
 
-    if not video:
-        raise HTTPException(status_code=404, detail="Vidéo introuvable")
+    if not video or (not video.is_published and user.role != "admin"):
+        raise HTTPException(status_code=404, detail="Vidéo introuvable ou non publiée")
 
     # 3. Contrôle et enregistrement des quotas de flux simultanés (anti-abus)
     client_ip = get_client_ip(request)

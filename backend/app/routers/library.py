@@ -73,7 +73,10 @@ async def get_watch_history(
     stmt = (
         select(WatchHistory, Video)
         .join(Video, WatchHistory.video_id == Video.id)
-        .where(WatchHistory.user_id == current_user.id)
+        .where(
+            WatchHistory.user_id == current_user.id,
+            Video.is_published == True,
+        )
         .order_by(desc(WatchHistory.last_watched_at))
     )
     result = await db.execute(stmt)
@@ -111,7 +114,10 @@ async def get_favorites(
     stmt = (
         select(Favorite, Video)
         .join(Video, Favorite.video_id == Video.id)
-        .where(Favorite.user_id == current_user.id)
+        .where(
+            Favorite.user_id == current_user.id,
+            Video.is_published == True,
+        )
         .order_by(desc(Favorite.created_at))
     )
     result = await db.execute(stmt)

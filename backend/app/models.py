@@ -56,6 +56,30 @@ class InviteCode(Base):
     used_at: Mapped[Optional[datetime]] = mapped_column(DateTime, nullable=True)
 
 
+class MediaItem(Base):
+    """
+    Film ou Série regroupant une ou plusieurs vidéos Telegram avec métadonnées enrichies.
+    Seuls les éléments avec is_published == True sont visibles dans le catalogue mobile.
+    """
+    __tablename__ = "media_items"
+
+    id: Mapped[int] = mapped_column(Integer, primary_key=True, index=True)
+    title: Mapped[str] = mapped_column(String(255), index=True, nullable=False)
+    media_type: Mapped[str] = mapped_column(String(32), default="movie", nullable=False)  # "movie" ou "series"
+    description: Mapped[Optional[str]] = mapped_column(Text, nullable=True)
+    category: Mapped[Optional[str]] = mapped_column(String(64), index=True, nullable=True)  # Genre principal
+    poster_url: Mapped[Optional[str]] = mapped_column(String(512), nullable=True)  # URL ou chemin miniature
+    backdrop_url: Mapped[Optional[str]] = mapped_column(String(512), nullable=True)  # Bannière / arrière-plan
+    release_year: Mapped[Optional[int]] = mapped_column(Integer, nullable=True)
+    rating: Mapped[Optional[float]] = mapped_column(Float, nullable=True)
+    is_published: Mapped[bool] = mapped_column(Boolean, default=False, nullable=False, index=True)
+    created_at: Mapped[datetime] = mapped_column(DateTime, default=utc_now, nullable=False)
+    updated_at: Mapped[datetime] = mapped_column(DateTime, default=utc_now, onupdate=utc_now, nullable=False)
+
+    # Relations
+    videos: Mapped[List["Video"]] = relationship("Video", back_populates="media_item")
+
+
 class Video(Base):
     """Métadonnées des vidéos synchronisées depuis le canal Telegram privé."""
     __tablename__ = "videos"
@@ -72,10 +96,16 @@ class Video(Base):
     file_name: Mapped[Optional[str]] = mapped_column(String(255), nullable=True)
     views_count: Mapped[int] = mapped_column(Integer, default=0, nullable=False)
     telegram_date: Mapped[datetime] = mapped_column(DateTime, nullable=False)
+    is_published: Mapped[bool] = mapped_column(Boolean, default=False, nullable=False, index=True)
+    media_item_id: Mapped[Optional[int]] = mapped_column(Integer, ForeignKey("media_items.id", ondelete="SET NULL"), nullable=True, index=True)
+    season_number: Mapped[int] = mapped_column(Integer, default=1, nullable=False)
+    episode_number: Mapped[int] = mapped_column(Integer, default=1, nullable=False)
+    episode_title: Mapped[Optional[str]] = mapped_column(String(255), nullable=True)
     created_at: Mapped[datetime] = mapped_column(DateTime, default=utc_now, nullable=False)
     updated_at: Mapped[datetime] = mapped_column(DateTime, default=utc_now, onupdate=utc_now, nullable=False)
 
     # Relations
+    media_item: Mapped[Optional["MediaItem"]] = relationship("MediaItem", back_populates="videos")
     history_entries: Mapped[List["WatchHistory"]] = relationship("WatchHistory", back_populates="video", cascade="all, delete-orphan")
     favorites: Mapped[List["Favorite"]] = relationship("Favorite", back_populates="video", cascade="all, delete-orphan")
 

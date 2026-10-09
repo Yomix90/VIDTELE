@@ -23,29 +23,32 @@
 <!-- Cartes Statistiques Clés -->
 <div class="row g-3 mb-4">
     <div class="col-12 col-sm-6 col-xl-3">
-        <div class="card stat-card p-3 shadow-sm border-start border-4 border-info">
+        <div class="card stat-card p-3 shadow-sm border-start border-4 border-danger">
             <div class="d-flex justify-content-between align-items-center">
                 <div>
-                    <div class="text-secondary small fw-semibold text-uppercase" id="lbl-videos">Vidéos Indexées</div>
-                    <div class="fs-3 fw-bold text-info" id="stat-videos">{{ stats.total_videos }}</div>
+                    <div class="text-secondary small fw-semibold text-uppercase" id="lbl-media">Catalogue (Films & Séries)</div>
+                    <div class="fs-3 fw-bold text-danger" id="stat-media">{{ stats.total_media_items }}</div>
                 </div>
-                <div class="bg-info bg-opacity-10 p-3 rounded-circle text-info fs-3">
-                    <i class="bi bi-collection-play"></i>
+                <div class="bg-danger bg-opacity-10 p-3 rounded-circle text-danger fs-3">
+                    <i class="bi bi-film"></i>
                 </div>
             </div>
         </div>
     </div>
 
     <div class="col-12 col-sm-6 col-xl-3">
-        <div class="card stat-card p-3 shadow-sm border-start border-4 border-primary">
+        <div class="card stat-card p-3 shadow-sm border-start border-4 border-info">
             <div class="d-flex justify-content-between align-items-center">
                 <div>
-                    <div class="text-secondary small fw-semibold text-uppercase" id="lbl-views">Total Vues</div>
-                    <div class="fs-3 fw-bold text-primary" id="stat-views">{{ stats.total_views }}</div>
+                    <div class="text-secondary small fw-semibold text-uppercase" id="lbl-videos">Vidéos Publiées sur Mobile</div>
+                    <div class="fs-3 fw-bold text-info" id="stat-videos">{{ stats.published_videos }} <span class="fs-6 text-secondary fw-normal">/ {{ stats.total_videos }}</span></div>
                 </div>
-                <div class="bg-primary bg-opacity-10 p-3 rounded-circle text-primary fs-3">
-                    <i class="bi bi-eye"></i>
+                <div class="bg-info bg-opacity-10 p-3 rounded-circle text-info fs-3">
+                    <i class="bi bi-collection-play"></i>
                 </div>
+            </div>
+            <div class="small text-secondary mt-1">
+                <span class="badge bg-warning text-dark">{{ stats.raw_videos_count }}</span> en attente d'organisation
             </div>
         </div>
     </div>
@@ -96,10 +99,24 @@
     </div>
 </div>
 
-<!-- Onglets Principaux (Canal Telegram, Utilisateurs & Invitations) -->
+<!-- Onglets Principaux -->
 <ul class="nav nav-tabs mb-3" id="adminTab" role="tablist">
     <li class="nav-item" role="presentation">
-        <button class="nav-link active" id="telegram-tab" data-bs-toggle="tab" data-bs-target="#tab-telegram" type="button" role="tab">
+        <button class="nav-link active" id="media-tab" data-bs-toggle="tab" data-bs-target="#tab-media" type="button" role="tab">
+            <i class="bi bi-film me-1 text-danger"></i> <span id="tab-title-media">Films & Séries</span>
+            <span class="badge bg-danger ms-1">{{ stats.total_media_items }}</span>
+        </button>
+    </li>
+    <li class="nav-item" role="presentation">
+        <button class="nav-link" id="raw-tab" data-bs-toggle="tab" data-bs-target="#tab-raw" type="button" role="tab">
+            <i class="bi bi-inbox me-1 text-warning"></i> <span id="tab-title-raw">Vidéos Brutes (En attente)</span>
+            {% if stats.raw_videos_count > 0 %}
+            <span class="badge bg-warning text-dark ms-1">{{ stats.raw_videos_count }}</span>
+            {% endif %}
+        </button>
+    </li>
+    <li class="nav-item" role="presentation">
+        <button class="nav-link" id="telegram-tab" data-bs-toggle="tab" data-bs-target="#tab-telegram" type="button" role="tab">
             <i class="bi bi-telegram me-1 text-info"></i> <span id="tab-title-telegram">Canal Telegram</span>
         </button>
     </li>
@@ -116,8 +133,248 @@
 </ul>
 
 <div class="tab-content" id="adminTabContent">
-    <!-- Onglet 1: Configuration et Vérification Canal Telegram -->
-    <div class="tab-pane fade show active" id="tab-telegram" role="tabpanel">
+    <!-- Onglet 1: Organisation du Catalogue (Films & Séries) -->
+    <div class="tab-pane fade show active" id="tab-media" role="tabpanel">
+        <div class="card p-3 mb-3 shadow-sm border-0 bg-dark bg-opacity-50">
+            <div class="d-flex justify-content-between align-items-center flex-wrap gap-2">
+                <div>
+                    <h5 class="fw-bold m-0 d-flex align-items-center gap-2">
+                        <i class="bi bi-collection-play-fill text-danger"></i>
+                        <span id="txt-media-title">Catalogue Films & Séries</span>
+                        <span class="badge bg-secondary">{{ media_items|length }}</span>
+                    </h5>
+                    <div class="text-secondary small mt-1" id="txt-media-subtitle">
+                        Organisez vos vidéos Telegram en Films ou Séries. Seuls les éléments <strong>publiés</strong> s'affichent sur l'application mobile.
+                    </div>
+                </div>
+                <div class="d-flex gap-2">
+                    <button class="btn btn-primary d-flex align-items-center gap-2" onclick="openCreateMediaModal()">
+                        <i class="bi bi-plus-circle"></i>
+                        <span id="txt-btn-new-media">Nouveau Film ou Série</span>
+                    </button>
+                </div>
+            </div>
+            
+            <!-- Barre de filtrage -->
+            <div class="row g-2 mt-2 pt-2 border-top border-secondary border-opacity-25 align-items-center">
+                <div class="col-12 col-md-5">
+                    <div class="input-group input-group-sm">
+                        <span class="input-group-text bg-dark border-secondary text-secondary"><i class="bi bi-search"></i></span>
+                        <input type="text" class="form-control" id="search-media-input" placeholder="Rechercher par titre, genre..." onkeyup="filterMediaCards()">
+                    </div>
+                </div>
+                <div class="col-12 col-md-7 d-flex justify-content-md-end flex-wrap gap-1">
+                    <button class="btn btn-sm btn-outline-light active filter-btn" onclick="applyMediaFilter('all', this)">Tous</button>
+                    <button class="btn btn-sm btn-outline-primary filter-btn" onclick="applyMediaFilter('movie', this)"><i class="bi bi-film me-1"></i>Films</button>
+                    <button class="btn btn-sm btn-outline-info filter-btn" onclick="applyMediaFilter('series', this)"><i class="bi bi-tv me-1"></i>Séries</button>
+                    <button class="btn btn-sm btn-outline-success filter-btn" onclick="applyMediaFilter('published', this)"><i class="bi bi-check-circle me-1"></i>Publiés</button>
+                    <button class="btn btn-sm btn-outline-secondary filter-btn" onclick="applyMediaFilter('draft', this)"><i class="bi bi-eye-slash me-1"></i>Brouillons</button>
+                </div>
+            </div>
+        </div>
+
+        <!-- Grille des Films & Séries -->
+        <div class="row g-3" id="media-cards-grid">
+            {% if media_items %}
+                {% for item in media_items %}
+                <div class="col-12 col-md-6 col-xl-4 media-card-item" 
+                     data-type="{{ item.media_type }}" 
+                     data-published="{{ '1' if item.is_published else '0' }}" 
+                     data-title="{{ item.title|lower }}" 
+                     data-category="{{ (item.category or '')|lower }}">
+                    <div class="card h-100 shadow-sm border border-secondary border-opacity-25 overflow-hidden">
+                        <!-- En-tête / Affiche -->
+                        <div class="position-relative bg-black" style="height: 180px; overflow: hidden;">
+                            {% if item.poster_url %}
+                                <img src="{{ item.poster_url }}" alt="{{ item.title }}" class="w-100 h-100 object-fit-cover" onerror="this.src='/api/videos/1/thumbnail';">
+                            {% elif item.attached_videos and item.attached_videos[0].thumbnail_path %}
+                                <img src="{{ item.attached_videos[0].thumbnail_path }}" alt="{{ item.title }}" class="w-100 h-100 object-fit-cover">
+                            {% else %}
+                                <div class="w-100 h-100 d-flex flex-column align-items-center justify-content-center bg-dark text-secondary">
+                                    <i class="bi {% if item.media_type == 'movie' %}bi-film{% else %}bi-tv{% endif %} fs-1 mb-2"></i>
+                                    <span class="small">Aucune affiche</span>
+                                </div>
+                            {% endif %}
+                            
+                            <!-- Badges superposés -->
+                            <div class="position-absolute top-0 start-0 m-2 d-flex gap-1">
+                                {% if item.media_type == 'movie' %}
+                                    <span class="badge bg-primary"><i class="bi bi-film me-1"></i>FILM</span>
+                                {% else %}
+                                    <span class="badge" style="background-color: #8b5cf6;"><i class="bi bi-tv me-1"></i>SÉRIE</span>
+                                {% endif %}
+                                {% if item.category %}
+                                    <span class="badge bg-dark bg-opacity-75 border border-secondary">{{ item.category }}</span>
+                                {% endif %}
+                            </div>
+                            
+                            <div class="position-absolute top-0 end-0 m-2">
+                                {% if item.is_published %}
+                                    <span class="badge bg-success shadow"><i class="bi bi-check-circle me-1"></i>Publié sur Mobile</span>
+                                {% else %}
+                                    <span class="badge bg-secondary shadow"><i class="bi bi-eye-slash me-1"></i>Brouillon (Masqué)</span>
+                                {% endif %}
+                            </div>
+
+                            <div class="position-absolute bottom-0 start-0 w-100 p-2" style="background: linear-gradient(transparent, rgba(15, 23, 42, 0.95));">
+                                <div class="d-flex justify-content-between align-items-end">
+                                    <span class="badge bg-dark border border-secondary">
+                                        <i class="bi bi-collection-play me-1"></i>
+                                        {% if item.media_type == 'movie' %}
+                                            {{ item.attached_videos|length }} vidéo liée
+                                        {% else %}
+                                            {{ item.attached_videos|length }} épisode(s)
+                                        {% endif %}
+                                    </span>
+                                    <div class="small text-light">
+                                        {% if item.release_year %}<span>{{ item.release_year }}</span>{% endif %}
+                                        {% if item.rating %}<span class="text-warning ms-1">⭐ {{ item.rating }}</span>{% endif %}
+                                    </div>
+                                </div>
+                            </div>
+                        </div>
+
+                        <!-- Corps de la carte -->
+                        <div class="card-body p-3 d-flex flex-column">
+                            <h6 class="fw-bold text-light mb-1 text-truncate" title="{{ item.title }}">{{ item.title }}</h6>
+                            <p class="text-secondary small mb-3 flex-grow-1" style="display: -webkit-box; -webkit-line-clamp: 2; -webkit-box-orient: vertical; overflow: hidden;">
+                                {{ item.description or 'Aucune description fournie.' }}
+                            </p>
+
+                            <!-- Actions -->
+                            <div class="d-flex justify-content-between align-items-center gap-1 pt-2 border-top border-secondary border-opacity-25 flex-wrap">
+                                <button class="btn btn-sm {% if item.is_published %}btn-outline-warning{% else %}btn-success{% endif %}" onclick="togglePublishMedia({{ item.id }})" title="Publier / Dépublier">
+                                    <i class="bi {% if item.is_published %}bi-eye-slash{% else %}bi-check-circle{% endif %} me-1"></i>
+                                    <span>{% if item.is_published %}Dépublier{% else %}Publier{% endif %}</span>
+                                </button>
+                                
+                                <div class="d-flex gap-1">
+                                    <button class="btn btn-sm btn-outline-info" onclick="openManageEpisodesModal({{ item.id }})" title="Gérer les vidéos / épisodes">
+                                        <i class="bi bi-list-ul me-1"></i>
+                                        <span>{% if item.media_type == 'movie' %}Vidéo{% else %}Épisodes ({{ item.attached_videos|length }}){% endif %}</span>
+                                    </button>
+                                    <button class="btn btn-sm btn-outline-light" onclick="openEditMediaModal({{ item.id }})" title="Modifier">
+                                        <i class="bi bi-pencil"></i>
+                                    </button>
+                                    <button class="btn btn-sm btn-outline-danger" onclick="deleteMediaItem({{ item.id }}, '{{ item.title|replace("'", "\\'") }}')" title="Supprimer">
+                                        <i class="bi bi-trash"></i>
+                                    </button>
+                                </div>
+                            </div>
+                        </div>
+                    </div>
+                </div>
+                {% endfor %}
+            {% else %}
+                <div class="col-12">
+                    <div class="card p-5 text-center border-dashed border-secondary">
+                        <i class="bi bi-film display-3 text-secondary mb-3"></i>
+                        <h4 class="fw-bold text-light">Votre catalogue est encore vide</h4>
+                        <p class="text-secondary mx-auto" style="max-width: 500px;">
+                            Vous avez synchronisé des vidéos de Telegram mais elles ne sont pas encore organisées.
+                            Créez un premier Film ou une Série pour regrouper vos vidéos et les rendre accessibles sur l'application mobile.
+                        </p>
+                        <div class="mt-2">
+                            <button class="btn btn-primary px-4 py-2" onclick="openCreateMediaModal()">
+                                <i class="bi bi-plus-circle me-2"></i>Créer un Film ou une Série
+                            </button>
+                        </div>
+                    </div>
+                </div>
+            {% endif %}
+        </div>
+    </div>
+
+    <!-- Onglet 2: Vidéos Brutes Telegram (En attente d'organisation) -->
+    <div class="tab-pane fade" id="tab-raw" role="tabpanel">
+        <div class="alert alert-warning border-0 d-flex align-items-center gap-3 mb-3">
+            <i class="bi bi-inbox-fill fs-3 text-warning"></i>
+            <div>
+                <div class="fw-bold">Vidéos Brutes Détectées sur Telegram (Masquées du Mobile)</div>
+                <div class="small">
+                    Ces vidéos proviennent de votre canal Telegram. Elles ne s'affichent <strong>PAS</strong> sur l'application mobile tant que vous ne les avez pas associées à un Film ou une Série dans l'onglet <strong>Films & Séries</strong>.
+                </div>
+            </div>
+        </div>
+
+        <div class="card p-3 shadow-sm">
+            <div class="d-flex justify-content-between align-items-center mb-3 flex-wrap gap-2">
+                <h5 class="fw-bold m-0 d-flex align-items-center gap-2">
+                    <i class="bi bi-cloud-arrow-down-fill text-warning"></i>
+                    <span>Vidéos en Attente</span>
+                    <span class="badge bg-warning text-dark">{{ raw_videos|length }}</span>
+                </h5>
+                <button class="btn btn-outline-info btn-sm" onclick="triggerSync()">
+                    <i class="bi bi-arrow-repeat me-1"></i>Rafraîchir depuis Telegram
+                </button>
+            </div>
+
+            {% if raw_videos %}
+            <div class="table-responsive">
+                <table class="table table-dark table-hover align-middle mb-0">
+                    <thead>
+                        <tr class="text-secondary small text-uppercase">
+                            <th style="width: 70px;">Aperçu</th>
+                            <th>ID Telegram</th>
+                            <th>Titre / Fichier d'origine</th>
+                            <th>Catégorie auto</th>
+                            <th>Durée</th>
+                            <th>Poids</th>
+                            <th>Date Telegram</th>
+                            <th class="text-end">Action</th>
+                        </tr>
+                    </thead>
+                    <tbody>
+                        {% for v in raw_videos %}
+                        <tr>
+                            <td>
+                                {% if v.thumbnail_path %}
+                                    <img src="{{ v.thumbnail_path }}" class="rounded object-fit-cover" style="width: 55px; height: 35px;" onerror="this.style.display='none';">
+                                {% else %}
+                                    <div class="bg-secondary bg-opacity-25 rounded d-flex align-items-center justify-content-center" style="width: 55px; height: 35px;">
+                                        <i class="bi bi-camera-video text-secondary"></i>
+                                    </div>
+                                {% endif %}
+                            </td>
+                            <td><code>#{{ v.telegram_message_id }}</code></td>
+                            <td>
+                                <div class="fw-semibold text-light text-truncate" style="max-width: 280px;" title="{{ v.title }}">{{ v.title }}</div>
+                                {% if v.file_name and v.file_name != v.title %}
+                                    <div class="small text-secondary text-truncate" style="max-width: 280px;">{{ v.file_name }}</div>
+                                {% endif %}
+                            </td>
+                            <td><span class="badge bg-secondary">{{ v.category or 'Général' }}</span></td>
+                            <td>
+                                {% if v.duration_seconds > 0 %}
+                                    {{ v.duration_seconds // 60 }}m {{ v.duration_seconds % 60 }}s
+                                {% else %}
+                                    <span class="text-secondary">Clip</span>
+                                {% endif %}
+                            </td>
+                            <td>{{ (v.file_size_bytes / 1048576)|round(1) }} Mo</td>
+                            <td class="small text-secondary">{{ v.telegram_date.strftime('%d/%m/%Y %H:%M') if v.telegram_date else 'N/A' }}</td>
+                            <td class="text-end">
+                                <button class="btn btn-sm btn-primary" onclick="quickCreateMediaWithVideo({{ v.id }}, '{{ (v.title or v.file_name or '')|replace("'", "\\'") }}', '{{ (v.category or 'Général')|replace("'", "\\'") }}', '{{ v.thumbnail_path or '' }}')">
+                                    <i class="bi bi-plus-circle me-1"></i>Créer Film / Série
+                                </button>
+                            </td>
+                        </tr>
+                        {% endfor %}
+                    </tbody>
+                </table>
+            </div>
+            {% else %}
+            <div class="p-4 text-center text-secondary">
+                <i class="bi bi-check-circle-fill text-success fs-2 mb-2 d-block"></i>
+                <div class="fw-semibold">Toutes vos vidéos sont organisées !</div>
+                <div class="small">Aucune vidéo brute en attente. Lors de votre prochain upload sur Telegram, les nouvelles vidéos apparaîtront ici.</div>
+            </div>
+            {% endif %}
+        </div>
+    </div>
+
+    <!-- Onglet 3: Configuration et Vérification Canal Telegram -->
+    <div class="tab-pane fade" id="tab-telegram" role="tabpanel">
         <div class="row g-3 mb-3">
             <!-- État actuel du compte & canal -->
             <div class="col-12 col-lg-5">
@@ -340,6 +597,258 @@
     </div>
 </div>
 
+<!-- Modal 1: Création Nouveau Film ou Série -->
+<div class="modal fade" id="modalCreateMedia" tabindex="-1">
+    <div class="modal-dialog modal-lg">
+        <div class="modal-content bg-dark text-light border-secondary">
+            <div class="modal-header border-secondary">
+                <h5 class="modal-title d-flex align-items-center gap-2">
+                    <i class="bi bi-plus-circle text-primary"></i>
+                    <span id="modal-title-media">Nouveau Film ou Série</span>
+                </h5>
+                <button type="button" class="btn-close btn-close-white" data-bs-dismiss="modal"></button>
+            </div>
+            <div class="modal-body">
+                <!-- Choix Type : Film ou Série -->
+                <div class="mb-3">
+                    <label class="form-label fw-semibold">Type d'œuvre</label>
+                    <div class="d-flex gap-2">
+                        <input type="radio" class="btn-check" name="media_type_radio" id="type-movie" value="movie" checked onchange="onMediaTypeChange()">
+                        <label class="btn btn-outline-primary flex-fill" for="type-movie">
+                            <i class="bi bi-film me-2"></i>Film Unique
+                        </label>
+
+                        <input type="radio" class="btn-check" name="media_type_radio" id="type-series" value="series" onchange="onMediaTypeChange()">
+                        <label class="btn btn-outline-info flex-fill" for="type-series">
+                            <i class="bi bi-tv me-2"></i>Série (Épisodes)
+                        </label>
+                    </div>
+                </div>
+
+                <!-- Titre -->
+                <div class="mb-3">
+                    <label class="form-label fw-semibold">Titre de l'œuvre <span class="text-danger">*</span></label>
+                    <input type="text" class="form-control" id="media-title" placeholder="Ex: Inception, Breaking Bad, Prison Break..." required>
+                </div>
+
+                <div class="row g-3 mb-3">
+                    <!-- Catégorie / Genre -->
+                    <div class="col-12 col-md-6">
+                        <label class="form-label fw-semibold">Genre / Catégorie</label>
+                        <input type="text" class="form-control" id="media-category" placeholder="Ex: Action, Sci-Fi, Drame...">
+                        <div class="d-flex flex-wrap gap-1 mt-2">
+                            <button type="button" class="btn btn-xs btn-outline-secondary py-0 px-2 small" onclick="setCategoryTag('Action')">Action</button>
+                            <button type="button" class="btn btn-xs btn-outline-secondary py-0 px-2 small" onclick="setCategoryTag('Drame')">Drame</button>
+                            <button type="button" class="btn btn-xs btn-outline-secondary py-0 px-2 small" onclick="setCategoryTag('Comédie')">Comédie</button>
+                            <button type="button" class="btn btn-xs btn-outline-secondary py-0 px-2 small" onclick="setCategoryTag('Sci-Fi')">Sci-Fi</button>
+                            <button type="button" class="btn btn-xs btn-outline-secondary py-0 px-2 small" onclick="setCategoryTag('Thriller')">Thriller</button>
+                            <button type="button" class="btn btn-xs btn-outline-secondary py-0 px-2 small" onclick="setCategoryTag('Animation')">Animation</button>
+                        </div>
+                    </div>
+
+                    <!-- Année & Note -->
+                    <div class="col-6 col-md-3">
+                        <label class="form-label fw-semibold">Année</label>
+                        <input type="number" class="form-control" id="media-year" placeholder="2024" min="1900" max="2100">
+                    </div>
+                    <div class="col-6 col-md-3">
+                        <label class="form-label fw-semibold">Note (/10)</label>
+                        <input type="number" step="0.1" class="form-control" id="media-rating" placeholder="8.5" min="0" max="10">
+                    </div>
+                </div>
+
+                <!-- URL Affiche (Poster) & Fond (Backdrop) -->
+                <div class="row g-3 mb-3">
+                    <div class="col-12 col-md-6">
+                        <label class="form-label fw-semibold">URL de l'Affiche (Poster)</label>
+                        <input type="url" class="form-control" id="media-poster" placeholder="https://image.tmdb.org/... ou laisser vide">
+                        <div class="form-text text-secondary small">Si vide, la miniature Telegram de la vidéo sera utilisée.</div>
+                    </div>
+                    <div class="col-12 col-md-6">
+                        <label class="form-label fw-semibold">URL Image de fond (Optionnel)</label>
+                        <input type="url" class="form-control" id="media-backdrop" placeholder="https://... bannière large">
+                    </div>
+                </div>
+
+                <!-- Synopsis -->
+                <div class="mb-3">
+                    <label class="form-label fw-semibold">Synopsis / Résumé</label>
+                    <textarea class="form-control" id="media-description" rows="3" placeholder="Description de l'histoire, résumé..."></textarea>
+                </div>
+
+                <!-- Liaison immédiate d'une vidéo brute -->
+                <div class="p-3 bg-black bg-opacity-40 rounded border border-secondary border-opacity-25 mb-3">
+                    <label class="form-label fw-semibold d-flex align-items-center gap-2">
+                        <i class="bi bi-link-45deg text-warning fs-5"></i>
+                        <span id="lbl-link-raw">Associer immédiatement une vidéo Telegram</span>
+                        <span class="badge bg-secondary">Optionnel</span>
+                    </label>
+                    <select class="form-select mb-2" id="media-raw-video">
+                        <option value="">-- Aucune (associer plus tard depuis les vidéos brutes) --</option>
+                        {% for v in raw_videos %}
+                        <option value="{{ v.id }}" data-title="{{ v.title }}" data-cat="{{ v.category or '' }}" data-thumb="{{ v.thumbnail_path or '' }}">
+                            #{{ v.telegram_message_id }} - {{ v.title }} ({{ v.duration_seconds // 60 }}m, {{ (v.file_size_bytes / 1048576)|round(1) }} Mo)
+                        </option>
+                        {% endfor %}
+                    </select>
+
+                    <!-- Champs spécifiques aux séries pour la vidéo sélectionnée -->
+                    <div id="series-episode-fields" class="row g-2 mt-2 d-none">
+                        <div class="col-3">
+                            <label class="form-label small text-secondary">Saison</label>
+                            <input type="number" class="form-control form-control-sm" id="media-raw-season" value="1" min="1">
+                        </div>
+                        <div class="col-3">
+                            <label class="form-label small text-secondary">Épisode</label>
+                            <input type="number" class="form-control form-control-sm" id="media-raw-episode" value="1" min="1">
+                        </div>
+                        <div class="col-6">
+                            <label class="form-label small text-secondary">Titre de l'épisode (optionnel)</label>
+                            <input type="text" class="form-control form-control-sm" id="media-raw-ep-title" placeholder="Ex: Pilote">
+                        </div>
+                    </div>
+                </div>
+
+                <!-- Case à cocher Publication immédiate -->
+                <div class="form-check form-switch mb-2">
+                    <input class="form-check-input" type="checkbox" id="media-is-published">
+                    <label class="form-check-label fw-semibold" for="media-is-published">
+                        <i class="bi bi-broadcast me-1 text-success"></i> Publier immédiatement sur l'application mobile
+                    </label>
+                    <div class="small text-secondary">Si décoché, l'élément restera en brouillon et ne sera pas visible sur les téléphones tant qu'il n'est pas publié.</div>
+                </div>
+            </div>
+            <div class="modal-footer border-secondary">
+                <button type="button" class="btn btn-secondary" data-bs-dismiss="modal">Annuler</button>
+                <button type="button" class="btn btn-primary" onclick="submitCreateMedia()">
+                    <i class="bi bi-check-circle me-1"></i>Enregistrer dans le Catalogue
+                </button>
+            </div>
+        </div>
+    </div>
+</div>
+
+<!-- Modal 2: Gestion des Épisodes & Vidéos d'une Œuvre -->
+<div class="modal fade" id="modalManageEpisodes" tabindex="-1">
+    <div class="modal-dialog modal-lg">
+        <div class="modal-content bg-dark text-light border-secondary">
+            <div class="modal-header border-secondary">
+                <h5 class="modal-title d-flex align-items-center gap-2">
+                    <i class="bi bi-collection-play text-info"></i>
+                    <span>Gestion des Vidéos / Épisodes : <span id="mng-media-title" class="text-warning fw-bold"></span></span>
+                </h5>
+                <button type="button" class="btn-close btn-close-white" data-bs-dismiss="modal"></button>
+            </div>
+            <div class="modal-body">
+                <input type="hidden" id="mng-media-id">
+                <input type="hidden" id="mng-media-type">
+
+                <!-- Liste des vidéos rattachées -->
+                <h6 class="fw-bold mb-2 text-light"><i class="bi bi-film me-2"></i>Vidéos Actuellement Associées</h6>
+                <div id="mng-episodes-table-container" class="mb-4">
+                    <div class="text-center text-secondary py-3">Chargement des vidéos...</div>
+                </div>
+
+                <!-- Formulaire d'ajout d'une vidéo brute -->
+                <div class="p-3 bg-black bg-opacity-40 rounded border border-secondary border-opacity-50">
+                    <h6 class="fw-bold mb-2 text-info d-flex align-items-center gap-2">
+                        <i class="bi bi-plus-circle"></i>
+                        <span id="mng-add-label">Associer une nouvelle vidéo</span>
+                    </h6>
+                    <div class="mb-2">
+                        <label class="form-label small text-secondary">Choisir une vidéo brute disponible</label>
+                        <select class="form-select form-select-sm" id="mng-select-video">
+                            <option value="">-- Sélectionner une vidéo --</option>
+                        </select>
+                    </div>
+
+                    <div id="mng-series-inputs" class="row g-2 mb-3 d-none">
+                        <div class="col-3">
+                            <label class="form-label small text-secondary">Saison #</label>
+                            <input type="number" class="form-control form-control-sm" id="mng-season-num" value="1" min="1">
+                        </div>
+                        <div class="col-3">
+                            <label class="form-label small text-secondary">Épisode #</label>
+                            <input type="number" class="form-control form-control-sm" id="mng-episode-num" value="1" min="1">
+                        </div>
+                        <div class="col-6">
+                            <label class="form-label small text-secondary">Titre de l'épisode</label>
+                            <input type="text" class="form-control form-control-sm" id="mng-episode-title" placeholder="Ex: Le commencement">
+                        </div>
+                    </div>
+
+                    <button type="button" class="btn btn-sm btn-info w-100" onclick="submitAttachEpisode()">
+                        <i class="bi bi-link-45deg me-1"></i>Rattacher cette vidéo
+                    </button>
+                </div>
+            </div>
+            <div class="modal-footer border-secondary">
+                <button type="button" class="btn btn-secondary" data-bs-dismiss="modal">Fermer</button>
+            </div>
+        </div>
+    </div>
+</div>
+
+<!-- Modal 3: Modification Métadonnées d'un Film ou Série -->
+<div class="modal fade" id="modalEditMedia" tabindex="-1">
+    <div class="modal-dialog modal-lg">
+        <div class="modal-content bg-dark text-light border-secondary">
+            <div class="modal-header border-secondary">
+                <h5 class="modal-title d-flex align-items-center gap-2">
+                    <i class="bi bi-pencil-square text-info"></i>
+                    <span>Modifier les Informations</span>
+                </h5>
+                <button type="button" class="btn-close btn-close-white" data-bs-dismiss="modal"></button>
+            </div>
+            <div class="modal-body">
+                <input type="hidden" id="edit-media-id">
+
+                <div class="mb-3">
+                    <label class="form-label fw-semibold">Titre</label>
+                    <input type="text" class="form-control" id="edit-media-title" required>
+                </div>
+
+                <div class="row g-3 mb-3">
+                    <div class="col-12 col-md-6">
+                        <label class="form-label fw-semibold">Genre / Catégorie</label>
+                        <input type="text" class="form-control" id="edit-media-category">
+                    </div>
+                    <div class="col-6 col-md-3">
+                        <label class="form-label fw-semibold">Année</label>
+                        <input type="number" class="form-control" id="edit-media-year" min="1900" max="2100">
+                    </div>
+                    <div class="col-6 col-md-3">
+                        <label class="form-label fw-semibold">Note (/10)</label>
+                        <input type="number" step="0.1" class="form-control" id="edit-media-rating" min="0" max="10">
+                    </div>
+                </div>
+
+                <div class="row g-3 mb-3">
+                    <div class="col-12 col-md-6">
+                        <label class="form-label fw-semibold">URL Affiche (Poster)</label>
+                        <input type="url" class="form-control" id="edit-media-poster">
+                    </div>
+                    <div class="col-12 col-md-6">
+                        <label class="form-label fw-semibold">URL Fond (Backdrop)</label>
+                        <input type="url" class="form-control" id="edit-media-backdrop">
+                    </div>
+                </div>
+
+                <div class="mb-3">
+                    <label class="form-label fw-semibold">Synopsis / Résumé</label>
+                    <textarea class="form-control" id="edit-media-description" rows="3"></textarea>
+                </div>
+            </div>
+            <div class="modal-footer border-secondary">
+                <button type="button" class="btn btn-secondary" data-bs-dismiss="modal">Annuler</button>
+                <button type="button" class="btn btn-primary" onclick="submitEditMedia()">
+                    <i class="bi bi-save me-1"></i>Enregistrer
+                </button>
+            </div>
+        </div>
+    </div>
+</div>
+
 <!-- Modal Création Utilisateur -->
 <div class="modal fade" id="modalCreateUser" tabindex="-1">
     <div class="modal-dialog">
@@ -414,13 +923,17 @@
             title: 'Tableau de Bord',
             syncBtn: 'Synchroniser Telegram',
             cacheBtn: 'Vider le Cache',
-            lblVideos: 'Vidéos Indexées',
+            lblMedia: 'Catalogue (Films & Séries)',
+            lblVideos: 'Vidéos Publiées sur Mobile',
             lblViews: 'Total Vues',
             lblUsers: 'Utilisateurs Actifs',
             lblStreams: 'Lectures Simultanées',
+            tabMedia: 'Films & Séries',
+            tabRaw: 'Vidéos Brutes (En attente)',
             tabTelegram: 'Canal Telegram',
             tabUsers: 'Gestion Utilisateurs',
             tabInvites: "Codes d'Invitation",
+            btnNewMedia: 'Nouveau Film ou Série',
             addUserBtn: 'Créer un utilisateur',
             genInviteBtn: 'Générer un code',
             copied: 'Code copié dans le presse-papier !'
@@ -431,13 +944,17 @@
             title: 'لوحة التحكم',
             syncBtn: 'مزامنة تيليجرام',
             cacheBtn: 'إفراغ الذاكرة المؤقتة',
-            lblVideos: 'مقاطع الفيديو المفهرسة',
+            lblMedia: 'دليل الأفلام والمسلسلات',
+            lblVideos: 'مقاطع الفيديو المنشورة',
             lblViews: 'إجمالي المشاهدات',
             lblUsers: 'المستخدمون النشطون',
             lblStreams: 'البث المتزامن',
+            tabMedia: 'الأفلام والمسلسلات',
+            tabRaw: 'الفيديوهات غير المصنفة',
             tabTelegram: 'قناة تيليجرام',
             tabUsers: 'إدارة المستخدمين',
             tabInvites: 'رموز الدعوة',
+            btnNewMedia: 'فيلم أو مسلسل جديد',
             addUserBtn: 'إضافة مستخدم جديد',
             genInviteBtn: 'إنشاء رمز دعوة',
             copied: 'تم نسخ الرمز إلى الحافظة!'
@@ -459,14 +976,22 @@
         document.getElementById('txt-page-title').innerText = t.title;
         document.getElementById('txt-btn-sync').innerText = t.syncBtn;
         document.getElementById('txt-btn-cache').innerText = t.cacheBtn;
+        const lblM = document.getElementById('lbl-media');
+        if (lblM) lblM.innerText = t.lblMedia;
         document.getElementById('lbl-videos').innerText = t.lblVideos;
         document.getElementById('lbl-views').innerText = t.lblViews;
         document.getElementById('lbl-users').innerText = t.lblUsers;
         document.getElementById('lbl-streams').innerText = t.lblStreams;
+        const tabM = document.getElementById('tab-title-media');
+        if (tabM) tabM.innerText = t.tabMedia;
+        const tabR = document.getElementById('tab-title-raw');
+        if (tabR) tabR.innerText = t.tabRaw;
         const tabTel = document.getElementById('tab-title-telegram');
         if (tabTel) tabTel.innerText = t.tabTelegram;
         document.getElementById('tab-title-users').innerText = t.tabUsers;
         document.getElementById('tab-title-invites').innerText = t.tabInvites;
+        const btnNM = document.getElementById('txt-btn-new-media');
+        if (btnNM) btnNM.innerText = t.btnNewMedia;
         document.getElementById('txt-btn-add-user').innerText = t.addUserBtn;
         document.getElementById('txt-btn-new-invite').innerText = t.genInviteBtn;
     }
@@ -842,6 +1367,428 @@
 
     function hideDetectedChannels() {
         document.getElementById('section-detected-channels').classList.add('d-none');
+    }
+
+    // ---------------------------------------------------------
+    // Gestion du Catalogue (Films & Séries)
+    // ---------------------------------------------------------
+
+    function onMediaTypeChange() {
+        const isSeries = document.getElementById('type-series').checked;
+        const seriesFields = document.getElementById('series-episode-fields');
+        const linkLbl = document.getElementById('lbl-link-raw');
+        if (isSeries) {
+            seriesFields.classList.remove('d-none');
+            if (linkLbl) linkLbl.innerText = "Associer immédiatement un 1er épisode";
+        } else {
+            seriesFields.classList.add('d-none');
+            if (linkLbl) linkLbl.innerText = "Associer immédiatement une vidéo Telegram";
+        }
+    }
+
+    function setCategoryTag(cat) {
+        document.getElementById('media-category').value = cat;
+    }
+
+    function openCreateMediaModal() {
+        document.getElementById('media-title').value = '';
+        document.getElementById('media-category').value = '';
+        document.getElementById('media-year').value = '';
+        document.getElementById('media-rating').value = '';
+        document.getElementById('media-poster').value = '';
+        document.getElementById('media-backdrop').value = '';
+        document.getElementById('media-description').value = '';
+        document.getElementById('media-raw-video').value = '';
+        document.getElementById('media-is-published').checked = false;
+        document.getElementById('type-movie').checked = true;
+        onMediaTypeChange();
+        new bootstrap.Modal(document.getElementById('modalCreateMedia')).show();
+    }
+
+    function quickCreateMediaWithVideo(videoId, title, category, thumb) {
+        openCreateMediaModal();
+        document.getElementById('media-title').value = title;
+        if (category && category !== 'Général') {
+            document.getElementById('media-category').value = category;
+        }
+        if (thumb) {
+            document.getElementById('media-poster').value = thumb;
+        }
+        document.getElementById('media-raw-video').value = videoId;
+    }
+
+    async function submitCreateMedia() {
+        const title = document.getElementById('media-title').value.trim();
+        if (!title) {
+            alert("Veuillez saisir un titre pour l'œuvre.");
+            return;
+        }
+
+        const mediaType = document.getElementById('type-series').checked ? 'series' : 'movie';
+        const category = document.getElementById('media-category').value.trim() || null;
+        const yearVal = document.getElementById('media-year').value;
+        const releaseYear = yearVal ? parseInt(yearVal) : null;
+        const rateVal = document.getElementById('media-rating').value;
+        const rating = rateVal ? parseFloat(rateVal) : null;
+        const posterUrl = document.getElementById('media-poster').value.trim() || null;
+        const backdropUrl = document.getElementById('media-backdrop').value.trim() || null;
+        const description = document.getElementById('media-description').value.trim() || null;
+        const isPublished = document.getElementById('media-is-published').checked;
+        const rawVideoIdVal = document.getElementById('media-raw-video').value;
+        const rawVideoId = rawVideoIdVal ? parseInt(rawVideoIdVal) : null;
+
+        const payload = {
+            title: title,
+            media_type: mediaType,
+            category: category,
+            release_year: releaseYear,
+            rating: rating,
+            poster_url: posterUrl,
+            backdrop_url: backdropUrl,
+            description: description,
+            is_published: isPublished,
+            raw_video_id: rawVideoId
+        };
+
+        try {
+            const res = await fetch('/api/admin/media-items', {
+                method: 'POST',
+                headers: getAuthHeaders(),
+                body: JSON.stringify(payload)
+            });
+            const data = await res.json();
+            if (res.ok) {
+                if (rawVideoId && mediaType === 'series') {
+                    const season = parseInt(document.getElementById('media-raw-season').value) || 1;
+                    const episode = parseInt(document.getElementById('media-raw-episode').value) || 1;
+                    const epTitle = document.getElementById('media-raw-ep-title').value.trim() || null;
+                    await fetch(`/api/admin/media-items/${data.id}/episodes`, {
+                        method: 'POST',
+                        headers: getAuthHeaders(),
+                        body: JSON.stringify({
+                            video_id: rawVideoId,
+                            season_number: season,
+                            episode_number: episode,
+                            episode_title: epTitle
+                        })
+                    });
+                }
+
+                showAlert(`Œuvre '${data.title}' créée avec succès !`);
+                setTimeout(() => location.reload(), 1000);
+            } else if (res.status === 401) {
+                showLoginModal();
+            } else {
+                alert(`Erreur : ${data.detail || 'Impossible de créer le média'}`);
+            }
+        } catch (e) {
+            alert('Erreur réseau lors de la création');
+        }
+    }
+
+    async function togglePublishMedia(mediaId) {
+        try {
+            const res = await fetch(`/api/admin/media-items/${mediaId}/toggle-publish`, {
+                method: 'POST',
+                headers: getAuthHeaders()
+            });
+            const data = await res.json();
+            if (res.ok && data.success) {
+                showAlert(data.message, data.is_published ? 'success' : 'secondary');
+                setTimeout(() => location.reload(), 800);
+            } else if (res.status === 401) {
+                showLoginModal();
+            } else {
+                alert(`Erreur : ${data.detail || 'Échec du changement de statut'}`);
+            }
+        } catch (e) {
+            alert('Erreur réseau');
+        }
+    }
+
+    async function openManageEpisodesModal(mediaId) {
+        document.getElementById('mng-media-id').value = mediaId;
+        const container = document.getElementById('mng-episodes-table-container');
+        container.innerHTML = '<div class="text-center text-secondary py-3"><span class="spinner-border spinner-border-sm me-2"></span>Chargement...</div>';
+
+        const modal = new bootstrap.Modal(document.getElementById('modalManageEpisodes'));
+        modal.show();
+
+        try {
+            const res = await fetch(`/api/admin/media-items/${mediaId}`, {
+                method: 'GET',
+                headers: getAuthHeaders()
+            });
+            const media = await res.json();
+            if (!res.ok) {
+                container.innerHTML = '<div class="text-danger">Impossible de charger cet élément.</div>';
+                return;
+            }
+
+            document.getElementById('mng-media-title').innerText = media.title;
+            document.getElementById('mng-media-type').value = media.media_type;
+
+            const isSeries = media.media_type === 'series';
+            const seriesInputs = document.getElementById('mng-series-inputs');
+            if (isSeries) {
+                seriesInputs.classList.remove('d-none');
+                document.getElementById('mng-add-label').innerText = "Associer un nouvel épisode";
+            } else {
+                seriesInputs.classList.add('d-none');
+                document.getElementById('mng-add-label').innerText = "Associer un fichier vidéo principal";
+            }
+
+            if (isSeries && media.videos && media.videos.length > 0) {
+                const maxEp = Math.max(...media.videos.map(v => v.episode_number || 1));
+                document.getElementById('mng-episode-num').value = maxEp + 1;
+            } else {
+                document.getElementById('mng-episode-num').value = 1;
+            }
+
+            if (!media.videos || media.videos.length === 0) {
+                container.innerHTML = '<div class="text-secondary small fst-italic p-2 bg-dark rounded border border-secondary border-opacity-25">Aucune vidéo rattachée pour le moment. Associez-en une ci-dessous.</div>';
+            } else {
+                let html = `
+                    <div class="table-responsive">
+                        <table class="table table-dark table-sm table-hover align-middle mb-0">
+                            <thead>
+                                <tr class="text-secondary small">
+                                    ${isSeries ? '<th>Saison / Épisode</th>' : ''}
+                                    <th>Titre Vidéo</th>
+                                    <th>Durée</th>
+                                    <th>Poids</th>
+                                    <th class="text-end">Détacher</th>
+                                </tr>
+                            </thead>
+                            <tbody>
+                `;
+                media.videos.forEach(v => {
+                    html += `
+                        <tr>
+                            ${isSeries ? `<td><span class="badge bg-secondary">S${String(v.season_number).padStart(2, '0')}E${String(v.episode_number).padStart(2, '0')}</span></td>` : ''}
+                            <td class="fw-semibold text-light text-truncate" style="max-width: 250px;">${v.title}</td>
+                            <td>${Math.floor(v.duration_seconds / 60)}m</td>
+                            <td>${(v.file_size_bytes / 1048576).toFixed(1)} Mo</td>
+                            <td class="text-end">
+                                <button class="btn btn-xs btn-outline-danger py-0 px-2" onclick="detachEpisode(${media.id}, ${v.id})">
+                                    <i class="bi bi-x-circle me-1"></i>Détacher
+                                </button>
+                            </td>
+                        </tr>
+                    `;
+                });
+                html += '</tbody></table></div>';
+                container.innerHTML = html;
+            }
+
+            const rawRes = await fetch('/api/admin/raw-videos?unassigned_only=true', {
+                method: 'GET',
+                headers: getAuthHeaders()
+            });
+            const rawVideos = await rawRes.json();
+            const selectEl = document.getElementById('mng-select-video');
+            selectEl.innerHTML = '<option value="">-- Sélectionner une vidéo brute --</option>';
+            if (Array.isArray(rawVideos)) {
+                rawVideos.forEach(rv => {
+                    const opt = document.createElement('option');
+                    opt.value = rv.id;
+                    opt.innerText = `#${rv.telegram_message_id} - ${rv.title} (${Math.floor(rv.duration_seconds / 60)}m, ${(rv.file_size_bytes / 1048576).toFixed(1)} Mo)`;
+                    selectEl.appendChild(opt);
+                });
+            }
+        } catch (e) {
+            container.innerHTML = '<div class="text-danger">Erreur réseau.</div>';
+        }
+    }
+
+    async function submitAttachEpisode() {
+        const mediaId = document.getElementById('mng-media-id').value;
+        const videoId = document.getElementById('mng-select-video').value;
+        if (!videoId) {
+            alert("Veuillez sélectionner une vidéo à rattacher.");
+            return;
+        }
+
+        const isSeries = document.getElementById('mng-media-type').value === 'series';
+        const season = isSeries ? (parseInt(document.getElementById('mng-season-num').value) || 1) : 1;
+        const episode = isSeries ? (parseInt(document.getElementById('mng-episode-num').value) || 1) : 1;
+        const epTitle = isSeries ? document.getElementById('mng-episode-title').value.trim() : null;
+
+        try {
+            const res = await fetch(`/api/admin/media-items/${mediaId}/episodes`, {
+                method: 'POST',
+                headers: getAuthHeaders(),
+                body: JSON.stringify({
+                    video_id: parseInt(videoId),
+                    season_number: season,
+                    episode_number: episode,
+                    episode_title: epTitle
+                })
+            });
+            const data = await res.json();
+            if (res.ok) {
+                showAlert(data.message || "Vidéo rattachée avec succès !");
+                openManageEpisodesModal(mediaId);
+            } else if (res.status === 401) {
+                showLoginModal();
+            } else {
+                alert(`Erreur : ${data.detail}`);
+            }
+        } catch (e) {
+            alert("Erreur réseau");
+        }
+    }
+
+    async function detachEpisode(mediaId, videoId) {
+        if (!confirm("Voulez-vous détacher cette vidéo ? Elle redeviendra une vidéo brute en attente.")) return;
+        try {
+            const res = await fetch(`/api/admin/media-items/${mediaId}/episodes/${videoId}`, {
+                method: 'DELETE',
+                headers: getAuthHeaders()
+            });
+            const data = await res.json();
+            if (res.ok) {
+                showAlert(data.message || "Vidéo détachée.");
+                openManageEpisodesModal(mediaId);
+            } else if (res.status === 401) {
+                showLoginModal();
+            } else {
+                alert(`Erreur : ${data.detail}`);
+            }
+        } catch (e) {
+            alert("Erreur réseau");
+        }
+    }
+
+    async function openEditMediaModal(mediaId) {
+        try {
+            const res = await fetch(`/api/admin/media-items/${mediaId}`, {
+                method: 'GET',
+                headers: getAuthHeaders()
+            });
+            const data = await res.json();
+            if (!res.ok) {
+                alert("Impossible de charger les données");
+                return;
+            }
+            document.getElementById('edit-media-id').value = data.id;
+            document.getElementById('edit-media-title').value = data.title;
+            document.getElementById('edit-media-category').value = data.category || '';
+            document.getElementById('edit-media-year').value = data.release_year || '';
+            document.getElementById('edit-media-rating').value = data.rating || '';
+            document.getElementById('edit-media-poster').value = data.poster_url || '';
+            document.getElementById('edit-media-backdrop').value = data.backdrop_url || '';
+            document.getElementById('edit-media-description').value = data.description || '';
+
+            new bootstrap.Modal(document.getElementById('modalEditMedia')).show();
+        } catch (e) {
+            alert("Erreur réseau");
+        }
+    }
+
+    async function submitEditMedia() {
+        const mediaId = document.getElementById('edit-media-id').value;
+        const title = document.getElementById('edit-media-title').value.trim();
+        if (!title) {
+            alert("Le titre est obligatoire");
+            return;
+        }
+
+        const category = document.getElementById('edit-media-category').value.trim() || null;
+        const yearVal = document.getElementById('edit-media-year').value;
+        const releaseYear = yearVal ? parseInt(yearVal) : null;
+        const rateVal = document.getElementById('edit-media-rating').value;
+        const rating = rateVal ? parseFloat(rateVal) : null;
+        const posterUrl = document.getElementById('edit-media-poster').value.trim() || null;
+        const backdropUrl = document.getElementById('edit-media-backdrop').value.trim() || null;
+        const description = document.getElementById('edit-media-description').value.trim() || null;
+
+        try {
+            const res = await fetch(`/api/admin/media-items/${mediaId}`, {
+                method: 'PUT',
+                headers: getAuthHeaders(),
+                body: JSON.stringify({
+                    title: title,
+                    category: category,
+                    release_year: releaseYear,
+                    rating: rating,
+                    poster_url: posterUrl,
+                    backdrop_url: backdropUrl,
+                    description: description
+                })
+            });
+            const data = await res.json();
+            if (res.ok) {
+                showAlert(`Modifications enregistrées pour '${data.title}'.`);
+                setTimeout(() => location.reload(), 800);
+            } else if (res.status === 401) {
+                showLoginModal();
+            } else {
+                alert(`Erreur : ${data.detail}`);
+            }
+        } catch (e) {
+            alert("Erreur réseau");
+        }
+    }
+
+    async function deleteMediaItem(mediaId, title) {
+        if (!confirm(`Supprimer '${title}' du catalogue ?\n\nLes vidéos associées ne seront pas effacées : elles retourneront dans la liste des Vidéos Brutes.`)) return;
+
+        try {
+            const res = await fetch(`/api/admin/media-items/${mediaId}`, {
+                method: 'DELETE',
+                headers: getAuthHeaders()
+            });
+            const data = await res.json();
+            if (res.ok) {
+                showAlert(data.message || "Élément supprimé.");
+                setTimeout(() => location.reload(), 800);
+            } else if (res.status === 401) {
+                showLoginModal();
+            } else {
+                alert(`Erreur : ${data.detail}`);
+            }
+        } catch (e) {
+            alert("Erreur réseau");
+        }
+    }
+
+    let activeFilter = 'all';
+
+    function applyMediaFilter(type, btnEl) {
+        activeFilter = type;
+        document.querySelectorAll('.filter-btn').forEach(b => b.classList.remove('active'));
+        if (btnEl) btnEl.classList.add('active');
+        filterMediaCards();
+    }
+
+    function filterMediaCards() {
+        const query = (document.getElementById('search-media-input')?.value || '').toLowerCase().trim();
+        const cards = document.querySelectorAll('.media-card-item');
+
+        cards.forEach(card => {
+            const type = card.getAttribute('data-type');
+            const isPub = card.getAttribute('data-published') === '1';
+            const title = card.getAttribute('data-title') || '';
+            const cat = card.getAttribute('data-category') || '';
+
+            let matchesFilter = true;
+            if (activeFilter === 'movie') matchesFilter = (type === 'movie');
+            else if (activeFilter === 'series') matchesFilter = (type === 'series');
+            else if (activeFilter === 'published') matchesFilter = isPub;
+            else if (activeFilter === 'draft') matchesFilter = !isPub;
+
+            let matchesQuery = true;
+            if (query) {
+                matchesQuery = title.includes(query) || cat.includes(query);
+            }
+
+            if (matchesFilter && matchesQuery) {
+                card.style.display = '';
+            } else {
+                card.style.display = 'none';
+            }
+        });
     }
 </script>
 {% endblock %}

@@ -107,6 +107,11 @@ class VideoResponse(BaseModel):
     file_name: Optional[str] = None
     views_count: int
     telegram_date: datetime
+    is_published: bool = False
+    media_item_id: Optional[int] = None
+    season_number: int = 1
+    episode_number: int = 1
+    episode_title: Optional[str] = None
     # Champs contextuels utilisateur (calculés dynamiquement)
     is_favorite: bool = False
     watch_progress_seconds: float = 0.0
@@ -126,6 +131,96 @@ class VideoListResponse(BaseModel):
 class CategoryItem(BaseModel):
     name: str
     count: int
+
+
+# -------------------------------------------------------------
+# Schémas Films, Séries & Organisation des Vidéos
+# -------------------------------------------------------------
+
+class MediaItemCreate(BaseModel):
+    title: str = Field(..., min_length=1, max_length=255, description="Titre du film ou de la série")
+    media_type: str = Field(default="movie", pattern="^(movie|series)$", description="'movie' ou 'series'")
+    description: Optional[str] = Field(default=None, description="Synopsis ou résumé")
+    category: Optional[str] = Field(default=None, description="Genre principal (ex: Action, Drame)")
+    poster_url: Optional[str] = Field(default=None, description="URL de l'affiche")
+    backdrop_url: Optional[str] = Field(default=None, description="URL de l'image d'arrière-plan")
+    release_year: Optional[int] = Field(default=None, ge=1900, le=2100, description="Année de sortie")
+    rating: Optional[float] = Field(default=None, ge=0.0, le=10.0, description="Note (ex: 8.5)")
+    is_published: bool = Field(default=False, description="Actif et visible sur l'application mobile")
+    raw_video_id: Optional[int] = Field(default=None, description="ID d'une vidéo brute à lier immédiatement")
+
+
+class MediaItemUpdate(BaseModel):
+    title: Optional[str] = Field(default=None, min_length=1, max_length=255)
+    media_type: Optional[str] = Field(default=None, pattern="^(movie|series)$")
+    description: Optional[str] = None
+    category: Optional[str] = None
+    poster_url: Optional[str] = None
+    backdrop_url: Optional[str] = None
+    release_year: Optional[int] = Field(default=None, ge=1900, le=2100)
+    rating: Optional[float] = Field(default=None, ge=0.0, le=10.0)
+    is_published: Optional[bool] = None
+
+
+class EpisodeAssignRequest(BaseModel):
+    video_id: int = Field(..., description="ID de la vidéo brute à rattacher")
+    season_number: int = Field(default=1, ge=1, description="Numéro de saison")
+    episode_number: int = Field(default=1, ge=1, description="Numéro d'épisode")
+    episode_title: Optional[str] = Field(default=None, description="Titre spécifique de l'épisode")
+
+
+class MediaItemVideoResponse(BaseModel):
+    id: int
+    telegram_message_id: int
+    title: str
+    file_name: Optional[str] = None
+    duration_seconds: int
+    file_size_bytes: int
+    season_number: int = 1
+    episode_number: int = 1
+    episode_title: Optional[str] = None
+    thumbnail_path: Optional[str] = None
+    is_published: bool
+
+    model_config = ConfigDict(from_attributes=True)
+
+
+class MediaItemResponse(BaseModel):
+    id: int
+    title: str
+    media_type: str
+    description: Optional[str] = None
+    category: Optional[str] = None
+    poster_url: Optional[str] = None
+    backdrop_url: Optional[str] = None
+    release_year: Optional[int] = None
+    rating: Optional[float] = None
+    is_published: bool
+    video_count: int = 0
+    created_at: datetime
+    updated_at: datetime
+
+    model_config = ConfigDict(from_attributes=True)
+
+
+class MediaItemDetailResponse(MediaItemResponse):
+    videos: list[MediaItemVideoResponse] = []
+
+
+class RawVideoItemResponse(BaseModel):
+    id: int
+    telegram_message_id: int
+    title: str
+    file_name: Optional[str] = None
+    duration_seconds: int
+    file_size_bytes: int
+    mime_type: str
+    thumbnail_path: Optional[str] = None
+    telegram_date: datetime
+    is_published: bool
+    media_item_id: Optional[int] = None
+
+    model_config = ConfigDict(from_attributes=True)
 
 
 class SyncStatusResponse(BaseModel):

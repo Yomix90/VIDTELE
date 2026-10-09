@@ -30,10 +30,14 @@ async def run_tests():
                 duration_seconds=300,
                 file_size_bytes=10_000_000,
                 telegram_date=datetime.now(timezone.utc).replace(tzinfo=None),
+                is_published=True,
             )
             db.add(v)
             await db.commit()
             await db.refresh(v)
+        else:
+            v.is_published = True
+            await db.commit()
         test_video_id = v.id
 
     transport = httpx.ASGITransport(app=app)
