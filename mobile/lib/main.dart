@@ -1,3 +1,4 @@
+import 'package:flutter/foundation.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
 import 'package:flutter_localizations/flutter_localizations.dart';
@@ -18,22 +19,26 @@ import 'screens/splash/splash_screen.dart';
 void main() async {
   WidgetsFlutterBinding.ensureInitialized();
 
-  // Initialisations AdMob en arrière-plan sans bloquer l'affichage immédiat de l'UI
-  MobileAds.instance.initialize().then((_) {
-    if (AdsConfig.testDeviceIds.isNotEmpty) {
-      MobileAds.instance.updateRequestConfiguration(
-        RequestConfiguration(testDeviceIds: AdsConfig.testDeviceIds),
-      );
-    }
-    ConsentManager.instance.requestConsent().catchError((e) {
-      debugPrint('[Main] Erreur consentement: $e');
-      return true;
+  // Initialisations AdMob réservées aux plateformes mobiles (Android/iOS)
+  if (!kIsWeb) {
+    MobileAds.instance.initialize().then((_) {
+      if (AdsConfig.testDeviceIds.isNotEmpty) {
+        MobileAds.instance.updateRequestConfiguration(
+          RequestConfiguration(testDeviceIds: AdsConfig.testDeviceIds),
+        );
+      }
+      ConsentManager.instance.requestConsent().catchError((e) {
+        debugPrint('[Main] Erreur consentement: $e');
+        return true;
+      });
+      WatchGateController.instance.initialize().catchError((_) {});
+      RewardedAdService.instance.preloadAd();
+    }).catchError((e) {
+      debugPrint('[Main] Initialisation AdMob ignorée: $e');
     });
+  } else {
     WatchGateController.instance.initialize().catchError((_) {});
-    RewardedAdService.instance.preloadAd();
-  }).catchError((e) {
-    debugPrint('[Main] Initialisation AdMob ignorée: $e');
-  });
+  }
 
   // Barre d'état transparente pour un rendu plein écran cinéma
   SystemChrome.setSystemUIOverlayStyle(

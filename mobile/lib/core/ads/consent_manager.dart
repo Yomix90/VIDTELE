@@ -14,6 +14,7 @@ class ConsentManager {
   /// Initialise la demande de mise à jour des informations de consentement et
   /// présente le formulaire si requis par la réglementation locale.
   Future<bool> requestConsent() async {
+    if (kIsWeb) return true;
     final completer = Completer<bool>();
 
     final params = ConsentRequestParameters(
@@ -53,6 +54,7 @@ class ConsentManager {
 
   /// Vérifie si l'application peut requêter des annonces
   Future<bool> canRequestAds() async {
+    if (kIsWeb) return true;
     try {
       return await ConsentInformation.instance.canRequestAds();
     } catch (_) {
