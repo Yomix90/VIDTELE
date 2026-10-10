@@ -40,26 +40,83 @@ class GeminiService:
 
         return {"api_key": api_key, "model": model or self.DEFAULT_MODEL}
 
+    async def list_available_models(self, api_key: str) -> List[str]:
+        """Interroge Google pour récupérer la liste exacte des modèles disponibles pour cette clé."""
+        url = f"https://generativelanguage.googleapis.com/v1beta/models?key={api_key}"
+        try:
+            async with httpx.AsyncClient(timeout=10.0) as client:
+                res = await client.get(url)
+                if res.status_code == 200:
+                    data = res.json()
+                    models = []
+                    for m in data.get("models", []):
+                        # On ne garde que les modèles supportant generateContent
+                        methods = m.get("supportedGenerationMethods", [])
+                        if "generateContent" in methods:
+                            name = m.get("name", "").replace("models/", "")
+                            if name:
+                                models.append(name)
+                    return models
+        except Exception as e:
+            logger.warning(f"Impossible de lister les modèles Gemini : {e}")
+        return []
+
     async def test_key(self, api_key: str, model: Optional[str] = None) -> Dict[str, Any]:
-        """Teste la validité d'une clé API Gemini."""
-        target_model = model or self.DEFAULT_MODEL
-        if target_model in ("gemini-2.0-flash-exp", "gemini-exp", ""):
-            target_model = self.DEFAULT_MODEL
+        """Teste la validité d'une clé API Gemini avec détection et fallback automatique intelligent."""
+        raw_model = (model or "").strip()
+        target_model = raw_model or self.DEFAULT_MODEL
+
+        # Nettoyage des préfixes éventuels
+        if target_model.startswith("models/"):
+            target_model = target_model.replace("models/", "")
 
         url = f"https://generativelanguage.googleapis.com/v1beta/models/{target_model}:generateContent?key={api_key}"
         payload = {
-            "contents": [{"parts": [{"text": "Hello, reponds simplement 'OK'"}]}]
+            "contents": [{"parts": [{"text": "Hello, réponds uniquement 'OK'"}]}]
         }
 
-        async with httpx.AsyncClient(timeout=10.0) as client:
+        async with httpx.AsyncClient(timeout=12.0) as client:
             try:
                 res = await client.post(url, json=payload)
                 if res.status_code == 200:
-                    return {"success": True, "message": f"Clé API Gemini validée avec succès avec le modèle {target_model} !"}
-                else:
-                    data = res.json()
-                    err = data.get("error", {}).get("message", res.text)
-                    return {"success": False, "error": f"Erreur Gemini ({res.status_code}): {err}"}
+                    return {
+                        "success": True,
+                        "model_used": target_model,
+                        "message": f"Clé API Gemini validée avec succès avec le modèle '{target_model}' !",
+                    }
+
+                # Si le modèle demandé n'existe pas (404), on interroge Google pour trouver les modèles actifs
+                if res.status_code == 404:
+                    available = await self.list_available_models(api_key)
+                    # Trouver le meilleur modèle disponible (1.5-flash, 2.0-flash, etc.)
+                    best_model = None
+                    for candidate in ["gemini-1.5-flash", "gemini-1.5-flash-8b", "gemini-2.0-flash", "gemini-1.5-pro"]:
+                        if candidate in available:
+                            best_model = candidate
+                            break
+                    if not best_model and available:
+                        best_model = available[0]
+
+                    if best_model:
+                        fallback_url = f"https://generativelanguage.googleapis.com/v1beta/models/{best_model}:generateContent?key={api_key}"
+                        fallback_res = await client.post(fallback_url, json=payload)
+                        if fallback_res.status_code == 200:
+                            return {
+                                "success": True,
+                                "model_used": best_model,
+                                "auto_switched": True,
+                                "message": f"Le modèle '{target_model}' n'existe pas chez Google. Votre clé a été validée avec succès avec le modèle officiel actif '{best_model}' !",
+                            }
+
+                    models_preview = ", ".join(available[:5]) if available else "aucun modèle trouvé"
+                    return {
+                        "success": False,
+                        "error": f"Modèle '{target_model}' introuvable chez Google. Modèles supportés sur votre compte : {models_preview}",
+                    }
+
+                data = res.json()
+                err = data.get("error", {}).get("message", res.text)
+                return {"success": False, "error": f"Erreur Google Gemini ({res.status_code}): {err}"}
             except Exception as e:
                 return {"success": False, "error": f"Erreur de connexion aux serveurs Google : {str(e)}"}
 
