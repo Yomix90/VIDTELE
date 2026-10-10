@@ -13,25 +13,44 @@
 <div class="row g-4">
   <div class="col-12 col-lg-6">
     <div class="card-dark p-4 border border-secondary border-opacity-25 h-100">
-      <h2 class="h6 fw-bold text-white mb-3"><i class="bi bi-hdd-rack me-2 text-info"></i>Stockage & Streaming</h2>
-      <div class="mb-3">
-        <label class="form-label small text-muted">Taille max du cache disque</label>
-        <div class="input-group">
-          <input type="text" class="form-control" value="20 Go" readonly>
-        </div>
+      <div class="d-flex align-items-center justify-content-between mb-3">
+        <h2 class="h6 fw-bold text-white mb-0"><i class="bi bi-hdd-rack me-2 text-info"></i>Stockage & Streaming</h2>
+        <span class="badge bg-info bg-opacity-20 text-info border border-info border-opacity-25">Lecteur Range 206</span>
       </div>
-      <div class="mb-3">
-        <label class="form-label small text-muted">Durée de validité des jetons de streaming</label>
-        <div class="input-group">
-          <input type="text" class="form-control" value="7200 secondes (2 heures)" readonly>
+      
+      <form id="streamSettingsForm" onsubmit="saveStreamingSettings(event)">
+        <div class="row g-3">
+          <div class="col-12 col-sm-6">
+            <label class="form-label small text-muted">Limite globale du serveur</label>
+            <div class="input-group">
+              <input type="number" id="streamMaxGlobal" class="form-control" value="{{ streaming.max_concurrent_global if streaming else 30 }}" min="1" max="1000" required>
+              <span class="input-group-text bg-dark border-secondary text-muted small">flux max</span>
+            </div>
+            <div class="text-muted" style="font-size: 0.72rem;">Nombre total max de vidéos lues simultanément.</div>
+          </div>
+          <div class="col-12 col-sm-6">
+            <label class="form-label small text-muted">Limite par utilisateur</label>
+            <div class="input-group">
+              <input type="number" id="streamMaxPerUser" class="form-control" value="{{ streaming.max_concurrent_per_user if streaming else 4 }}" min="1" max="20" required>
+              <span class="input-group-text bg-dark border-secondary text-muted small">écrans</span>
+            </div>
+            <div class="text-muted" style="font-size: 0.72rem;">Écrans simultanés par compte client.</div>
+          </div>
+          <div class="col-12 col-sm-6">
+            <label class="form-label small text-muted">Taille max du cache disque</label>
+            <input type="text" class="form-control" value="{{ streaming.max_cache_gb if streaming else 20 }} Go" readonly>
+          </div>
+          <div class="col-12 col-sm-6">
+            <label class="form-label small text-muted">Validité des jetons</label>
+            <input type="text" class="form-control" value="{{ streaming.token_expire_seconds if streaming else 7200 }} sec (2h)" readonly>
+          </div>
+          <div class="col-12 text-end pt-1">
+            <button type="submit" class="btn btn-outline-info btn-sm">
+              <i class="bi bi-save me-1"></i>Enregistrer les limites
+            </button>
+          </div>
         </div>
-      </div>
-      <div class="mb-3">
-        <label class="form-label small text-muted">Flux simultanés par défaut / utilisateur</label>
-        <div class="input-group">
-          <input type="text" class="form-control" value="2 flux" readonly>
-        </div>
-      </div>
+      </form>
     </div>
   </div>
 
@@ -52,6 +71,159 @@
       </div>
     </div>
   </div>
+
+  <!-- Section Benchmark & Stress Test VPS -->
+  <div class="col-12">
+    <div class="card-dark p-4 border border-secondary border-opacity-25">
+      <div class="d-flex flex-wrap align-items-center justify-content-between gap-2 mb-3">
+        <div class="d-flex align-items-center gap-2">
+          <i class="bi bi-speedometer2 text-danger fs-4"></i>
+          <div>
+            <h2 class="h6 fw-bold text-white mb-0">Test de Charge & Capacité VPS (Stress Test Simultané)</h2>
+            <div class="text-muted small">Mesurez en direct combien d'utilisateurs simultanés votre serveur VPS peut supporter sans coupure.</div>
+          </div>
+        </div>
+        <span class="badge bg-danger bg-opacity-20 text-danger border border-danger border-opacity-25 px-2 py-1">
+          <i class="bi bi-lightning-fill me-1"></i>Test Haute Concurrence
+        </span>
+      </div>
+
+      <div class="row g-3 align-items-end mb-4">
+        <div class="col-12 col-sm-4 col-md-3">
+          <label class="form-label small fw-semibold">Spectateurs Simultanés</label>
+          <select id="benchConcurrency" class="form-select bg-dark border-secondary text-white">
+            <option value="10">10 utilisateurs</option>
+            <option value="25" selected>25 utilisateurs</option>
+            <option value="50">50 utilisateurs</option>
+            <option value="100">100 utilisateurs</option>
+            <option value="150">150 utilisateurs</option>
+            <option value="200">200 utilisateurs</option>
+          </select>
+          <div class="text-muted" style="font-size: 0.72rem;">Clients virtuels parallèles.</div>
+        </div>
+
+        <div class="col-12 col-sm-4 col-md-3">
+          <label class="form-label small fw-semibold">Durée du Test</label>
+          <select id="benchDuration" class="form-select bg-dark border-secondary text-white">
+            <option value="3">3 secondes (Rapide)</option>
+            <option value="5" selected>5 secondes (Recommandé)</option>
+            <option value="10">10 secondes (Approfondi)</option>
+          </select>
+          <div class="text-muted" style="font-size: 0.72rem;">Temps de mesure du débit.</div>
+        </div>
+
+        <div class="col-12 col-sm-4 col-md-3">
+          <label class="form-label small fw-semibold">Mode de Flux</label>
+          <select id="benchMode" class="form-select bg-dark border-secondary text-white">
+            <option value="burst" selected>Débit Maximal (Burst Stress)</option>
+            <option value="playback">Lecture Réelle ExoPlayer (2.5 Mbps)</option>
+          </select>
+          <div class="text-muted" style="font-size: 0.72rem;">Stress E/S ou cadence vidéo.</div>
+        </div>
+
+        <div class="col-12 col-md-3">
+          <button type="button" id="benchStartBtn" class="btn btn-danger w-100 fw-semibold" onclick="runVpsBenchmark()">
+            <i class="bi bi-play-circle-fill me-1"></i>Lancer le Benchmark
+          </button>
+        </div>
+      </div>
+
+      <!-- Animation / Progression du Test -->
+      <div id="benchProgressContainer" class="d-none my-3 p-3 bg-black bg-opacity-40 rounded border border-secondary border-opacity-25">
+        <div class="d-flex justify-content-between align-items-center mb-2">
+          <span class="small text-info fw-bold" id="benchProgressStatus">
+            <span class="spinner-border spinner-border-sm me-2" role="status"></span>
+            Test de charge en cours d'exécution sur le VPS...
+          </span>
+          <span class="small text-muted" id="benchProgressTimer">Simulation des flux actifs</span>
+        </div>
+        <div class="progress" style="height: 6px;">
+          <div id="benchProgressBar" class="progress-bar progress-bar-striped progress-bar-animated bg-danger" style="width: 100%"></div>
+        </div>
+      </div>
+
+      <!-- Résultats du Benchmark -->
+      <div id="benchResultsContainer" class="d-none mt-3">
+        <hr class="border-secondary border-opacity-25 my-3">
+        <div class="row g-3">
+          <div class="col-6 col-md-3">
+            <div class="p-3 bg-dark bg-opacity-50 rounded border border-secondary border-opacity-25 text-center">
+              <div class="text-muted small">Débit Réseau VPS</div>
+              <div class="fs-4 fw-bold text-info" id="resThroughputMbps">-</div>
+              <div class="text-muted" style="font-size: 0.72rem;" id="resThroughputMbS">- Mo/s</div>
+            </div>
+          </div>
+          <div class="col-6 col-md-3">
+            <div class="p-3 bg-dark bg-opacity-50 rounded border border-secondary border-opacity-25 text-center">
+              <div class="text-muted small">Latence Moyenne (TTFB)</div>
+              <div class="fs-4 fw-bold text-success" id="resAvgLatency">-</div>
+              <div class="text-muted" style="font-size: 0.72rem;" id="resP95Latency">P95: - ms</div>
+            </div>
+          </div>
+          <div class="col-6 col-md-3">
+            <div class="p-3 bg-dark bg-opacity-50 rounded border border-secondary border-opacity-25 text-center">
+              <div class="text-muted small">Flux Réussis</div>
+              <div class="fs-4 fw-bold text-white" id="resSuccessStreams">-</div>
+              <div class="text-muted" style="font-size: 0.72rem;" id="resTotalChunks">- blocs streamés</div>
+            </div>
+          </div>
+          <div class="col-6 col-md-3">
+            <div class="p-3 bg-dark bg-opacity-50 rounded border border-secondary border-opacity-25 text-center">
+              <div class="text-muted small">Capacité Recommandée</div>
+              <div class="fs-4 fw-bold text-warning" id="resRecommendedLimit">-</div>
+              <div class="text-muted" style="font-size: 0.72rem;">flux simultanés max</div>
+            </div>
+          </div>
+        </div>
+
+        <!-- Matrice de capacité par qualité vidéo -->
+        <div class="mt-4 p-3 bg-black bg-opacity-30 rounded border border-secondary border-opacity-25">
+          <h3 class="h6 fw-bold text-white mb-2"><i class="bi bi-display me-2 text-warning"></i>Capacité Estimée de Spectateurs Simultanés selon la Résolution :</h3>
+          <div class="row g-2 text-center pt-2">
+            <div class="col-12 col-md-4">
+              <div class="p-2 border border-success border-opacity-25 rounded bg-success bg-opacity-10">
+                <div class="text-success fw-bold small">Qualité SD (480p @ 0.8 Mbps)</div>
+                <div class="fs-5 fw-bold text-white mt-1" id="resCapSd">- utilisateurs</div>
+                <div class="text-muted" style="font-size: 0.7rem;">Idéal connexion mobile 3G/4G</div>
+              </div>
+            </div>
+            <div class="col-12 col-md-4">
+              <div class="p-2 border border-info border-opacity-25 rounded bg-info bg-opacity-10">
+                <div class="text-info fw-bold small">Qualité HD (720p @ 2.0 Mbps)</div>
+                <div class="fs-5 fw-bold text-white mt-1" id="resCapHd">- utilisateurs</div>
+                <div class="text-muted" style="font-size: 0.7rem;">Standard recommandé Atlas Play</div>
+              </div>
+            </div>
+            <div class="col-12 col-md-4">
+              <div class="p-2 border border-primary border-opacity-25 rounded bg-primary bg-opacity-10">
+                <div class="text-primary fw-bold small">Qualité FHD (1080p @ 3.5 Mbps)</div>
+                <div class="fs-5 fw-bold text-white mt-1" id="resCapFhd">- utilisateurs</div>
+                <div class="text-muted" style="font-size: 0.7rem;">Haute fidélité grand écran</div>
+              </div>
+            </div>
+          </div>
+
+          <!-- Diagnostic & Recommandation Dynamique -->
+          <div class="mt-3 p-3 bg-dark rounded border border-secondary border-opacity-25">
+            <div class="d-flex flex-wrap align-items-center justify-content-between gap-2">
+              <div>
+                <div class="fw-bold text-white small" id="resDiagTitle"><i class="bi bi-check-circle-fill text-success me-2"></i>Diagnostic VPS</div>
+                <div class="text-muted small mt-1" id="resDiagBody">-</div>
+              </div>
+              <button type="button" id="resApplyLimitBtn" class="btn btn-outline-warning btn-sm d-none" onclick="applyRecommendedLimitFromBench()">
+                <i class="bi bi-sliders me-1"></i>Ajuster la limite serveur à cette valeur
+              </button>
+            </div>
+          </div>
+        </div>
+
+        <div class="text-muted small mt-2 text-end" style="font-size: 0.72rem;">
+          <i class="bi bi-terminal me-1"></i>Pour un test complet multi-paliers depuis SSH : <code>python benchmark_streaming.py --ramp</code>
+        </div>
+      </div>
+    </div>
+  </div>
+
 
   <!-- Configuration des Mises à jour Mobile Atlas Play -->
   <div class="col-12">
