@@ -53,10 +53,14 @@
           {{ s.synopsis_fr or 'Aucun synopsis disponible.' }}
         </p>
 
-        <div class="mt-auto">
-          <a href="/admin/series/{{ s.id }}" class="btn btn-sm btn-outline-danger w-100">
-            <i class="bi bi-gear me-1"></i>Gérer les saisons & épisodes
+        <div class="mt-auto d-flex gap-2">
+          <a href="/admin/series/{{ s.id }}" class="btn btn-sm btn-outline-danger flex-grow-1 d-flex align-items-center justify-content-center gap-1">
+            <i class="bi bi-gear"></i>
+            <span>Gérer</span>
           </a>
+          <button type="button" class="btn btn-sm btn-outline-warning d-flex align-items-center justify-content-center px-2" title="Modifier la Série" onclick="openEditSeriesModalFromList({{ s.id }})">
+            <i class="bi bi-pencil-square"></i>
+          </button>
         </div>
       </div>
     </div>
@@ -178,6 +182,111 @@
     </div>
   </div>
 </div>
+
+<!-- Modale : Modifier une Série existante (Multilingue + Gemini AI + Upload VPS) -->
+<div class="modal fade" id="modalEditSeries" tabindex="-1">
+  <div class="modal-dialog modal-lg">
+    <div class="modal-content bg-dark text-white border-secondary">
+      <div class="modal-header border-secondary">
+        <h5 class="modal-title d-flex align-items-center gap-2">
+          <i class="bi bi-pencil-square text-warning"></i>
+          <span>Modifier la Série</span>
+        </h5>
+        <button type="button" class="btn-close btn-close-white" data-bs-dismiss="modal"></button>
+      </div>
+      <div class="modal-body">
+        <form id="formEditSeries" onsubmit="submitUpdateSeries(event)">
+          <input type="hidden" id="editSeriesId">
+
+          <!-- Bouton Traduction & Enrichissement IA Gemini -->
+          <div class="d-flex justify-content-between align-items-center mb-3 p-2 rounded bg-black bg-opacity-40 border border-secondary border-opacity-50">
+            <span class="small text-muted">Traduire automatiquement les titres et le synopsis :</span>
+            <button type="button" class="btn btn-outline-info btn-sm d-flex align-items-center gap-1" onclick="autoTranslateEditSeriesWithGemini()">
+              <i class="bi bi-stars"></i>
+              <span>Traduire avec Gemini AI</span>
+            </button>
+          </div>
+
+          <div class="row g-2 mb-3">
+            <div class="col-12 col-md-4">
+              <label class="form-label small">Titre (Français) *</label>
+              <input type="text" id="editSeriesTitleFr" class="form-control" required>
+            </div>
+            <div class="col-12 col-md-4">
+              <label class="form-label small">Titre (Arabe)</label>
+              <input type="text" id="editSeriesTitleAr" class="form-control" dir="rtl">
+            </div>
+            <div class="col-12 col-md-4">
+              <label class="form-label small">Titre (Anglais)</label>
+              <input type="text" id="editSeriesTitleEn" class="form-control">
+            </div>
+          </div>
+
+          <div class="row g-2 mb-3">
+            <div class="col-6 col-md-4">
+              <label class="form-label small">Année de début</label>
+              <input type="number" id="editSeriesYear" class="form-control" min="1950" max="2035">
+            </div>
+            <div class="col-6 col-md-4">
+              <label class="form-label small">Note (0 à 10)</label>
+              <input type="number" id="editSeriesRating" class="form-control" step="0.1" min="0" max="10">
+            </div>
+            <div class="col-12 col-md-4">
+              <label class="form-label small">Statut</label>
+              <select id="editSeriesStatus" class="form-select">
+                <option value="ongoing">En cours</option>
+                <option value="completed">Terminé</option>
+                <option value="upcoming">À venir</option>
+              </select>
+            </div>
+          </div>
+
+          <!-- Upload Affiche VPS -->
+          <div class="mb-3">
+            <label class="form-label small">Affiche (Poster 2:3)</label>
+            <div class="input-group mb-2">
+              <input type="text" id="editSeriesPoster" class="form-control" placeholder="https://... ou téléverser sur VPS">
+              <label class="btn btn-outline-secondary" for="uploadEditSeriesPosterFile">
+                <i class="bi bi-cloud-arrow-up me-1"></i>Téléverser Image
+              </label>
+              <input type="file" id="uploadEditSeriesPosterFile" class="d-none" accept="image/*" onchange="uploadImageToServer('uploadEditSeriesPosterFile', 'editSeriesPoster')">
+            </div>
+          </div>
+
+          <!-- Upload Bannière VPS -->
+          <div class="mb-3">
+            <label class="form-label small">Bannière (Backdrop 16:9)</label>
+            <div class="input-group mb-2">
+              <input type="text" id="editSeriesBanner" class="form-control" placeholder="https://... ou téléverser sur VPS">
+              <label class="btn btn-outline-secondary" for="uploadEditSeriesBannerFile">
+                <i class="bi bi-cloud-arrow-up me-1"></i>Téléverser Image
+              </label>
+              <input type="file" id="uploadEditSeriesBannerFile" class="d-none" accept="image/*" onchange="uploadImageToServer('uploadEditSeriesBannerFile', 'editSeriesBanner')">
+            </div>
+          </div>
+
+          <div class="mb-3">
+            <label class="form-label small">Synopsis (Français)</label>
+            <textarea id="editSeriesSynopsisFr" class="form-control" rows="2"></textarea>
+          </div>
+          <div class="mb-3">
+            <label class="form-label small">Synopsis (Arabe)</label>
+            <textarea id="editSeriesSynopsisAr" class="form-control" rows="2" dir="rtl"></textarea>
+          </div>
+          <div class="mb-3">
+            <label class="form-label small">Synopsis (Anglais)</label>
+            <textarea id="editSeriesSynopsisEn" class="form-control" rows="2"></textarea>
+          </div>
+
+          <div class="d-flex justify-content-end gap-2">
+            <button type="button" class="btn btn-secondary" data-bs-dismiss="modal">Annuler</button>
+            <button type="submit" class="btn btn-warning px-4">Enregistrer les modifications</button>
+          </div>
+        </form>
+      </div>
+    </div>
+  </div>
+</div>
 {% endblock %}
 
 {% block extra_scripts %}
@@ -291,6 +400,108 @@ async function submitCreateSeries(e) {
       showToast(err.detail || 'Erreur lors de la création', 'error');
     }
   } catch (e) {
+    showToast('Erreur serveur', 'error');
+  }
+}
+
+async function openEditSeriesModalFromList(id) {
+  showToast('Chargement des informations de la série...', 'info');
+  try {
+    const res = await fetch(`/api/admin/series/${id}`);
+    if (!res.ok) {
+      showToast('Impossible de charger les données de la série', 'error');
+      return;
+    }
+    const data = await res.json();
+    document.getElementById('editSeriesId').value = data.id;
+    document.getElementById('editSeriesTitleFr').value = data.title_fr || '';
+    document.getElementById('editSeriesTitleAr').value = data.title_ar || '';
+    document.getElementById('editSeriesTitleEn').value = data.title_en || '';
+    document.getElementById('editSeriesYear').value = data.year_start || '';
+    document.getElementById('editSeriesRating').value = data.rating !== null && data.rating !== undefined ? data.rating : '';
+    document.getElementById('editSeriesStatus').value = data.status || 'ongoing';
+    document.getElementById('editSeriesPoster').value = data.poster_path || '';
+    document.getElementById('editSeriesBanner').value = data.banner_path || '';
+    document.getElementById('editSeriesSynopsisFr').value = data.synopsis_fr || '';
+    document.getElementById('editSeriesSynopsisAr').value = data.synopsis_ar || '';
+    document.getElementById('editSeriesSynopsisEn').value = data.synopsis_en || '';
+
+    const modal = bootstrap.Modal.getOrCreateInstance(document.getElementById('modalEditSeries'));
+    modal.show();
+  } catch (err) {
+    showToast('Erreur de connexion', 'error');
+  }
+}
+
+async function autoTranslateEditSeriesWithGemini() {
+  const title = document.getElementById('editSeriesTitleFr').value.trim();
+  const synopsis = document.getElementById('editSeriesSynopsisFr').value.trim();
+  if (!title) {
+    showToast('Veuillez renseigner au moins un titre français.', 'warning');
+    return;
+  }
+
+  showToast('Traduction et enrichissement avec Gemini AI...', 'info');
+  try {
+    const res = await fetch('/api/admin/ai/translate', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ title: title, synopsis: synopsis, content_type: 'series' })
+    });
+    const data = await res.json();
+    if (res.ok) {
+      if (data.title_ar) document.getElementById('editSeriesTitleAr').value = data.title_ar;
+      if (data.title_en) document.getElementById('editSeriesTitleEn').value = data.title_en;
+      if (data.synopsis_fr && !synopsis) document.getElementById('editSeriesSynopsisFr').value = data.synopsis_fr;
+      if (data.synopsis_ar) document.getElementById('editSeriesSynopsisAr').value = data.synopsis_ar;
+      if (data.synopsis_en) document.getElementById('editSeriesSynopsisEn').value = data.synopsis_en;
+      if (data.year && !document.getElementById('editSeriesYear').value) {
+        document.getElementById('editSeriesYear').value = data.year;
+      }
+      if (data.warning) {
+        showToast(data.warning, 'warning');
+      } else {
+        showToast('Métadonnées multilingues générées par Gemini AI !', 'success');
+      }
+    } else {
+      showToast(data.detail || 'Erreur IA', 'error');
+    }
+  } catch (e) {
+    showToast('Erreur de requête Gemini', 'error');
+  }
+}
+
+async function submitUpdateSeries(e) {
+  e.preventDefault();
+  const seriesId = document.getElementById('editSeriesId').value;
+  const payload = {
+    title_fr: document.getElementById('editSeriesTitleFr').value.trim(),
+    title_ar: document.getElementById('editSeriesTitleAr').value.trim() || null,
+    title_en: document.getElementById('editSeriesTitleEn').value.trim() || null,
+    year_start: document.getElementById('editSeriesYear').value ? parseInt(document.getElementById('editSeriesYear').value) : null,
+    rating: document.getElementById('editSeriesRating').value ? parseFloat(document.getElementById('editSeriesRating').value) : null,
+    status: document.getElementById('editSeriesStatus').value,
+    poster_path: document.getElementById('editSeriesPoster').value.trim() || null,
+    banner_path: document.getElementById('editSeriesBanner').value.trim() || null,
+    synopsis_fr: document.getElementById('editSeriesSynopsisFr').value.trim() || null,
+    synopsis_ar: document.getElementById('editSeriesSynopsisAr').value.trim() || null,
+    synopsis_en: document.getElementById('editSeriesSynopsisEn').value.trim() || null,
+  };
+
+  try {
+    const res = await fetch(`/api/admin/series/${seriesId}`, {
+      method: 'PATCH',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify(payload)
+    });
+    if (res.ok) {
+      showToast('Série mise à jour avec succès !', 'success');
+      setTimeout(() => location.reload(), 800);
+    } else {
+      const err = await res.json();
+      showToast(err.detail || 'Erreur', 'error');
+    }
+  } catch (err) {
     showToast('Erreur serveur', 'error');
   }
 }

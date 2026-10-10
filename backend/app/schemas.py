@@ -385,7 +385,10 @@ class SeriesResponse(BaseModel):
     slug: str
     title_fr: str
     title_ar: Optional[str] = None
+    title_en: Optional[str] = None
     synopsis_fr: Optional[str] = None
+    synopsis_ar: Optional[str] = None
+    synopsis_en: Optional[str] = None
     year_start: Optional[int] = None
     rating: Optional[float] = None
     status: str = "ongoing"

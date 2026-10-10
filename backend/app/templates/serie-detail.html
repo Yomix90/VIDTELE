@@ -45,7 +45,7 @@
           <i class="bi bi-broadcast"></i>
           <span>{% if series.visibility == 'published' %}Passer en Brouillon{% else %}Publier sur Mobile{% endif %}</span>
         </button>
-        <button class="btn btn-outline-warning btn-sm d-flex align-items-center gap-1" onclick="openEditSeriesModal()">
+        <button class="btn btn-outline-warning btn-sm d-flex align-items-center gap-1" data-bs-toggle="modal" data-bs-target="#modalEditSeries" onclick="openEditSeriesModal()">
           <i class="bi bi-pencil-square"></i>
           <span>Modifier la Série</span>
         </button>
@@ -292,6 +292,9 @@
         <button type="button" class="btn btn-danger w-100" onclick="submitAssignVideo()">Valider l'association</button>
       </div>
     </div>
+  </div>
+</div>
+
 <!-- Modale : Modifier la Série (Multilingue + Gemini AI + Upload VPS) -->
 <div class="modal fade" id="modalEditSeries" tabindex="-1">
   <div class="modal-dialog modal-lg">
