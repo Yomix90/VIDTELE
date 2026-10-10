@@ -117,6 +117,7 @@ def write_private_file(path: Path, content: str) -> None:
 PUBLIC_DEFAULT_SECRET_KEYS = {
     "",
     "change_me_super_secret_jwt_key_at_least_32_chars_vidtele_2026",
+    "cle_secrete_ultra_securisee_vidtele_production_2026_xyz",  # exemple de DOKPLOY.md
 }
 
 # Mots de passe admin publiés dans le dépôt : refusés à la création, signalés s'ils sont encore utilisés.
@@ -124,6 +125,8 @@ PUBLIC_DEFAULT_ADMIN_PASSWORDS = {
     "",
     "VotreMotDePasseSecurise2026!",
     "AdminSecurePass2026!",
+    "VotreMotDePasseAdminTresSecurise2026!",  # exemple de DOKPLOY.md
+    "VotreMotDePasseAdminSecurise",  # exemple du README
 }
 
 # Origine de la clé utilisée : "env" (variable fournie) ou "generated" (fichier persistant)

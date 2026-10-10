@@ -110,8 +110,9 @@ Dans Dokploy (onglet **Environment**), collez les variables suivantes :
 # Port du service
 PORT=8000
 
-# Clés de sécurité (Générez une chaîne aléatoire d'au moins 32 caractères)
-SECRET_KEY=cle_secrete_ultra_securisee_vidtele_production_2026_xyz
+# Clé de signature des jetons : générez-la avec `openssl rand -hex 32` (ne jamais réutiliser un exemple).
+# Vide = clé aléatoire persistante générée dans /app/data/.jwt_secret au 1er démarrage.
+SECRET_KEY=<résultat de openssl rand -hex 32>
 ALGORITHM=HS256
 ACCESS_TOKEN_EXPIRE_MINUTES=60
 REFRESH_TOKEN_EXPIRE_DAYS=30
@@ -121,10 +122,10 @@ STREAM_TOKEN_EXPIRE_SECONDS=7200
 DATABASE_URL=sqlite+aiosqlite:////app/data/vidtele.db
 
 # Identifiants Telegram MTProto (https://my.telegram.org)
-TELEGRAM_API_ID=20715869
-TELEGRAM_API_HASH=3312ffbf97e0c13b0c206a72faa7eef0
+TELEGRAM_API_ID=<votre api_id>
+TELEGRAM_API_HASH=<votre api_hash>
 TELEGRAM_SESSION_NAME=/app/data/vidtele_session
-TELEGRAM_CHANNEL_ID=-1002563514004
+TELEGRAM_CHANNEL_ID=-100XXXXXXXXXX
 
 # Session en mémoire (Optionnel mais recommandé pour Dokploy)
 TELEGRAM_STRING_SESSION=votre_string_session_generee
@@ -139,9 +140,19 @@ MAX_CONCURRENT_STREAMS_PER_USER=2
 MAX_CONCURRENT_STREAMS_GLOBAL=30
 SYNC_INTERVAL_MINUTES=15
 
-# Compte administrateur créé au 1er démarrage
+# Compte administrateur créé au 1er démarrage UNIQUEMENT (s'il n'existe aucun admin).
+# Vide = mot de passe aléatoire écrit dans /app/data/admin_initial_password.txt.
+# Le mot de passe n'est plus réécrit aux démarrages suivants : changez-le depuis l'admin.
 ADMIN_DEFAULT_USERNAME=admin
-ADMIN_DEFAULT_PASSWORD=VotreMotDePasseAdminTresSecurise2026!
+ADMIN_DEFAULT_PASSWORD=<mot de passe fort et unique>
+# Secours en cas d'oubli : true + redémarrage réécrit le mot de passe depuis ADMIN_DEFAULT_PASSWORD, puis remettre false
+ADMIN_RESET_PASSWORD=false
+
+# Proxys autorisés à transmettre l'IP réelle (X-Forwarded-For) : réseaux Docker/Traefik par défaut
+# TRUSTED_PROXIES=127.0.0.1/32,::1/128,10.0.0.0/8,172.16.0.0/12,192.168.0.0/16
+
+# Tolérance d'expiration du jeton sur l'URL de lecture (évite les coupures en cours de lecture)
+# STREAM_TOKEN_GRACE_MINUTES=240
 ```
 
 ---
@@ -186,7 +197,7 @@ Une fois votre serveur déployé :
    - ou `http://vps-ip:8000` (si accès IP direct)
 4. Connectez-vous avec :
    - Identifiant : `admin`
-   - Mot de passe : celui configuré dans `ADMIN_DEFAULT_PASSWORD`
+   - Mot de passe : celui configuré dans `ADMIN_DEFAULT_PASSWORD` lors de la création (ou le contenu de `/app/data/admin_initial_password.txt`)
 5. Pour inscrire des utilisateurs VIP :
    - Utilisez le code d'invitation initial `BIENVENUE-2026`
    - Ou générez-en de nouveaux depuis l'écran Admin mobile ou le tableau de bord web.

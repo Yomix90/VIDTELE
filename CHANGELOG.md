@@ -1,4 +1,27 @@
-# 📜 CHANGELOG - Branche `lecteur-vertical`
+# 📜 CHANGELOG
+
+## [Non publié] - Phase 0.5 : correctifs urgents (branche `mise-a-jour-totale`)
+
+Serveur uniquement : aucune nouvelle version de l'application n'est nécessaire, et aucun endpoint n'a été retiré ni modifié de façon incompatible.
+
+### Sécurité
+- Suppression de la porte dérobée : des mots de passe admin « maîtres » publics ouvraient tout compte administrateur.
+- Le mot de passe admin n'est plus réécrit à chaque démarrage (secours : `ADMIN_RESET_PASSWORD=true`).
+- `SECRET_KEY` vide ou publique : remplacée par une clé aléatoire persistante (`/app/data/.jwt_secret`).
+- L'anti brute-force n'est plus contournable avec `X-Forwarded-For` (`TRUSTED_PROXIES`), il ajoute un verrou par compte et protège aussi `/admin/login`.
+- Le jeton de flux n'ouvre plus que la vidéo pour laquelle il a été émis.
+- Retrait des identifiants Telegram réels et des exemples de secrets de `DOKPLOY.md`.
+
+### Corrections
+- `/api/videos/series`, `/api/videos/home` et `/api/videos/feed` renvoyaient 422 : les listes de séries de l'app étaient vides.
+- Arrêts en cours de lecture à l'expiration du jeton présent dans l'URL : tolérance `STREAM_TOKEN_GRACE_MINUTES` (240 min) sur l'endpoint de flux uniquement.
+
+### Tests
+- Nouvelle suite pytest `backend/tests/` (26 tests, base jetable, sans Telegram) : `pytest` depuis `backend/`.
+
+---
+
+# Branche `lecteur-vertical`
 
 Toutes les modifications apportées pour l'unification du lecteur vertical, la fiabilisation du streaming et la suppression du partage.
 

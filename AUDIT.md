@@ -183,6 +183,7 @@ App : _initControllerForIndex()
 
 | # | Problème | Gravité | Preuve |
 |---|---|---|---|
+| S0 | **Porte dérobée** (trouvée en Phase 0.5) : `/api/auth/login` et `/admin/login` acceptaient pour **tout compte admin** les mots de passe publics `AdminSecurePass2026!` et `VotreMotDePasseSecurise2026!`, quel que soit le vrai mot de passe. `/admin/login` n'avait en plus aucune limitation de tentatives | **Critique** — corrigé en Phase 0.5 | `auth.py`, `admin_web.py` |
 | S1 | `SECRET_KEY` par défaut **publique** dans `config.py` et dans `docker-compose.yml` (`:-change_me_...`). Si la variable n'est pas définie en production, n'importe qui peut forger un JWT admin | **Critique** (à vérifier en prod) | code |
 | S2 | Le mot de passe admin est **réécrit à chaque démarrage** avec `ADMIN_DEFAULT_PASSWORD`, dont la valeur par défaut est publique (`AdminSecurePass2026!`). Changer le mot de passe depuis l'admin ne sert donc à rien | **Critique** | `main.py` l.52 |
 | S3 | Anti brute-force contourné en changeant l'en-tête `X-Forwarded-For` : 8 échecs sans blocage, alors qu'il y a un blocage au 6e échec depuis la même IP | **Haute** | testé |
