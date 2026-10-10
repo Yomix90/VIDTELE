@@ -37,7 +37,8 @@ class Settings(BaseSettings):
 
     # Compte Administrateur initial (créé automatiquement si la table est vide)
     ADMIN_DEFAULT_USERNAME: str = "admin"
-    ADMIN_DEFAULT_PASSWORD: str = "AdminSecurePass2026!"
+    ADMIN_DEFAULT_PASSWORD: str = "VotreMotDePasseSecurise2026!"
+
 
     # Anti brute-force
     MAX_LOGIN_ATTEMPTS: int = 5

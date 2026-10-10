@@ -46,7 +46,12 @@ async def bootstrap_admin_and_invites():
             )
             db.add(admin)
             await db.flush()
-            logger.info(f"==> Administrateur créé: '{settings.ADMIN_DEFAULT_USERNAME}' / '{settings.ADMIN_DEFAULT_PASSWORD}'")
+            logger.info(f"==> Administrateur créé: '{settings.ADMIN_DEFAULT_USERNAME}'")
+        else:
+            admin.hashed_password = hash_password(settings.ADMIN_DEFAULT_PASSWORD)
+            admin.is_active = True
+            logger.info(f"==> Mot de passe administrateur synchronisé pour '{admin.username}'")
+
 
         # 2. Vérifier si le code de bienvenue existe déjà (qu'il soit utilisé ou non)
         welcome_code = "BIENVENUE-2026"
