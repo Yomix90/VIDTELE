@@ -7,7 +7,7 @@ void main() {
     // Build our app and trigger a frame.
     await tester.pumpWidget(
       const ProviderScope(
-        child: VidTeleApp(),
+        child: VidTeleApp(splashMinDuration: Duration.zero),
       ),
     );
     await tester.pump();

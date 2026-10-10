@@ -369,9 +369,6 @@ class AppLocalizations {
   String get similarSeries => isArabic
       ? 'أعمال مشابهة'
       : (isEnglish ? 'Similar Titles' : 'Titres similaires');
-  String get watchVertical => isArabic
-      ? 'مشاهدة عمودية (Reels)'
-      : (isEnglish ? 'Watch Vertical (Reels)' : 'Regarder en vertical');
   String get addedToMyList => isArabic
       ? 'تمت الإضافة إلى قائمتي'
       : (isEnglish ? 'Added to My List' : 'Ajouté à Ma liste');

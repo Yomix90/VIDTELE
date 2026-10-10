@@ -79,22 +79,6 @@ class _SeriesDetailScreenState extends ConsumerState<SeriesDetailScreen> {
     });
   }
 
-  void _playInReels(BuildContext context) {
-    HapticFeedback.lightImpact();
-    Navigator.push(
-      context,
-      MaterialPageRoute(
-        builder: (_) => ReelsScreen(
-          seriesId: widget.seriesId,
-          isActive: true,
-          isStandalone: true,
-        ),
-      ),
-    ).then((_) {
-      ref.invalidate(seriesDetailProvider(widget.seriesId));
-    });
-  }
-
   Future<void> _toggleFavorite(bool currentStatus, AppLocalizations l10n) async {
     HapticFeedback.mediumImpact();
     final newStatus = !currentStatus;
@@ -405,38 +389,8 @@ class _SeriesDetailScreenState extends ConsumerState<SeriesDetailScreen> {
                                 ),
                               ),
                             ),
-                            const SizedBox(height: 10),
+                            const SizedBox(height: 14),
                           ],
-
-                          // Bouton 2 : Binge vertical style TikTok (Reels)
-                          TouchableScale(
-                            onTap: () => _playInReels(context),
-                            child: Container(
-                              width: double.infinity,
-                              padding: const EdgeInsets.symmetric(vertical: 12),
-                              decoration: BoxDecoration(
-                                color: const Color(0xFF1E1E26),
-                                borderRadius: BorderRadius.circular(8),
-                                border: Border.all(color: Colors.white12),
-                              ),
-                              child: Row(
-                                mainAxisAlignment: MainAxisAlignment.center,
-                                children: [
-                                  const Icon(Icons.stay_current_portrait_rounded, color: Colors.white, size: 20),
-                                  const SizedBox(width: 8),
-                                  Text(
-                                    l10n.watchVertical,
-                                    style: const TextStyle(
-                                      color: Colors.white,
-                                      fontSize: 14,
-                                      fontWeight: FontWeight.w600,
-                                    ),
-                                  ),
-                                ],
-                              ),
-                            ),
-                          ),
-                          const SizedBox(height: 14),
 
                           // Action secondaire : Ma Liste
                           Center(

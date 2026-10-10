@@ -621,25 +621,38 @@ class _ReelsScreenState extends ConsumerState<ReelsScreen>
       final baseUrl = await storageService.getServerUrl();
       final accessToken = await storageService.getAccessToken();
 
-      // Utilisation du verbe GET standardisé pour stream-token
+      // Obtention résiliente du token de flux (supporte à la fois POST et GET)
       String? streamToken;
       try {
-        final tokenRes = await apiClient.dio.get(
+        final tokenRes = await apiClient.dio.post(
           ApiConstants.videoStreamToken(item.id),
         );
         streamToken = tokenRes.data['stream_token'];
       } catch (_) {
-        streamToken = accessToken;
+        try {
+          final tokenRes = await apiClient.dio.get(
+            ApiConstants.videoStreamToken(item.id),
+          );
+          streamToken = tokenRes.data['stream_token'];
+        } catch (_) {
+          streamToken = accessToken;
+        }
       }
 
+      // Omission stricte du paramètre token s'il est null (ne jamais envoyer ?token=null)
+      final String tokenParam = (streamToken != null && streamToken.isNotEmpty)
+          ? '?token=$streamToken'
+          : '';
       final streamUri = Uri.parse(
-        '$baseUrl${ApiConstants.videoStream(item.id)}?token=$streamToken',
+        '$baseUrl${ApiConstants.videoStream(item.id)}$tokenParam',
       );
+      debugPrint('[ReelsScreen] Initialisation flux index $idx (vid ${item.id}) -> $streamUri');
 
       final ctrl = VideoPlayerController.networkUrl(
         streamUri,
         httpHeaders: {
-          if (accessToken != null) 'Authorization': 'Bearer $accessToken',
+          if (accessToken != null && accessToken.isNotEmpty)
+            'Authorization': 'Bearer $accessToken',
         },
       );
 
@@ -705,12 +718,21 @@ class _ReelsScreenState extends ConsumerState<ReelsScreen>
       if (mounted) setState(() {});
 
       if (idx == _focusedIndex && widget.isActive && _isAppActive) {
+        try {
+          await ctrl.play();
+        } catch (e) {
+          debugPrint('[ReelsScreen] Erreur play direct: $e');
+        }
         await ref.read(videoPlayerManagerProvider).play(playerId);
         final feedState = _getFeedState();
         _attachWatchdog(_focusedIndex, feedState.items);
+        if (mounted) setState(() {});
       }
-    } catch (_) {
+    } catch (e, stack) {
+      debugPrint('[ReelsScreen] ERREUR INITIALISATION CONTROLEUR idx $idx (vid ${item.id}): $e');
+      debugPrint('$stack');
       _initializingIndices.remove(idx);
+      if (mounted) setState(() {});
     }
   }
 
@@ -1442,9 +1464,6 @@ class _ReelsScreenState extends ConsumerState<ReelsScreen>
               final item = feedState.items[index];
               final ctrl = _controllerPool[index];
               final isCurrent = (index == _focusedIndex);
-              final isInitialized = ctrl != null && ctrl.value.isInitialized;
-              final isPlaying = isInitialized && ctrl.value.isPlaying;
-              final isBuffering = isInitialized && ctrl.value.isBuffering;
               final thumbUrl = ImageUtils.resolveUrl(item.thumbnailPath, baseUrl);
 
               return GestureDetector(
@@ -1454,33 +1473,41 @@ class _ReelsScreenState extends ConsumerState<ReelsScreen>
                 child: Stack(
                   fit: StackFit.expand,
                   children: [
-                    // 1. Miniature d'attente (évite tout écran noir au démarrage)
-                    if (thumbUrl != null && thumbUrl.isNotEmpty)
-                      CachedNetworkImage(
-                        imageUrl: thumbUrl,
-                        fit: BoxFit.cover,
-                        alignment: Alignment.center,
-                        placeholder: (_, __) => Container(color: Colors.black),
-                        errorWidget: (_, __, ___) => Container(color: Colors.black),
-                      )
-                    else
-                      Container(color: Colors.black),
+                    // 1. Fond noir pur cinéma absolu (évite toute superposition en arrière-plan)
+                    Container(color: Colors.black),
 
-                    // 2. Lecteur Vidéo Plein Écran
-                    if (isInitialized)
-                      Center(
-                        child: FittedBox(
-                          fit: BoxFit.cover,
-                          child: SizedBox(
-                            width: ctrl.value.size.width,
-                            height: ctrl.value.size.height,
-                            child: VideoPlayer(ctrl),
-                          ),
-                        ),
+                    // 2. Lecteur Vidéo Plein Écran réactif
+                    if (ctrl != null)
+                      ValueListenableBuilder<VideoPlayerValue>(
+                        valueListenable: ctrl,
+                        builder: (context, val, _) {
+                          if (!val.isInitialized || val.size.width <= 0 || val.size.height <= 0) {
+                            return const SizedBox.shrink();
+                          }
+                          return Center(
+                            child: AspectRatio(
+                              aspectRatio: val.aspectRatio > 0 ? val.aspectRatio : (9 / 16),
+                              child: VideoPlayer(ctrl),
+                            ),
+                          );
+                        },
                       ),
 
+                    // 3. Miniature d'attente temporaire (affichée UNIQUEMENT avant le début effectif de la lecture)
+                    if (ctrl == null || !ctrl.value.isInitialized || (!ctrl.value.isPlaying && ctrl.value.position == Duration.zero))
+                      if (thumbUrl != null && thumbUrl.isNotEmpty)
+                        Positioned.fill(
+                          child: CachedNetworkImage(
+                            imageUrl: thumbUrl,
+                            fit: BoxFit.contain,
+                            alignment: Alignment.center,
+                            placeholder: (_, __) => Container(color: Colors.black),
+                            errorWidget: (_, __, ___) => Container(color: Colors.black),
+                          ),
+                        ),
+
                     // Indicateur de chargement / Buffering discret
-                    if (!isInitialized || isBuffering)
+                    if (ctrl == null || !ctrl.value.isInitialized || ctrl.value.isBuffering)
                       Center(
                         child: Container(
                           padding: const EdgeInsets.all(16),
@@ -1514,22 +1541,30 @@ class _ReelsScreenState extends ConsumerState<ReelsScreen>
                       ),
                     ),
 
-                    // 4. Icône centrale lors de la pause
-                    if (isInitialized && !isPlaying && isCurrent && !_showingAdGatePrompt && !isGateLocked)
-                      Center(
-                        child: Container(
-                          padding: const EdgeInsets.all(18),
-                          decoration: BoxDecoration(
-                            color: Colors.black.withValues(alpha: 0.55),
-                            shape: BoxShape.circle,
-                            border: Border.all(color: Colors.white24, width: 1.5),
-                          ),
-                          child: const Icon(
-                            Icons.play_arrow_rounded,
-                            color: Colors.white,
-                            size: 52,
-                          ),
-                        ),
+                    // 4. Icône centrale lors de la pause (réactive en temps réel)
+                    if (ctrl != null)
+                      ValueListenableBuilder<VideoPlayerValue>(
+                        valueListenable: ctrl,
+                        builder: (context, val, _) {
+                          if (val.isInitialized && !val.isPlaying && isCurrent && !_showingAdGatePrompt && !isGateLocked) {
+                            return Center(
+                              child: Container(
+                                padding: const EdgeInsets.all(18),
+                                decoration: BoxDecoration(
+                                  color: Colors.black.withValues(alpha: 0.55),
+                                  shape: BoxShape.circle,
+                                  border: Border.all(color: Colors.white24, width: 1.5),
+                                ),
+                                child: const Icon(
+                                  Icons.play_arrow_rounded,
+                                  color: Colors.white,
+                                  size: 52,
+                                ),
+                              ),
+                            );
+                          }
+                          return const SizedBox.shrink();
+                        },
                       ),
 
                     // 5. Cœur animé au double-tap
@@ -1757,7 +1792,7 @@ class _ReelsScreenState extends ConsumerState<ReelsScreen>
                     ),
 
                     // 8. Barre fine de scrubbing rouge au bas de l'écran
-                    if (isInitialized)
+                    if (ctrl != null)
                       Positioned(
                         left: 0,
                         right: 0,
@@ -1765,6 +1800,7 @@ class _ReelsScreenState extends ConsumerState<ReelsScreen>
                         child: ValueListenableBuilder<VideoPlayerValue>(
                           valueListenable: ctrl,
                           builder: (context, val, _) {
+                            if (!val.isInitialized) return const SizedBox.shrink();
                             final durationMs = val.duration.inMilliseconds;
                             final positionMs = val.position.inMilliseconds;
                             final progress = durationMs > 0 ? (positionMs / durationMs).clamp(0.0, 1.0) : 0.0;
