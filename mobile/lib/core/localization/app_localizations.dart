@@ -388,6 +388,15 @@ class AppLocalizations {
   String get filterSeries => isArabic ? 'مسلسلات' : (isEnglish ? 'Series' : 'Séries');
   String get filterInProgress => isArabic ? 'قيد المشاهدة' : (isEnglish ? 'In Progress' : 'En cours');
   String get episodesHeader => isArabic ? 'الحلقات' : (isEnglish ? 'Episodes' : 'Épisodes');
+  String get seriesCompletedTitle => isArabic ? 'سلسلة مكتملة !' : (isEnglish ? 'Series Completed!' : 'Série terminée !');
+  String get seriesCompletedSubtitle => isArabic
+      ? 'تهانينا! لقد شاهدت جميع حلقات هذه السلسلة.'
+      : (isEnglish
+          ? 'Congratulations! You have watched all episodes of this series.'
+          : 'Félicitations ! Vous avez regardé tous les épisodes de cette série.');
+  String get recommendedSeries => isArabic ? 'مسلسلات مقترحة لك' : (isEnglish ? 'Recommended Series' : 'Séries recommandées pour vous');
+  String get restartSeries => isArabic ? 'إعادة المشاهدة من البداية' : (isEnglish ? 'Restart Series' : 'Recommencer la série');
+  String get backToHome => isArabic ? 'العودة للرئيسية' : (isEnglish ? 'Back to Home' : 'Retour à l\'accueil');
 
   // ==================== MONETIZATION / REWARDED ADS ====================
   String get adRewardPromptTitle => isArabic

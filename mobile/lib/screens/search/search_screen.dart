@@ -16,7 +16,7 @@ import '../../widgets/empty_state.dart';
 import '../../widgets/shimmer_placeholder.dart';
 import '../../widgets/touchable_scale.dart';
 import '../../widgets/video_card.dart';
-import '../player/video_player_screen.dart';
+import '../player/reels_screen.dart';
 import '../series/series_detail_screen.dart';
 
 /// Écran dédié à la recherche dynamique, exploration par catégorie et suggestions
@@ -50,10 +50,13 @@ class _SearchScreenState extends ConsumerState<SearchScreen> {
     Navigator.push(
       context,
       MaterialPageRoute(
-        builder: (_) => VideoPlayerScreen(
-          video: video,
+        builder: (_) => ReelsScreen(
+          isActive: true,
+          isStandalone: true,
+          initialVideo: video,
           playlist: playlist,
-          initialIndex: playlist?.indexOf(video),
+          initialVideoId: video.id,
+          seriesId: video.seriesId,
         ),
       ),
     );

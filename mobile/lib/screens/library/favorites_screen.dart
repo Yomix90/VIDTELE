@@ -10,7 +10,7 @@ import '../../widgets/error_state.dart';
 import '../../widgets/shimmer_placeholder.dart';
 import '../../widgets/touchable_scale.dart';
 import '../../widgets/video_card.dart';
-import '../player/video_player_screen.dart';
+import '../player/reels_screen.dart';
 
 enum FavoriteFilter { all, series, inProgress }
 
@@ -146,10 +146,13 @@ class _FavoritesScreenState extends ConsumerState<FavoritesScreen> {
                                     Navigator.push(
                                       context,
                                       MaterialPageRoute(
-                                        builder: (_) => VideoPlayerScreen(
-                                          video: video,
+                                        builder: (_) => ReelsScreen(
+                                          isActive: true,
+                                          isStandalone: true,
+                                          initialVideo: video,
                                           playlist: filteredFavorites,
-                                          initialIndex: index,
+                                          initialVideoId: video.id,
+                                          seriesId: video.seriesId,
                                         ),
                                       ),
                                     );
@@ -162,10 +165,13 @@ class _FavoritesScreenState extends ConsumerState<FavoritesScreen> {
                                       Navigator.push(
                                         context,
                                         MaterialPageRoute(
-                                          builder: (_) => VideoPlayerScreen(
-                                            video: video,
+                                          builder: (_) => ReelsScreen(
+                                            isActive: true,
+                                            isStandalone: true,
+                                            initialVideo: video,
                                             playlist: filteredFavorites,
-                                            initialIndex: index,
+                                            initialVideoId: video.id,
+                                            seriesId: video.seriesId,
                                           ),
                                         ),
                                       );

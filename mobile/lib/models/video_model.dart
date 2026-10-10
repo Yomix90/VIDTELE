@@ -1,6 +1,7 @@
 /// Modèle représentant une vidéo du catalogue VidTele avec ses métadonnées de lecture.
 class VideoModel {
   final int id;
+  final int? seriesId;
   final int telegramMessageId;
   final String title;
   final String? caption;
@@ -22,6 +23,7 @@ class VideoModel {
 
   VideoModel({
     required this.id,
+    this.seriesId,
     required this.telegramMessageId,
     required this.title,
     this.caption,
@@ -96,6 +98,7 @@ class VideoModel {
   factory VideoModel.fromJson(Map<String, dynamic> json) {
     return VideoModel(
       id: json['id'] ?? json['video_id'] ?? 0,
+      seriesId: json['series_id'] ?? json['seriesId'],
       telegramMessageId: json['telegram_message_id'] ?? 0,
       title: json['title'] ?? json['video_title'] ?? 'Sans titre',
       caption: json['caption'],
@@ -120,6 +123,7 @@ class VideoModel {
   }
 
   VideoModel copyWith({
+    int? seriesId,
     bool? isFavorite,
     double? watchProgressSeconds,
     bool? isCompleted,
@@ -130,6 +134,7 @@ class VideoModel {
   }) {
     return VideoModel(
       id: id,
+      seriesId: seriesId ?? this.seriesId,
       telegramMessageId: telegramMessageId,
       title: title,
       caption: caption,

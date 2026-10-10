@@ -15,7 +15,6 @@ import '../../providers/video_provider.dart';
 import '../../widgets/shimmer_placeholder.dart';
 import '../../widgets/touchable_scale.dart';
 import '../player/reels_screen.dart';
-import '../player/video_player_screen.dart';
 
 /// Écran complet de détail d'une Série TV au standard Netflix / DramaBox.
 /// Comprend :
@@ -62,15 +61,16 @@ class _SeriesDetailScreenState extends ConsumerState<SeriesDetailScreen> {
         .map((e) => e.video!)
         .toList();
 
-    final initialIndex = playlist.indexWhere((v) => v.id == episode.video!.id);
-
     Navigator.push(
       context,
       MaterialPageRoute(
-        builder: (_) => VideoPlayerScreen(
-          video: episode.video!,
+        builder: (_) => ReelsScreen(
+          seriesId: widget.seriesId,
+          initialVideoId: episode.video!.id,
+          initialVideo: episode.video,
           playlist: playlist,
-          initialIndex: initialIndex >= 0 ? initialIndex : 0,
+          isActive: true,
+          isStandalone: true,
         ),
       ),
     ).then((_) {
@@ -84,12 +84,10 @@ class _SeriesDetailScreenState extends ConsumerState<SeriesDetailScreen> {
     Navigator.push(
       context,
       MaterialPageRoute(
-        builder: (_) => Scaffold(
-          backgroundColor: Colors.black,
-          body: ReelsScreen(
-            seriesId: widget.seriesId,
-            isActive: true,
-          ),
+        builder: (_) => ReelsScreen(
+          seriesId: widget.seriesId,
+          isActive: true,
+          isStandalone: true,
         ),
       ),
     ).then((_) {

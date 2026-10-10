@@ -24,7 +24,6 @@ dependencies:
 
   # Lecteur vidéo & Contrôles personnalisés
   video_player: ^2.8.6
-  chewie: ^1.8.1
 
   # Cache d'images pour les miniatures
   cached_network_image: ^3.3.1

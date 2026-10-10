@@ -7,7 +7,7 @@ import '../../core/storage/storage_service.dart';
 import '../../core/theme/app_theme.dart';
 import '../../core/utils/image_utils.dart';
 import '../../providers/library_provider.dart';
-import '../player/video_player_screen.dart';
+import '../player/reels_screen.dart';
 
 /// Écran Historique de lecture avec état d'avancement et reprise directe (support trilingue FR / EN / AR)
 class HistoryScreen extends ConsumerWidget {
@@ -129,7 +129,13 @@ class HistoryScreen extends ConsumerWidget {
                         Navigator.push(
                           context,
                           MaterialPageRoute(
-                            builder: (_) => VideoPlayerScreen(video: resumingVideo),
+                            builder: (_) => ReelsScreen(
+                              isActive: true,
+                              isStandalone: true,
+                              initialVideo: resumingVideo,
+                              initialVideoId: resumingVideo.id,
+                              seriesId: resumingVideo.seriesId,
+                            ),
                           ),
                         );
                       },
