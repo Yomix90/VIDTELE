@@ -168,9 +168,6 @@ class AppLocalizations {
   String get episodesList => isArabic ? 'قائمة الحلقات' : (isEnglish ? 'Episodes List' : 'Liste des épisodes');
   String get nextEpisode => isArabic ? 'الحلقة التالية' : (isEnglish ? 'Next Episode' : 'Épisode suivant');
   String get playbackSpeed => isArabic ? 'سرعة التشغيل' : (isEnglish ? 'Playback Speed' : 'Vitesse de lecture');
-  String get linkCopied => isArabic
-      ? 'تم نسخ الرابط إلى الحافظة'
-      : (isEnglish ? 'Link copied to clipboard' : 'Lien copié dans le presse-papier');
   String get noReelsAvailable => isArabic
       ? 'لا توجد حلقات متوفرة في الموجز'
       : (isEnglish ? 'No episodes available in the feed' : 'Aucun épisode disponible dans le flux');
@@ -383,7 +380,6 @@ class AppLocalizations {
       : (isEnglish ? 'Removed from My List' : 'Retiré de Ma liste');
   String get expand => isArabic ? 'المزيد' : (isEnglish ? 'More' : 'Plus');
   String get collapse => isArabic ? 'أقل' : (isEnglish ? 'Less' : 'Moins');
-  String get shareSeries => isArabic ? 'مشاركة' : (isEnglish ? 'Share' : 'Partager');
   String get filterAll => isArabic ? 'الكل' : (isEnglish ? 'All' : 'Tout');
   String get filterSeries => isArabic ? 'مسلسلات' : (isEnglish ? 'Series' : 'Séries');
   String get filterInProgress => isArabic ? 'قيد المشاهدة' : (isEnglish ? 'In Progress' : 'En cours');
