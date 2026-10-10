@@ -168,9 +168,6 @@ class AppLocalizations {
   String get episodesList => isArabic ? 'قائمة الحلقات' : (isEnglish ? 'Episodes List' : 'Liste des épisodes');
   String get nextEpisode => isArabic ? 'الحلقة التالية' : (isEnglish ? 'Next Episode' : 'Épisode suivant');
   String get playbackSpeed => isArabic ? 'سرعة التشغيل' : (isEnglish ? 'Playback Speed' : 'Vitesse de lecture');
-  String get linkCopied => isArabic
-      ? 'تم نسخ الرابط إلى الحافظة'
-      : (isEnglish ? 'Link copied to clipboard' : 'Lien copié dans le presse-papier');
   String get noReelsAvailable => isArabic
       ? 'لا توجد حلقات متوفرة في الموجز'
       : (isEnglish ? 'No episodes available in the feed' : 'Aucun épisode disponible dans le flux');
@@ -372,9 +369,6 @@ class AppLocalizations {
   String get similarSeries => isArabic
       ? 'أعمال مشابهة'
       : (isEnglish ? 'Similar Titles' : 'Titres similaires');
-  String get watchVertical => isArabic
-      ? 'مشاهدة عمودية (Reels)'
-      : (isEnglish ? 'Watch Vertical (Reels)' : 'Regarder en vertical');
   String get addedToMyList => isArabic
       ? 'تمت الإضافة إلى قائمتي'
       : (isEnglish ? 'Added to My List' : 'Ajouté à Ma liste');
@@ -383,11 +377,19 @@ class AppLocalizations {
       : (isEnglish ? 'Removed from My List' : 'Retiré de Ma liste');
   String get expand => isArabic ? 'المزيد' : (isEnglish ? 'More' : 'Plus');
   String get collapse => isArabic ? 'أقل' : (isEnglish ? 'Less' : 'Moins');
-  String get shareSeries => isArabic ? 'مشاركة' : (isEnglish ? 'Share' : 'Partager');
   String get filterAll => isArabic ? 'الكل' : (isEnglish ? 'All' : 'Tout');
   String get filterSeries => isArabic ? 'مسلسلات' : (isEnglish ? 'Series' : 'Séries');
   String get filterInProgress => isArabic ? 'قيد المشاهدة' : (isEnglish ? 'In Progress' : 'En cours');
   String get episodesHeader => isArabic ? 'الحلقات' : (isEnglish ? 'Episodes' : 'Épisodes');
+  String get seriesCompletedTitle => isArabic ? 'سلسلة مكتملة !' : (isEnglish ? 'Series Completed!' : 'Série terminée !');
+  String get seriesCompletedSubtitle => isArabic
+      ? 'تهانينا! لقد شاهدت جميع حلقات هذه السلسلة.'
+      : (isEnglish
+          ? 'Congratulations! You have watched all episodes of this series.'
+          : 'Félicitations ! Vous avez regardé tous les épisodes de cette série.');
+  String get recommendedSeries => isArabic ? 'مسلسلات مقترحة لك' : (isEnglish ? 'Recommended Series' : 'Séries recommandées pour vous');
+  String get restartSeries => isArabic ? 'إعادة المشاهدة من البداية' : (isEnglish ? 'Restart Series' : 'Recommencer la série');
+  String get backToHome => isArabic ? 'العودة للرئيسية' : (isEnglish ? 'Back to Home' : 'Retour à l\'accueil');
 
   // ==================== MONETIZATION / REWARDED ADS ====================
   String get adRewardPromptTitle => isArabic

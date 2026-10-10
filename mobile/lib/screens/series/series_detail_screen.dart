@@ -15,14 +15,13 @@ import '../../providers/video_provider.dart';
 import '../../widgets/shimmer_placeholder.dart';
 import '../../widgets/touchable_scale.dart';
 import '../player/reels_screen.dart';
-import '../player/video_player_screen.dart';
 
 /// Écran complet de détail d'une Série TV au standard Netflix / DramaBox.
 /// Comprend :
 /// - Grande bannière Hero avec animation Hero, dégradé cinématique et retour tactile
 /// - Métadonnées enrichies : Note IMDb/TMDB, année, nombre de saisons, total épisodes, tags de genres
 /// - Synopsis repliable avec bouton Plus / Moins animé
-/// - Boutons d'action : Regarder l'épisode en cours, Binge vertical style TikTok (Reels), Ma liste, Partager
+/// - Boutons d'action : Regarder l'épisode en cours, Binge vertical style TikTok (Reels), Ma liste
 /// - Onglets de saisons et table d'épisodes avec miniatures 16:9, durée et barre de progression rouge
 /// - Section de recommandations « Séries similaires »
 class SeriesDetailScreen extends ConsumerStatefulWidget {
@@ -62,38 +61,21 @@ class _SeriesDetailScreenState extends ConsumerState<SeriesDetailScreen> {
         .map((e) => e.video!)
         .toList();
 
-    final initialIndex = playlist.indexWhere((v) => v.id == episode.video!.id);
-
     Navigator.push(
       context,
       MaterialPageRoute(
-        builder: (_) => VideoPlayerScreen(
-          video: episode.video!,
+        builder: (_) => ReelsScreen(
+          seriesId: widget.seriesId,
+          initialVideoId: episode.video!.id,
+          initialVideo: episode.video,
           playlist: playlist,
-          initialIndex: initialIndex >= 0 ? initialIndex : 0,
+          isActive: true,
+          isStandalone: true,
         ),
       ),
     ).then((_) {
       ref.invalidate(seriesDetailProvider(widget.seriesId));
       ref.invalidate(videoListProvider);
-    });
-  }
-
-  void _playInReels(BuildContext context) {
-    HapticFeedback.lightImpact();
-    Navigator.push(
-      context,
-      MaterialPageRoute(
-        builder: (_) => Scaffold(
-          backgroundColor: Colors.black,
-          body: ReelsScreen(
-            seriesId: widget.seriesId,
-            isActive: true,
-          ),
-        ),
-      ),
-    ).then((_) {
-      ref.invalidate(seriesDetailProvider(widget.seriesId));
     });
   }
 
@@ -119,19 +101,6 @@ class _SeriesDetailScreenState extends ConsumerState<SeriesDetailScreen> {
         setState(() => _localIsFavorite = currentStatus);
       }
     }
-  }
-
-  void _shareSeries(String title, AppLocalizations l10n) {
-    HapticFeedback.lightImpact();
-    final url = 'https://vidtele.digitlab.dev/series/${widget.seriesId}';
-    Clipboard.setData(ClipboardData(text: '$title · $url'));
-    ScaffoldMessenger.of(context).showSnackBar(
-      SnackBar(
-        content: Text(l10n.linkCopied),
-        duration: const Duration(seconds: 2),
-        backgroundColor: AppTheme.darkSurface,
-      ),
-    );
   }
 
   @override
@@ -225,18 +194,6 @@ class _SeriesDetailScreenState extends ConsumerState<SeriesDetailScreen> {
                         ),
                       ),
                     ),
-                    actions: [
-                      Padding(
-                        padding: const EdgeInsets.only(right: 12),
-                        child: CircleAvatar(
-                          backgroundColor: Colors.black54,
-                          child: IconButton(
-                            icon: const Icon(Icons.share, color: Colors.white, size: 20),
-                            onPressed: () => _shareSeries(title, l10n),
-                          ),
-                        ),
-                      ),
-                    ],
                     flexibleSpace: FlexibleSpaceBar(
                       background: Stack(
                         fit: StackFit.expand,
@@ -432,80 +389,33 @@ class _SeriesDetailScreenState extends ConsumerState<SeriesDetailScreen> {
                                 ),
                               ),
                             ),
-                            const SizedBox(height: 10),
+                            const SizedBox(height: 14),
                           ],
 
-                          // Bouton 2 : Binge vertical style TikTok (Reels)
-                          TouchableScale(
-                            onTap: () => _playInReels(context),
-                            child: Container(
-                              width: double.infinity,
-                              padding: const EdgeInsets.symmetric(vertical: 12),
-                              decoration: BoxDecoration(
-                                color: const Color(0xFF1E1E26),
-                                borderRadius: BorderRadius.circular(8),
-                                border: Border.all(color: Colors.white12),
-                              ),
-                              child: Row(
-                                mainAxisAlignment: MainAxisAlignment.center,
+                          // Action secondaire : Ma Liste
+                          Center(
+                            child: TouchableScale(
+                              onTap: () => _toggleFavorite(isFavorite, l10n),
+                              child: Column(
+                                mainAxisSize: MainAxisSize.min,
                                 children: [
-                                  const Icon(Icons.stay_current_portrait_rounded, color: Colors.white, size: 20),
-                                  const SizedBox(width: 8),
+                                  Icon(
+                                    isFavorite ? Icons.check : Icons.add,
+                                    color: isFavorite ? AppTheme.netflixRed : Colors.white,
+                                    size: 26,
+                                  ),
+                                  const SizedBox(height: 4),
                                   Text(
-                                    l10n.watchVertical,
-                                    style: const TextStyle(
-                                      color: Colors.white,
-                                      fontSize: 14,
-                                      fontWeight: FontWeight.w600,
+                                    l10n.myListTitle,
+                                    style: TextStyle(
+                                      color: isFavorite ? AppTheme.netflixRed : Colors.white70,
+                                      fontSize: 12,
+                                      fontWeight: isFavorite ? FontWeight.bold : FontWeight.normal,
                                     ),
                                   ),
                                 ],
                               ),
                             ),
-                          ),
-                          const SizedBox(height: 14),
-
-                          // Ligne d'actions secondaires : Ma Liste, Partager
-                          Row(
-                            mainAxisAlignment: MainAxisAlignment.spaceAround,
-                            children: [
-                              TouchableScale(
-                                onTap: () => _toggleFavorite(isFavorite, l10n),
-                                child: Column(
-                                  mainAxisSize: MainAxisSize.min,
-                                  children: [
-                                    Icon(
-                                      isFavorite ? Icons.check : Icons.add,
-                                      color: isFavorite ? AppTheme.netflixRed : Colors.white,
-                                      size: 24,
-                                    ),
-                                    const SizedBox(height: 4),
-                                    Text(
-                                      l10n.myListTitle,
-                                      style: TextStyle(
-                                        color: isFavorite ? AppTheme.netflixRed : Colors.white70,
-                                        fontSize: 12,
-                                        fontWeight: isFavorite ? FontWeight.bold : FontWeight.normal,
-                                      ),
-                                    ),
-                                  ],
-                                ),
-                              ),
-                              TouchableScale(
-                                onTap: () => _shareSeries(title, l10n),
-                                child: Column(
-                                  mainAxisSize: MainAxisSize.min,
-                                  children: [
-                                    const Icon(Icons.share, color: Colors.white, size: 22),
-                                    const SizedBox(height: 4),
-                                    Text(
-                                      l10n.shareSeries,
-                                      style: const TextStyle(color: Colors.white70, fontSize: 12),
-                                    ),
-                                  ],
-                                ),
-                              ),
-                            ],
                           ),
                           const SizedBox(height: 18),
 

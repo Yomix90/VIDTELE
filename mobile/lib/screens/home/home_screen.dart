@@ -16,7 +16,7 @@ import '../../widgets/shimmer_placeholder.dart';
 import '../../widgets/top_number_card.dart';
 import '../../widgets/touchable_scale.dart';
 import '../../widgets/video_card.dart';
-import '../player/video_player_screen.dart';
+import '../player/reels_screen.dart';
 import '../series/series_detail_screen.dart';
 
 /// Écran d'accueil immersif moderne pour VidTele / Atlas Play.
@@ -43,13 +43,22 @@ class _HomeScreenState extends ConsumerState<HomeScreen> {
   }
 
   void _onVideoSelected(VideoModel video, [List<VideoModel>? playlist]) {
+    final seriesPlaylist = (video.seriesId != null && playlist != null)
+        ? playlist.where((v) => v.seriesId == video.seriesId).toList()
+        : playlist;
+
     Navigator.push(
       context,
       MaterialPageRoute(
-        builder: (_) => VideoPlayerScreen(
-          video: video,
-          playlist: playlist,
-          initialIndex: playlist?.indexOf(video),
+        builder: (_) => ReelsScreen(
+          isActive: true,
+          isStandalone: true,
+          initialVideo: video,
+          playlist: (video.seriesId != null && (seriesPlaylist == null || seriesPlaylist.length <= 1))
+              ? null
+              : seriesPlaylist,
+          initialVideoId: video.id,
+          seriesId: video.seriesId,
         ),
       ),
     );

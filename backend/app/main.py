@@ -83,8 +83,8 @@ async def lifespan(app: FastAPI):
     await bootstrap_admin_and_invites()
     logger.info("Base de données et tables initialisées avec succès.")
 
-    # Restauration des paramètres dynamiques depuis la base (ex: TELEGRAM_CHANNEL_ID)
-    from app.models import SystemSetting
+    # Restauration des paramètres dynamiques depuis la base (ex: TELEGRAM_CHANNEL_ID et TelegramAccount actif)
+    from app.models import SystemSetting, TelegramAccount
     async with AsyncSessionLocal() as db:
         res = await db.execute(select(SystemSetting).where(SystemSetting.key == "TELEGRAM_CHANNEL_ID"))
         setting = res.scalar_one_or_none()
@@ -94,6 +94,17 @@ async def lifespan(app: FastAPI):
                 logger.info(f"Canal Telegram restauré depuis la base de données : {settings.TELEGRAM_CHANNEL_ID}")
             except ValueError:
                 pass
+
+        # Vérifier si un compte Telegram actif est enregistré dans la table telegram_accounts
+        res_acc = await db.execute(select(TelegramAccount).where(TelegramAccount.is_active == True))
+        active_acc = res_acc.scalar_one_or_none()
+        if active_acc and active_acc.string_session:
+            settings.TELEGRAM_STRING_SESSION = active_acc.string_session
+            if active_acc.api_id:
+                settings.TELEGRAM_API_ID = active_acc.api_id
+            if active_acc.api_hash:
+                settings.TELEGRAM_API_HASH = active_acc.api_hash
+            logger.info(f"Session Telegram active restaurée depuis la base de données : '{active_acc.name}'")
 
     # Démarrage du client Telegram MTProto
     periodic_task = None

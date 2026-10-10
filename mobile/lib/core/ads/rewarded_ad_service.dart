@@ -39,7 +39,7 @@ class RewardedAdService extends ChangeNotifier {
 
   /// Précharge une annonce vidéo avec récompense si aucune annonce n'est déjà prête ou en cours de chargement.
   Future<void> preloadAd() async {
-    if (_isDisposed) return;
+    if (kIsWeb || _isDisposed) return;
     if (_rewardedAd != null || _status == RewardedAdStatus.loading || _status == RewardedAdStatus.showing) {
       return;
     }
@@ -160,6 +160,10 @@ class RewardedAdService extends ChangeNotifier {
     VoidCallback? onAdClosed,
     void Function(String error)? onAdFailed,
   }) async {
+    if (kIsWeb) {
+      onUserEarnedReward(RewardItem(1, 'web_reward'));
+      return true;
+    }
     if (!isAdReady || _rewardedAd == null) {
       debugPrint('[RewardedAdService] Impossible d\'afficher: aucune annonce prête');
       onAdFailed?.call('Aucune annonce disponible pour le moment');

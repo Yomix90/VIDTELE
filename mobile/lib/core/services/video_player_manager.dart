@@ -71,18 +71,41 @@ class VideoPlayerManager with WidgetsBindingObserver {
     }
   }
 
+  String? _pausedPlayerIdBeforeBackground;
+  bool _wasPlayingBeforeBackground = false;
+
   @override
   void didChangeAppLifecycleState(AppLifecycleState state) {
+    debugPrint('[VideoPlayerManager] AppLifecycleState -> $state');
     switch (state) {
       case AppLifecycleState.paused:
-      case AppLifecycleState.inactive:
       case AppLifecycleState.hidden:
       case AppLifecycleState.detached:
-        // Coupure absolue du son et de la vidéo dès que l'app n'est plus au premier plan
-        pauseAll();
+        // L'application n'est réellement plus à l'écran : coupure propre
+        if (_activePlayerId != null) {
+          final active = _players[_activePlayerId];
+          if (active != null && active.controller.value.isInitialized && active.controller.value.isPlaying) {
+            _pausedPlayerIdBeforeBackground = _activePlayerId;
+            _wasPlayingBeforeBackground = true;
+          }
+        }
+        pauseAll(recordPause: false);
+        break;
+      case AppLifecycleState.inactive:
+        // Sous Android, inactive survient lors d'une notification push, du volet de statut,
+        // d'un appui volume ou d'une boîte de dialogue. L'application reste visible.
+        // NE PAS couper la lecture ici pour éviter les arrêts inopinés.
+        debugPrint('[VideoPlayerManager] Inactive ignoré (maintien lecture en premier plan)');
         break;
       case AppLifecycleState.resumed:
-        // Ne reprend pas automatiquement pour éviter tout son surprise non désiré
+        // Retour au premier plan : reprendre la lecture si elle était active avant
+        if (_wasPlayingBeforeBackground && _pausedPlayerIdBeforeBackground != null) {
+          final idToResume = _pausedPlayerIdBeforeBackground!;
+          _wasPlayingBeforeBackground = false;
+          _pausedPlayerIdBeforeBackground = null;
+          debugPrint('[VideoPlayerManager] Reprise automatique après retour au premier plan: $idToResume');
+          play(idToResume);
+        }
         break;
     }
   }
@@ -152,7 +175,11 @@ class VideoPlayerManager with WidgetsBindingObserver {
   }
 
   /// Met en pause TOUS les lecteurs actifs enregistrés
-  void pauseAll() {
+  void pauseAll({bool recordPause = true}) {
+    if (recordPause) {
+      _wasPlayingBeforeBackground = false;
+      _pausedPlayerIdBeforeBackground = null;
+    }
     _players.forEach((_, entry) {
       if (entry.controller.value.isInitialized && entry.controller.value.isPlaying) {
         entry.controller.pause();

@@ -239,6 +239,8 @@ class SeriesDetailModel {
     required this.seasons,
   });
 
+  String get title => titleFr;
+
   String getLocalizedTitle(String langCode) {
     if (langCode == 'ar' && titleAr != null && titleAr!.trim().isNotEmpty) {
       return titleAr!;

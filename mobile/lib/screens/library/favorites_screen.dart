@@ -10,7 +10,7 @@ import '../../widgets/error_state.dart';
 import '../../widgets/shimmer_placeholder.dart';
 import '../../widgets/touchable_scale.dart';
 import '../../widgets/video_card.dart';
-import '../player/video_player_screen.dart';
+import '../player/reels_screen.dart';
 
 enum FavoriteFilter { all, series, inProgress }
 
@@ -143,13 +143,21 @@ class _FavoritesScreenState extends ConsumerState<FavoritesScreen> {
                               children: [
                                 TouchableScale(
                                   onTap: () {
+                                    final seriesPlaylist = (video.seriesId != null)
+                                        ? filteredFavorites.where((v) => v.seriesId == video.seriesId).toList()
+                                        : filteredFavorites;
                                     Navigator.push(
                                       context,
                                       MaterialPageRoute(
-                                        builder: (_) => VideoPlayerScreen(
-                                          video: video,
-                                          playlist: filteredFavorites,
-                                          initialIndex: index,
+                                        builder: (_) => ReelsScreen(
+                                          isActive: true,
+                                          isStandalone: true,
+                                          initialVideo: video,
+                                          playlist: (video.seriesId != null && seriesPlaylist.length <= 1)
+                                              ? null
+                                              : seriesPlaylist,
+                                          initialVideoId: video.id,
+                                          seriesId: video.seriesId,
                                         ),
                                       ),
                                     );
@@ -159,13 +167,21 @@ class _FavoritesScreenState extends ConsumerState<FavoritesScreen> {
                                     width: double.infinity,
                                     height: double.infinity,
                                     onTap: () {
+                                      final seriesPlaylist = (video.seriesId != null)
+                                          ? filteredFavorites.where((v) => v.seriesId == video.seriesId).toList()
+                                          : filteredFavorites;
                                       Navigator.push(
                                         context,
                                         MaterialPageRoute(
-                                          builder: (_) => VideoPlayerScreen(
-                                            video: video,
-                                            playlist: filteredFavorites,
-                                            initialIndex: index,
+                                          builder: (_) => ReelsScreen(
+                                            isActive: true,
+                                            isStandalone: true,
+                                            initialVideo: video,
+                                            playlist: (video.seriesId != null && seriesPlaylist.length <= 1)
+                                                ? null
+                                                : seriesPlaylist,
+                                            initialVideoId: video.id,
+                                            seriesId: video.seriesId,
                                           ),
                                         ),
                                       );
