@@ -54,8 +54,12 @@ class Settings(BaseSettings):
 
 
     # Anti brute-force
-    MAX_LOGIN_ATTEMPTS: int = 5
+    MAX_LOGIN_ATTEMPTS: int = 5  # par couple IP + nom d'utilisateur
+    MAX_LOGIN_ATTEMPTS_PER_ACCOUNT: int = 20  # par compte, toutes IP confondues (résiste à l'usurpation d'IP)
     LOGIN_LOCKOUT_MINUTES: int = 15
+
+    # Proxys de confiance (Traefik/Dokploy, réseaux Docker) : seuls eux peuvent fixer X-Forwarded-For
+    TRUSTED_PROXIES: str = "127.0.0.1/32,::1/128,10.0.0.0/8,172.16.0.0/12,192.168.0.0/16"
 
     model_config = SettingsConfigDict(
         env_file=str(Path(__file__).resolve().parent.parent / ".env"),

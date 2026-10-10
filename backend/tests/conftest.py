@@ -58,3 +58,13 @@ async def admin_token(client):
 @pytest.fixture
 def auth(admin_token):
     return {"Authorization": f"Bearer {admin_token}"}
+
+
+@pytest.fixture(autouse=True)
+def reset_brute_force():
+    """Chaque test démarre avec des compteurs anti brute-force vierges."""
+    from app.security import brute_force_protector
+
+    brute_force_protector._failures.clear()
+    yield
+    brute_force_protector._failures.clear()

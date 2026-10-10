@@ -1,6 +1,7 @@
 """
 Sécurité, hachage des mots de passe, gestion des jetons JWT et anti brute-force.
 """
+import ipaddress
 from collections import defaultdict
 from datetime import datetime, timedelta, timezone
 from typing import Optional, Tuple
@@ -27,16 +28,21 @@ class BruteForceProtector:
         # Clé: identifiant (ip:username), Valeur: liste de timestamps UTC des échecs
         self._failures: dict[str, list[datetime]] = defaultdict(list)
 
-    def is_locked(self, identifier: str) -> Tuple[bool, int]:
+    def is_locked(self, identifier: str, max_attempts: Optional[int] = None) -> Tuple[bool, int]:
         """Vérifie si l'identifiant est bloqué. Renvoie (bloqué, secondes_restantes)."""
+        if max_attempts is None:
+            max_attempts = settings.MAX_LOGIN_ATTEMPTS
         now = datetime.now(timezone.utc)
         window = timedelta(minutes=settings.LOGIN_LOCKOUT_MINUTES)
         # Nettoyage des tentatives hors de la fenêtre
-        recent = [t for t in self._failures[identifier] if (now - t) < window]
-        self._failures[identifier] = recent
+        recent = [t for t in self._failures.get(identifier, []) if (now - t) < window]
+        if recent:
+            self._failures[identifier] = recent
+        else:
+            self._failures.pop(identifier, None)
 
-        if len(recent) >= settings.MAX_LOGIN_ATTEMPTS:
-            oldest = recent[0]
+        if len(recent) >= max_attempts:
+            oldest = recent[-max_attempts]
             remaining = int((oldest + window - now).total_seconds())
             return True, max(remaining, 1)
         return False, 0
@@ -44,6 +50,14 @@ class BruteForceProtector:
     def register_failure(self, identifier: str) -> None:
         """Enregistre un échec de connexion."""
         self._failures[identifier].append(datetime.now(timezone.utc))
+        if len(self._failures) > 10_000:
+            self._prune()
+
+    def _prune(self) -> None:
+        """Supprime les entrées expirées pour borner la mémoire (clés tournantes d'un attaquant)."""
+        limit = datetime.now(timezone.utc) - timedelta(minutes=settings.LOGIN_LOCKOUT_MINUTES)
+        for key in [k for k, v in self._failures.items() if not v or v[-1] < limit]:
+            del self._failures[key]
 
     def reset(self, identifier: str) -> None:
         """Réinitialise les échecs après une connexion réussie."""
@@ -52,6 +66,33 @@ class BruteForceProtector:
 
 
 brute_force_protector = BruteForceProtector()
+
+
+def check_login_allowed(ip: str, username: str) -> Tuple[bool, int]:
+    """
+    Vérifie les deux verrous anti brute-force :
+    - par IP + compte (MAX_LOGIN_ATTEMPTS) ;
+    - par compte seul (MAX_LOGIN_ATTEMPTS_PER_ACCOUNT), qui tient même si l'attaquant change d'IP.
+    Renvoie (autorisé, secondes_restantes).
+    """
+    locked, remaining = brute_force_protector.is_locked(f"{ip}:{username}")
+    if not locked:
+        locked, remaining = brute_force_protector.is_locked(
+            f"compte:{username.lower()}", settings.MAX_LOGIN_ATTEMPTS_PER_ACCOUNT
+        )
+    if locked:
+        return False, remaining
+    return True, 0
+
+
+def register_login_failure(ip: str, username: str) -> None:
+    brute_force_protector.register_failure(f"{ip}:{username}")
+    brute_force_protector.register_failure(f"compte:{username.lower()}")
+
+
+def reset_login_failures(ip: str, username: str) -> None:
+    brute_force_protector.reset(f"{ip}:{username}")
+    brute_force_protector.reset(f"compte:{username.lower()}")
 
 
 # -------------------------------------------------------------
@@ -218,9 +259,43 @@ async def get_optional_current_user(
         return None
 
 
+def _parse_networks(raw: str) -> list:
+    networks = []
+    for part in raw.split(","):
+        part = part.strip()
+        if part:
+            try:
+                networks.append(ipaddress.ip_network(part, strict=False))
+            except ValueError:
+                pass
+    return networks
+
+
+def _is_trusted_proxy(ip: str) -> bool:
+    try:
+        addr = ipaddress.ip_address(ip)
+    except ValueError:
+        return False
+    return any(addr in net for net in _parse_networks(settings.TRUSTED_PROXIES))
+
+
 def get_client_ip(request: Request) -> str:
-    """Récupère l'adresse IP réelle du client (gère les proxys Nginx X-Forwarded-For)."""
-    forwarded = request.headers.get("X-Forwarded-For")
-    if forwarded:
-        return forwarded.split(",")[0].strip()
-    return request.client.host if request.client else "unknown"
+    """
+    Récupère l'adresse IP réelle du client.
+    X-Forwarded-For n'est pris en compte que si la connexion vient d'un proxy de confiance
+    (Traefik). On lit alors la liste de droite à gauche et on garde la première IP qui
+    n'est pas un proxy : c'est celle ajoutée par Traefik, que le client ne peut pas falsifier.
+    """
+    peer = request.client.host if request.client else "unknown"
+    if not _is_trusted_proxy(peer):
+        return peer
+
+    forwarded = request.headers.get("X-Forwarded-For", "")
+    for candidate in reversed([p.strip() for p in forwarded.split(",") if p.strip()]):
+        try:
+            ipaddress.ip_address(candidate)
+        except ValueError:
+            continue
+        if not _is_trusted_proxy(candidate):
+            return candidate
+    return peer

@@ -14,7 +14,16 @@ from sqlalchemy.orm import selectinload
 from app.config import settings
 from app.database import get_db
 from app.models import Episode, HomeRow, InviteCode, Movie, Season, Series, SystemSetting, TelegramAccount, User, Video
-from app.security import create_access_token, decode_token, hash_password, verify_password
+from app.security import (
+    check_login_allowed,
+    create_access_token,
+    decode_token,
+    get_client_ip,
+    hash_password,
+    register_login_failure,
+    reset_login_failures,
+    verify_password,
+)
 from app.services.cache_service import cache_service
 from app.services.stream_manager import stream_manager
 from app.telegram_client import telegram_manager
@@ -83,6 +92,17 @@ async def admin_login_submit(
     username = str(form.get("username", "")).strip()
     password = str(form.get("password", "")).strip()
 
+    # Anti brute-force (mêmes verrous que l'API mobile)
+    ip = get_client_ip(request)
+    allowed, remaining_seconds = check_login_allowed(ip, username)
+    if not allowed:
+        return templates.TemplateResponse(
+            request=request,
+            name="login.html",
+            context={"error": f"Trop de tentatives. Réessayez dans {remaining_seconds} secondes.", "next_url": next},
+            status_code=429,
+        )
+
     stmt = select(User).where(User.username == username)
     result = await db.execute(stmt)
     user = result.scalar_one_or_none()
@@ -92,6 +112,7 @@ async def admin_login_submit(
 
 
     if not user or not is_valid:
+        register_login_failure(ip, username)
         return templates.TemplateResponse(
             request=request,
             name="login.html",
@@ -108,6 +129,7 @@ async def admin_login_submit(
             status_code=403,
         )
 
+    reset_login_failures(ip, username)
     token = create_access_token(user.id, user.username, user.role)
     redirect_target = next if next and next.startswith("/admin") else "/admin"
     response = RedirectResponse(url=redirect_target, status_code=303)
