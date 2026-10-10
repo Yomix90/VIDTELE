@@ -261,6 +261,47 @@ bash deploy/prepare_video.sh ma_video.mp4 ma_video_optimisee.mp4
 
 ---
 
+## 💰 Monétisation AdMob & Conformité Google Play
+
+VidTele intègre une monétisation par **annonces vidéo avec récompense (Rewarded Ads)** strictement conforme aux règles Google AdMob et aux consignes Google Play :
+
+### 1. Cycle de Quota Intelligent (WatchGate)
+- **Seuil dynamique aléatoire** : L'utilisateur regarde 4 ou 5 vidéos complètes (seuil tiré au sort à chaque cycle) avant de voir une proposition.
+- **Règle de visionnage des 70%** : Une vidéo n'est comptabilisée que si elle est visionnée à **70% minimum** (ou jusqu'à sa fin). Les zappings rapides ne consomment pas le quota.
+- **Opt-in strict & Consentement explicite** : Aucune annonce n'est jamais déclenchée par surprise ni pendant la lecture. Une boîte de dialogue soignée propose à l'utilisateur de visionner une annonce pour débloquer le prochain bloc de vidéos ou de reporter (« Plus tard »). En cas de report, le swipe et la lecture restent élégamment verrouillés.
+- **Validation du déblocage** : Les vidéos suivantes ne sont débloquées qu'à la réception du callback officiel `onUserEarnedReward`.
+- **Persistance locale & secours** : L'état et le compteur sont conservés en mémoire persistante (`shared_preferences`). En cas d'indisponibilité prolongée du réseau publicitaire, une dérogation d'urgence empêche tout blocage infini.
+- **Exemption VIP / Admin** : Les administrateurs et les utilisateurs marqués `ads_free: true` ne voient aucune publicité.
+
+### 2. Identifiants AdMob (Automatisés Debug / Release)
+- **Mode Debug (`kDebugMode`)** : L'application utilise automatiquement les IDs de test officiels Google.
+- **Mode Release** : L'application bascule automatiquement sur les IDs de production :
+  - **App ID AdMob Android** : `ca-app-pub-7846348811801616~6697457552`
+  - **Bloc Rewarded Android** : `ca-app-pub-7846348811801616/7954698905`
+
+> [!WARNING] Protection contre la suspension de compte AdMob
+> Ne cliquez jamais sur vos propres annonces réelles. Enregistrez toujours l'identifiant de votre smartphone de développement dans la liste `testDeviceIds` via `AdsConfig.registerTestDeviceId("VOTRE_DEVICE_ID")`.
+
+### 3. Déclarations requises dans Google Play Console
+1. **Contenu de l'application > Présence d'annonces** : Sélectionner **« Oui, mon application contient des annonces »**.
+2. **Déclaration de l'ID publicitaire (AAID)** :
+   - Indiquer que l'application utilise l'identifiant publicitaire (`com.google.android.gms.permission.AD_ID`).
+   - Cocher l'usage : **« Publicité ou marketing »**.
+3. **Formulaire de Sécurité des données (Data Safety)** :
+   - Déclarer les données collectées par le SDK Google Mobile Ads (identifiants de l'appareil, interactions publicitaires, diagnostics de plantage).
+   - Préciser que toutes les données sont chiffrées en transit (HTTPS).
+
+### 4. Liaison Google AdMob & Fichier app-ads.txt
+1. Une fois l'APK publiée sur Google Play, rendez-vous dans votre console **Google AdMob > Applications > VidTele > Paramètres de l'application > Magasins d'applications** et liez votre fiche Google Play Store.
+2. Créez et publiez votre fichier `app-ads.txt` à la racine de votre domaine officiel :
+   ```text
+   google.com, pub-7846348811801616, DIRECT, f08c47fec0942fa0
+   ```
+3. Consultez le guide complet de mise en production : [ADMOB_GUIDE.md](file:///c:/Users/USF/Desktop/VIDTELE/ADMOB_GUIDE.md).
+
+---
+
 ## 📄 Licence & Mentions Légales
 Ce projet est conçu pour un usage privé et légal de diffusion de contenus multimédias dont vous détenez les droits de visionnage.
 VidTele utilise l'API officielle Telegram via MTProto conforme aux conditions d'utilisation de Telegram.
+
