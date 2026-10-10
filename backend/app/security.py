@@ -143,18 +143,25 @@ def decode_token(token: str, expected_type: str = "access") -> dict:
 # Dépendances FastAPI pour les Utilisateurs
 # -------------------------------------------------------------
 async def get_current_user(
+    request: Request = None,
     auth: Optional[HTTPAuthorizationCredentials] = Depends(security_bearer),
     db: AsyncSession = Depends(get_db),
 ) -> User:
-    """Extrait et vérifie l'utilisateur courant à partir du header Authorization: Bearer <token>."""
-    if not auth or not auth.credentials:
+    """Extrait et vérifie l'utilisateur courant à partir du header Authorization ou du cookie de session."""
+    token = None
+    if auth and auth.credentials:
+        token = auth.credentials
+    elif request:
+        token = request.cookies.get("admin_token") or request.cookies.get("access_token")
+
+    if not token:
         raise HTTPException(
             status_code=status.HTTP_401_UNAUTHORIZED,
             detail="Authentification requise",
             headers={"WWW-Authenticate": "Bearer"},
         )
 
-    payload = decode_token(auth.credentials, expected_type="access")
+    payload = decode_token(token, expected_type="access")
     user_id_str = payload.get("sub")
     if not user_id_str or not user_id_str.isdigit():
         raise HTTPException(

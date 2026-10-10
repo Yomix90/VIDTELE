@@ -481,3 +481,55 @@ class AppUpdateConfig(BaseModel):
     title: Optional[str] = Field("Nouvelle mise à jour disponible", description="Titre du dialogue")
     release_notes: Optional[str] = Field(None, description="Notes de mise à jour (changements)")
     force_update: bool = Field(False, description="Bloquer l'utilisation de l'app si non mis à jour")
+
+
+# -------------------------------------------------------------
+# Schémas Multi-Comptes et Diagnostics Telegram MTProto
+# -------------------------------------------------------------
+
+class TelegramAccountResponse(BaseModel):
+    id: int
+    name: str
+    phone: Optional[str] = None
+    account_user_id: Optional[int] = None
+    account_username: Optional[str] = None
+    account_first_name: Optional[str] = None
+    is_active: bool = False
+    status: str = "idle"
+    last_error: Optional[str] = None
+    created_at: datetime
+    last_tested_at: Optional[datetime] = None
+
+    model_config = ConfigDict(from_attributes=True)
+
+
+class TelegramAccountCreate(BaseModel):
+    name: str = Field(..., description="Nom convivial du compte (ex: Compte Principal, Backup)")
+    string_session: str = Field(..., description="Clé de session StringSession Telethon")
+    api_id: Optional[int] = None
+    api_hash: Optional[str] = None
+    make_active: bool = True
+
+
+class TelegramPhoneAuthRequest(BaseModel):
+    phone: str = Field(..., description="Numéro de téléphone au format international (ex: +33612345678)")
+    api_id: Optional[int] = None
+    api_hash: Optional[str] = None
+
+
+class TelegramPhoneVerifyRequest(BaseModel):
+    phone: str
+    code: str = Field(..., description="Code de vérification reçu sur Telegram")
+    phone_code_hash: str
+    password_2fa: Optional[str] = None
+    account_name: Optional[str] = "Nouveau Compte"
+    api_id: Optional[int] = None
+    api_hash: Optional[str] = None
+    make_active: bool = True
+
+
+class TelegramConfigUpdateRequest(BaseModel):
+    api_id: Optional[int] = None
+    api_hash: Optional[str] = None
+    channel_id: Optional[str] = None
+

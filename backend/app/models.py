@@ -390,3 +390,25 @@ class Device(Base):
     is_active: Mapped[bool] = mapped_column(Boolean, default=True, nullable=False)
     last_seen_at: Mapped[Optional[datetime]] = mapped_column(DateTime, nullable=True)
     created_at: Mapped[datetime] = mapped_column(DateTime, default=utc_now, nullable=False)
+
+
+class TelegramAccount(Base):
+    """Comptes Telegram MTProto configurés et reliés (Gestion Multi-Comptes)."""
+    __tablename__ = "telegram_accounts"
+
+    id: Mapped[int] = mapped_column(Integer, primary_key=True, index=True)
+    name: Mapped[str] = mapped_column(String(128), nullable=False)  # Nom convivial : 'Compte Principal', 'Backup'
+    phone: Mapped[Optional[str]] = mapped_column(String(32), nullable=True)
+    api_id: Mapped[Optional[int]] = mapped_column(Integer, nullable=True)
+    api_hash: Mapped[Optional[str]] = mapped_column(String(64), nullable=True)
+    string_session: Mapped[Optional[str]] = mapped_column(Text, nullable=True)
+    session_file: Mapped[Optional[str]] = mapped_column(String(255), nullable=True)
+    is_active: Mapped[bool] = mapped_column(Boolean, default=False, nullable=False)
+    account_user_id: Mapped[Optional[int]] = mapped_column(BigInteger, nullable=True)
+    account_username: Mapped[Optional[str]] = mapped_column(String(128), nullable=True)
+    account_first_name: Mapped[Optional[str]] = mapped_column(String(128), nullable=True)
+    status: Mapped[str] = mapped_column(String(32), default="idle", nullable=False)  # "connected", "error", "idle"
+    last_error: Mapped[Optional[str]] = mapped_column(Text, nullable=True)
+    created_at: Mapped[datetime] = mapped_column(DateTime, default=utc_now, nullable=False)
+    last_tested_at: Mapped[Optional[datetime]] = mapped_column(DateTime, nullable=True)
+

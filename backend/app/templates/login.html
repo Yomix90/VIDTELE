@@ -1,0 +1,192 @@
+<!doctype html>
+<html lang="fr" data-bs-theme="dark" data-theme="dark">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <title>Atlas Play - Connexion Administrateur</title>
+
+  <!-- Google Fonts -->
+  <link rel="preconnect" href="https://fonts.googleapis.com">
+  <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+  <link href="https://fonts.googleapis.com/css2?family=Cairo:wght@400;600;700;800&family=Inter:wght@400;500;600;700;800;900&display=swap" rel="stylesheet">
+
+  <!-- Bootstrap 5 & Icons -->
+  <link href="https://cdn.jsdelivr.net/npm/bootstrap@5.3.3/dist/css/bootstrap.min.css" rel="stylesheet">
+  <link href="https://cdn.jsdelivr.net/npm/bootstrap-icons@1.11.3/font/bootstrap-icons.min.css" rel="stylesheet">
+
+  <!-- Charte Graphique Atlas Play -->
+  <link href="/static/css/preview.css" rel="stylesheet">
+
+  <style>
+    body {
+      background: #090B10;
+      background-image: 
+        radial-gradient(at 0% 0%, rgba(229, 9, 20, 0.12) 0px, transparent 50%),
+        radial-gradient(at 100% 100%, rgba(14, 165, 233, 0.08) 0px, transparent 50%);
+      min-height: 100vh;
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      font-family: 'Inter', sans-serif;
+    }
+    .login-container {
+      width: 100%;
+      max-width: 440px;
+      padding: 24px;
+    }
+    .login-card {
+      background: #0F131C;
+      border: 1px solid rgba(255, 255, 255, 0.08);
+      border-radius: 16px;
+      box-shadow: 0 20px 40px rgba(0, 0, 0, 0.6);
+      padding: 36px 32px;
+    }
+    .brand-logo-img {
+      height: 48px;
+      width: auto;
+      object-fit: contain;
+    }
+    .form-control {
+      background: rgba(255, 255, 255, 0.03);
+      border: 1px solid rgba(255, 255, 255, 0.12);
+      color: #FFFFFF;
+      padding: 12px 14px;
+      border-radius: 10px;
+    }
+    .form-control:focus {
+      background: rgba(255, 255, 255, 0.05);
+      border-color: #E50914;
+      color: #FFFFFF;
+      box-shadow: 0 0 0 3px rgba(229, 9, 20, 0.2);
+    }
+    .input-group-text {
+      background: rgba(255, 255, 255, 0.03);
+      border: 1px solid rgba(255, 255, 255, 0.12);
+      color: #94A3B8;
+      border-radius: 10px;
+    }
+    .btn-login {
+      background: #E50914;
+      border: none;
+      color: #FFFFFF;
+      font-weight: 700;
+      padding: 12px;
+      border-radius: 10px;
+      transition: all 0.2s ease;
+    }
+    .btn-login:hover {
+      background: #B80710;
+      box-shadow: 0 4px 15px rgba(229, 9, 20, 0.4);
+    }
+  </style>
+</head>
+<body>
+
+<div class="login-container">
+  <!-- Brand Header -->
+  <div class="text-center mb-4">
+    <img src="/static/img/atlas_play_icon.svg" alt="Atlas Play" class="brand-logo-img mb-2">
+    <h1 class="h4 fw-black text-white tracking-wide mb-1">
+      ATLAS<span style="color: #E50914;">PLAY</span>
+    </h1>
+    <div class="text-muted small">Panneau d'administration sécurisé</div>
+  </div>
+
+  <!-- Login Card -->
+  <div class="login-card">
+    <div class="mb-4">
+      <h2 class="h5 fw-bold text-white mb-1">Connexion</h2>
+      <div class="text-muted small">Veuillez renseigner vos identifiants administrateur.</div>
+    </div>
+
+    {% if error %}
+    <div class="alert alert-danger py-2 px-3 small d-flex align-items-center gap-2 mb-3" role="alert">
+      <i class="bi bi-exclamation-triangle-fill flex-shrink-0"></i>
+      <div>{{ error }}</div>
+    </div>
+    {% endif %}
+
+    <form method="POST" action="/admin/login{% if next_url %}?next={{ next_url }}{% endif %}" id="loginForm">
+      <!-- Username -->
+      <div class="mb-3">
+        <label for="usernameInput" class="form-label small text-white fw-semibold">Nom d'utilisateur</label>
+        <div class="input-group">
+          <span class="input-group-text"><i class="bi bi-person"></i></span>
+          <input 
+            type="text" 
+            name="username" 
+            id="usernameInput" 
+            class="form-control" 
+            placeholder="admin" 
+            required 
+            autocomplete="username"
+            autofocus
+          >
+        </div>
+      </div>
+
+      <!-- Password -->
+      <div class="mb-4">
+        <label for="passwordInput" class="form-label small text-white fw-semibold">Mot de passe</label>
+        <div class="input-group">
+          <span class="input-group-text"><i class="bi bi-shield-lock"></i></span>
+          <input 
+            type="password" 
+            name="password" 
+            id="passwordInput" 
+            class="form-control" 
+            placeholder="••••••••••••" 
+            required 
+            autocomplete="current-password"
+          >
+          <button class="btn btn-outline-secondary border-start-0" type="button" id="togglePasswordBtn" style="border-color: rgba(255, 255, 255, 0.12);">
+            <i class="bi bi-eye text-muted" id="togglePasswordIcon"></i>
+          </button>
+        </div>
+      </div>
+
+      <!-- Submit Button -->
+      <button type="submit" class="btn btn-login w-100 d-flex align-items-center justify-content-center gap-2" id="submitBtn">
+        <i class="bi bi-box-arrow-in-right"></i>
+        <span>Se connecter</span>
+      </button>
+    </form>
+  </div>
+
+  <div class="text-center mt-4">
+    <div class="text-muted" style="font-size: 0.78rem;">
+      Atlas Play Streaming Platform &copy; 2026 · Dokploy VPS
+    </div>
+  </div>
+</div>
+
+<script>
+  // Toggle password visibility
+  const toggleBtn = document.getElementById('togglePasswordBtn');
+  const pwdInput = document.getElementById('passwordInput');
+  const pwdIcon = document.getElementById('togglePasswordIcon');
+  if (toggleBtn && pwdInput) {
+    toggleBtn.addEventListener('click', function () {
+      if (pwdInput.type === 'password') {
+        pwdInput.type = 'text';
+        pwdIcon.classList.replace('bi-eye', 'bi-eye-slash');
+      } else {
+        pwdInput.type = 'password';
+        pwdIcon.classList.replace('bi-eye-slash', 'bi-eye');
+      }
+    });
+  }
+
+  // Loading state on submit
+  const form = document.getElementById('loginForm');
+  const submitBtn = document.getElementById('submitBtn');
+  if (form && submitBtn) {
+    form.addEventListener('submit', function () {
+      submitBtn.disabled = true;
+      submitBtn.innerHTML = '<span class="spinner-border spinner-border-sm" role="status" aria-hidden="true"></span> Connexion en cours...';
+    });
+  }
+</script>
+
+</body>
+</html>

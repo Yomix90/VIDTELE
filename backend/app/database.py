@@ -120,3 +120,29 @@ async def init_db() -> None:
                 """))
         except Exception:
             pass
+
+        # Amorçage automatique du compte Telegram configuré en .env / Dokploy si table vide
+        try:
+            res_tg = await conn.execute(text("SELECT count(*) FROM telegram_accounts"))
+            if res_tg.scalar_one() == 0:
+                has_conf = bool(settings.TELEGRAM_API_ID and settings.TELEGRAM_API_HASH and settings.TELEGRAM_API_HASH != "none")
+                str_sess = settings.TELEGRAM_STRING_SESSION.strip() if settings.TELEGRAM_STRING_SESSION else ""
+                sess_file = settings.TELEGRAM_SESSION_NAME if not str_sess else ""
+                name = "Compte Principal"
+                if has_conf:
+                    await conn.execute(
+                        text("""
+                            INSERT INTO telegram_accounts (name, api_id, api_hash, string_session, session_file, is_active, status, created_at)
+                            VALUES (:name, :api_id, :api_hash, :string_session, :session_file, 1, 'connected', CURRENT_TIMESTAMP)
+                        """),
+                        {
+                            "name": name,
+                            "api_id": settings.TELEGRAM_API_ID,
+                            "api_hash": settings.TELEGRAM_API_HASH,
+                            "string_session": str_sess or None,
+                            "session_file": sess_file or None,
+                        }
+                    )
+        except Exception:
+            pass
+

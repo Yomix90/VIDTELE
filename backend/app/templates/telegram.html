@@ -1,82 +1,375 @@
 {% extends "base.html" %}
 
-{% block title %}Atlas Play - Infrastructure Telegram MTProto{% endblock %}
+{% block title %}Atlas Play - Infrastructure & Multi-Comptes Telegram{% endblock %}
 
 {% block content %}
+<!-- En-tête -->
 <div class="d-flex flex-wrap align-items-center justify-content-between gap-3 mb-4">
   <div>
     <h1 class="h3 mb-1 fw-bold text-white d-flex align-items-center gap-2" data-i18n="telegram">
       <i class="bi bi-telegram text-info"></i>
-      <span>Réseau & Stockage Telegram MTProto</span>
+      <span>Réseau, Stockage & Multi-Comptes Telegram</span>
     </h1>
-    <div class="text-muted small">Surveillez l'état de la session MTProto Telethon et configurez votre canal privé de stockage cloud illimité.</div>
+    <div class="text-muted small">Surveillez l'état de la connexion MTProto, liez plusieurs comptes Telegram et configurez votre stockage cloud.</div>
   </div>
-  <button class="btn btn-outline-light btn-sm d-flex align-items-center gap-2 shadow-sm" onclick="triggerSync()">
-    <i class="bi bi-arrow-repeat text-info" id="syncIcon"></i>
-    <span data-i18n="sync_btn">Synchroniser Telegram</span>
-  </button>
+  <div class="d-flex flex-wrap gap-2">
+    <button class="btn btn-outline-info btn-sm d-flex align-items-center gap-2 shadow-sm" onclick="testConnectionDiagnostics()">
+      <i class="bi bi-activity text-info" id="diagIcon"></i>
+      <span>Tester la connexion</span>
+    </button>
+    <button class="btn btn-danger btn-sm d-flex align-items-center gap-2 shadow-sm" data-bs-toggle="modal" data-bs-target="#addAccountModal">
+      <i class="bi bi-plus-circle"></i>
+      <span>Lier un compte Telegram</span>
+    </button>
+    <button class="btn btn-outline-light btn-sm d-flex align-items-center gap-2 shadow-sm" onclick="triggerSync()">
+      <i class="bi bi-arrow-repeat text-info" id="syncIcon"></i>
+      <span data-i18n="sync_btn">Synchroniser Telegram</span>
+    </button>
+  </div>
 </div>
 
-<!-- État MTProto Direct -->
-<div class="row g-4 mb-4">
-  <div class="col-12 col-lg-6">
-    <div class="card-dark p-4 h-100 shadow-sm" style="border-top: 3px solid #0EA5E9;">
-      <h2 class="h6 fw-bold text-white mb-3 d-flex align-items-center gap-2">
-        <i class="bi bi-shield-check text-info"></i>
-        <span>Statut de la Session MTProto</span>
-      </h2>
-
-      <div class="d-flex align-items-center gap-3 mb-4 p-3 rounded-3" style="background: rgba(255,255,255,0.02); border: 1px solid var(--border-subtle);">
-        <div class="stat-icon rounded-3 {% if telegram.connected %}bg-success bg-opacity-20 text-success{% else %}bg-warning bg-opacity-20 text-warning{% endif %} fs-3 p-2">
-          <i class="bi bi-telegram"></i>
-        </div>
-        <div>
-          <div class="fw-bold fs-5 text-white">
-            {% if telegram.connected %}Session Active (Connecté){% else %}En attente / Session locale{% endif %}
-          </div>
-          <div class="text-muted small mt-1">
-            Compte propriétaire : <strong class="text-white">{{ telegram.user_name or 'Administrateur' }}</strong> 
-            {% if telegram.user_id %}(ID: <code>{{ telegram.user_id }}</code>){% endif %}
-          </div>
-        </div>
+<!-- Bandeau Diagnostic Rapide en Direct -->
+<div class="card-dark p-3 mb-4 shadow-sm" style="border-left: 4px solid #0EA5E9;">
+  <div class="d-flex flex-wrap align-items-center justify-content-between gap-3">
+    <div class="d-flex align-items-center gap-3">
+      <div class="stat-icon p-2 rounded-3 {% if telegram.is_connected %}bg-success bg-opacity-20 text-success{% else %}bg-warning bg-opacity-20 text-warning{% endif %} fs-3">
+        <i class="bi bi-broadcast"></i>
       </div>
-
-      <div class="text-muted small">
-        <p class="mb-1"><i class="bi bi-check2 text-success me-2"></i>Client Telethon configuré en mode asynchrone natif.</p>
-        <p class="mb-1"><i class="bi bi-check2 text-success me-2"></i>Écoute en temps réel des nouveaux messages activée.</p>
-        <p class="mb-0"><i class="bi bi-check2 text-success me-2"></i>Téléchargement par blocs HTTP Range 206 pour le streaming mobile.</p>
+      <div>
+        <div class="fw-bold d-flex align-items-center gap-2 text-white">
+          <span>Connexion MTProto active :</span>
+          {% if telegram.is_connected %}
+            <span class="badge badge-atlas-green"><i class="bi bi-check-circle-fill me-1"></i>Connecté & Autorisé</span>
+          {% else %}
+            <span class="badge badge-atlas-amber"><i class="bi bi-exclamation-triangle-fill me-1"></i>En attente / Session locale</span>
+          {% endif %}
+        </div>
+        <div class="text-muted small mt-1">
+          {% if telegram.account %}
+            Compte en service : <strong class="text-white">{{ telegram.account.first_name }}</strong> 
+            {% if telegram.account.username %}(<span class="text-info">@{{ telegram.account.username }}</span>){% endif %}
+            · ID: <code>{{ telegram.account.id }}</code>
+          {% else %}
+            Aucun compte actif connecté.
+          {% endif %}
+          · Canal : <strong class="text-white">{{ telegram.current_channel_title or 'Non résolu' }}</strong> (<code>{{ telegram.current_channel_id or 'N/A' }}</code>)
+        </div>
       </div>
     </div>
+    <div class="d-flex align-items-center gap-3" id="diagnosticBadgeContainer">
+      <span class="badge badge-atlas-muted small" id="pingBadge"><i class="bi bi-stopwatch me-1"></i>Latence: En attente</span>
+      <span class="badge badge-atlas-muted small"><i class="bi bi-shield-check me-1"></i>Telethon MTProto</span>
+    </div>
+  </div>
+</div>
+
+<!-- SECTION 1 : Gestion Multi-Comptes Telegram -->
+<div class="card-dark p-4 mb-4 shadow-sm">
+  <div class="d-flex flex-wrap align-items-center justify-content-between gap-3 mb-3 pb-2 border-bottom border-secondary border-opacity-10">
+    <div>
+      <h2 class="h5 fw-bold text-white mb-1 d-flex align-items-center gap-2">
+        <i class="bi bi-people-fill text-danger"></i>
+        <span>Comptes Telegram Liés (Multi-Comptes)</span>
+      </h2>
+      <div class="text-muted small">Liez plusieurs comptes Telegram pour répartir le trafic de streaming, basculer facilement et contourner les limites FloodWait.</div>
+    </div>
+    <button class="btn btn-outline-danger btn-sm d-flex align-items-center gap-1" data-bs-toggle="modal" data-bs-target="#addAccountModal">
+      <i class="bi bi-plus-lg"></i>
+      <span>Ajouter un compte</span>
+    </button>
   </div>
 
-  <!-- Canal Actif -->
+  <div class="table-responsive">
+    <table class="table-atlas">
+      <thead>
+        <tr>
+          <th>Nom du compte</th>
+          <th>Identité Telegram</th>
+          <th>Téléphone</th>
+          <th>Session</th>
+          <th>État</th>
+          <th class="text-end">Actions</th>
+        </tr>
+      </thead>
+      <tbody>
+        {% if accounts %}
+          {% for acc in accounts %}
+          <tr>
+            <td>
+              <div class="d-flex align-items-center gap-2">
+                <div class="fw-bold text-white">{{ acc.name }}</div>
+                {% if acc.is_active %}
+                  <span class="badge badge-atlas-green" title="Compte actuellement en service pour le streaming et la synchronisation">
+                    <i class="bi bi-check-circle-fill me-1"></i>ACTIF
+                  </span>
+                {% endif %}
+              </div>
+              <div class="text-muted" style="font-size: 0.72rem;">Ajouté le {{ acc.created_at.strftime('%d/%m/%Y') if acc.created_at else '-' }}</div>
+            </td>
+            <td>
+              {% if acc.account_first_name or acc.account_username %}
+                <div class="text-white fw-semibold">{{ acc.account_first_name or 'Compte MTProto' }}</div>
+                <div class="text-info" style="font-size: 0.75rem;">{% if acc.account_username %}@{{ acc.account_username }}{% else %}ID: {{ acc.account_user_id }}{% endif %}</div>
+              {% else %}
+                <span class="text-muted small">Non renseigné</span>
+              {% endif %}
+            </td>
+            <td class="text-muted small">
+              {{ acc.phone or 'Masqué / Dokploy' }}
+            </td>
+            <td>
+              {% if acc.string_session %}
+                <code class="text-muted" style="font-size: 0.72rem;">{{ acc.string_session[:12] }}...{{ acc.string_session[-6:] }}</code>
+              {% elif acc.session_file %}
+                <span class="badge badge-atlas-muted">Fichier disque</span>
+              {% else %}
+                <span class="text-muted small">-</span>
+              {% endif %}
+            </td>
+            <td>
+              {% if acc.status == 'connected' %}
+                <span class="badge badge-atlas-green">Opérationnel</span>
+              {% elif acc.status == 'error' %}
+                <span class="badge badge-atlas-red" title="{{ acc.last_error or 'Erreur de connexion' }}">Erreur</span>
+              {% else %}
+                <span class="badge badge-atlas-muted">Prêt</span>
+              {% endif %}
+            </td>
+            <td class="text-end">
+              <div class="btn-group btn-group-sm">
+                <button type="button" class="btn btn-outline-info py-1 px-2" onclick="testAccount({{ acc.id }})" title="Tester la connexion de ce compte">
+                  <i class="bi bi-play-circle me-1"></i>Tester
+                </button>
+                {% if not acc.is_active %}
+                  <button type="button" class="btn btn-outline-success py-1 px-2" onclick="activateAccount({{ acc.id }})" title="Activer ce compte comme source principale">
+                    <i class="bi bi-check-lg me-1"></i>Activer
+                  </button>
+                  <button type="button" class="btn btn-outline-danger py-1 px-2" onclick="deleteAccount({{ acc.id }}, '{{ acc.name }}')" title="Supprimer ce compte">
+                    <i class="bi bi-trash"></i>
+                  </button>
+                {% else %}
+                  <button type="button" class="btn btn-success py-1 px-2" disabled title="Ce compte est déjà le compte actif">
+                    <i class="bi bi-shield-check me-1"></i>En service
+                  </button>
+                {% endif %}
+              </div>
+            </td>
+          </tr>
+          {% endfor %}
+        {% else %}
+          <tr>
+            <td colspan="6" class="text-center py-4 text-muted">
+              Aucun compte Telegram secondaire lié. Utilisez le bouton "Lier un compte Telegram" ci-dessus.
+            </td>
+          </tr>
+        {% endif %}
+      </tbody>
+    </table>
+  </div>
+</div>
+
+<!-- SECTION 2 : Configuration API & Canal de Stockage Privé -->
+<div class="row g-4 mb-4">
+  <!-- 1. Canal de Stockage Vidéo -->
   <div class="col-12 col-lg-6">
     <div class="card-dark p-4 h-100 shadow-sm" style="border-top: 3px solid #E50914;">
       <h2 class="h6 fw-bold text-white mb-3 d-flex align-items-center gap-2">
         <i class="bi bi-broadcast text-danger"></i>
-        <span>Canal de Stockage Actif</span>
+        <span>Canal de Stockage Source</span>
       </h2>
 
       <div class="p-3 rounded-3 mb-4" style="background: rgba(255,255,255,0.02); border: 1px solid var(--border-subtle);">
-        <div class="text-muted small">Titre du canal :</div>
-        <div class="fs-5 fw-bold text-white mt-1">{{ telegram.channel_title or 'Non configuré' }}</div>
+        <div class="text-muted small">Canal actuellement configuré :</div>
+        <div class="fs-5 fw-bold text-white mt-1">{{ telegram.current_channel_title or 'Non configuré' }}</div>
         <div class="text-muted small mt-1">
-          Identifiant Telegram : <code>{{ telegram.channel_id or '-1004234167037' }}</code>
+          Identifiant cible : <code>{{ telegram.current_channel_id or 'Non défini' }}</code>
         </div>
       </div>
 
-      <!-- Formulaire pour changer le canal -->
+      <!-- Formulaire Canal -->
       <form onsubmit="submitChangeChannel(event)">
-        <label class="form-label small text-white">Modifier l'identifiant du canal privé</label>
+        <label class="form-label small text-white fw-semibold">Modifier l'identifiant du canal privé</label>
         <div class="input-group mb-2">
-          <input type="text" id="targetChannelInput" class="form-control" placeholder="ex: -1004234167037 ou -4234167037" value="{{ telegram.channel_id or '' }}" required>
+          <input type="text" id="targetChannelInput" class="form-control" placeholder="ex: -1004234167037 ou @moncanal" value="{{ telegram.current_channel_id or '' }}" required>
           <button type="button" class="btn btn-outline-info" onclick="testChannel()">Tester</button>
           <button type="submit" class="btn btn-danger">Appliquer</button>
         </div>
         <div class="text-muted" style="font-size: 0.78rem;">
-          Format accepté : ID brut (ex: -4234167037) ou ID avec préfixe bot (-1004234167037) ou @nomducanal.
+          Format accepté : ID numérique brut (-100xxxx), nom d'utilisateur public (@canal), ou lien t.me.
         </div>
       </form>
+    </div>
+  </div>
+
+  <!-- 2. Identifiants API Telegram (API_ID & API_HASH) -->
+  <div class="col-12 col-lg-6">
+    <div class="card-dark p-4 h-100 shadow-sm" style="border-top: 3px solid #0EA5E9;">
+      <h2 class="h6 fw-bold text-white mb-3 d-flex align-items-center gap-2">
+        <i class="bi bi-key text-info"></i>
+        <span>Identifiants API MTProto Globaux</span>
+      </h2>
+
+      <div class="text-muted small mb-3">
+        Ces identifiants sont fournis par Telegram sur <a href="https://my.telegram.org" target="_blank" class="text-info text-decoration-none">my.telegram.org</a> (menu <em>API Development Tools</em>).
+      </div>
+
+      <form onsubmit="submitUpdateApiConfig(event)">
+        <div class="mb-3">
+          <label class="form-label small text-white fw-semibold">App API ID (Chiffres)</label>
+          <input type="number" id="apiIdInput" class="form-control" placeholder="ex: 12345678" value="{{ config.api_id or '' }}">
+        </div>
+
+        <div class="mb-3">
+          <label class="form-label small text-white fw-semibold">App API HASH (32 caractères)</label>
+          <input type="password" id="apiHashInput" class="form-control" placeholder="{% if config.has_api_hash %}•••••••••••••••••••••••••••••••• (Configuré){% else %}ex: 0123456789abcdef0123456789abcdef{% endif %}">
+        </div>
+
+        <div class="d-flex justify-content-end">
+          <button type="submit" class="btn btn-outline-light btn-sm d-flex align-items-center gap-1 shadow-sm">
+            <i class="bi bi-save"></i>
+            <span>Enregistrer la configuration</span>
+          </button>
+        </div>
+      </form>
+    </div>
+  </div>
+</div>
+
+<!-- ========================================================================= -->
+<!-- MODALE : Lier un Nouveau Compte Telegram (StringSession ou Téléphone OTP)  -->
+<!-- ========================================================================= -->
+<div class="modal fade" id="addAccountModal" tabindex="-1" aria-labelledby="addAccountModalLabel" aria-hidden="true">
+  <div class="modal-dialog modal-dialog-centered modal-lg">
+    <div class="modal-content card-dark border border-secondary border-opacity-25 shadow-lg">
+      <div class="modal-header border-bottom border-secondary border-opacity-10">
+        <h5 class="modal-title text-white fw-bold d-flex align-items-center gap-2" id="addAccountModalLabel">
+          <i class="bi bi-telegram text-info"></i>
+          <span>Lier un Compte Telegram à Atlas Play</span>
+        </h5>
+        <button type="button" class="btn-close btn-close-white" data-bs-dismiss="modal" aria-label="Fermer"></button>
+      </div>
+      <div class="modal-body p-4">
+        <!-- Navigation par onglets -->
+        <ul class="nav nav-pills nav-fill mb-4" id="pills-tab" role="tablist">
+          <li class="nav-item" role="presentation">
+            <button class="nav-link active d-flex align-items-center justify-content-center gap-2 py-2" id="pills-session-tab" data-bs-toggle="pill" data-bs-target="#pills-session" type="button" role="tab" aria-selected="true">
+              <i class="bi bi-key-fill"></i>
+              <span>Méthode 1 : Clé StringSession</span>
+            </button>
+          </li>
+          <li class="nav-item" role="presentation">
+            <button class="nav-link d-flex align-items-center justify-content-center gap-2 py-2" id="pills-otp-tab" data-bs-toggle="pill" data-bs-target="#pills-otp" type="button" role="tab" aria-selected="false">
+              <i class="bi bi-phone"></i>
+              <span>Méthode 2 : Téléphone & Code OTP</span>
+            </button>
+          </li>
+        </ul>
+
+        <div class="tab-content" id="pills-tabContent">
+          <!-- ONGLET 1 : Par clé StringSession -->
+          <div class="tab-pane fade show active" id="pills-session" role="tabpanel">
+            <div class="alert alert-info py-2 px-3 small d-flex align-items-center gap-2 mb-3" style="background: rgba(14, 165, 233, 0.1); border-color: rgba(14, 165, 233, 0.3);">
+              <i class="bi bi-info-circle-fill text-info fs-5 flex-shrink-0"></i>
+              <div>Collez une clé <strong>StringSession</strong> générée préalablement avec Telethon. Le serveur teste instantanément la validité de la session avant enregistrement.</div>
+            </div>
+
+            <form onsubmit="submitAddSessionAccount(event)">
+              <div class="mb-3">
+                <label class="form-label small text-white fw-semibold">Nom convivial du compte</label>
+                <input type="text" id="sessionAccountName" class="form-control" placeholder="ex: Compte Backup 1" required>
+              </div>
+
+              <div class="mb-3">
+                <label class="form-label small text-white fw-semibold">Clé StringSession Telethon</label>
+                <textarea id="sessionStringInput" class="form-control font-monospace" rows="4" placeholder="1BVtsOIwBu... (Coller la clé ici)" required></textarea>
+              </div>
+
+              <div class="form-check form-switch mb-4">
+                <input class="form-check-input" type="checkbox" id="sessionMakeActive" checked>
+                <label class="form-check-label text-white small" for="sessionMakeActive">
+                  Définir immédiatement comme compte actif principal
+                </label>
+              </div>
+
+              <div class="d-flex justify-content-end gap-2">
+                <button type="button" class="btn btn-outline-secondary btn-sm" data-bs-dismiss="modal">Annuler</button>
+                <button type="submit" class="btn btn-danger btn-sm px-4" id="btnSubmitSession">
+                  <i class="bi bi-check2-circle me-1"></i>Tester & Lier le Compte
+                </button>
+              </div>
+            </form>
+          </div>
+
+          <!-- ONGLET 2 : Par numéro de téléphone et code OTP -->
+          <div class="tab-pane fade" id="pills-otp" role="tabpanel">
+            <div class="alert alert-warning py-2 px-3 small d-flex align-items-center gap-2 mb-3" style="background: rgba(245, 158, 11, 0.1); border-color: rgba(245, 158, 11, 0.3);">
+              <i class="bi bi-shield-lock-fill text-warning fs-5 flex-shrink-0"></i>
+              <div>Connectez un compte Telegram directement depuis votre navigateur sans toucher au terminal. Vous recevrez un code officiel dans votre application Telegram.</div>
+            </div>
+
+            <!-- Étape 1 : Demande de code -->
+            <div id="otpStep1">
+              <div class="mb-3">
+                <label class="form-label small text-white fw-semibold">Nom du compte</label>
+                <input type="text" id="otpAccountName" class="form-control" placeholder="ex: Compte Vidéos 2">
+              </div>
+
+              <div class="mb-4">
+                <label class="form-label small text-white fw-semibold">Numéro de téléphone au format international</label>
+                <div class="input-group">
+                  <span class="input-group-text"><i class="bi bi-telephone"></i></span>
+                  <input type="text" id="otpPhoneInput" class="form-control" placeholder="+33612345678 ou +212612345678" required>
+                </div>
+                <div class="text-muted mt-1" style="font-size: 0.75rem;">
+                  N'oubliez pas l'indicatif pays (+33 pour la France, +212 pour le Maroc, etc.).
+                </div>
+              </div>
+
+              <div class="d-flex justify-content-end gap-2">
+                <button type="button" class="btn btn-outline-secondary btn-sm" data-bs-dismiss="modal">Annuler</button>
+                <button type="button" class="btn btn-info btn-sm px-4 text-white" onclick="sendOtpCode()" id="btnSendOtp">
+                  <i class="bi bi-send me-1"></i>Envoyer le code Telegram
+                </button>
+              </div>
+            </div>
+
+            <!-- Étape 2 : Saisie du code et 2FA -->
+            <div id="otpStep2" style="display: none;">
+              <div class="alert alert-success py-2 px-3 small mb-3">
+                Code envoyé avec succès à <strong id="otpTargetPhoneLabel"></strong>. Consultez votre application Telegram.
+              </div>
+
+              <div class="mb-3">
+                <label class="form-label small text-white fw-semibold">Code de vérification Telegram</label>
+                <input type="text" id="otpCodeInput" class="form-control text-center fs-4 letter-spacing-2" placeholder="12345" maxlength="8">
+              </div>
+
+              <div class="mb-3" id="otp2faContainer" style="display: none;">
+                <label class="form-label small text-warning fw-semibold">
+                  <i class="bi bi-key-fill me-1"></i>Mot de passe 2FA (Vérification en deux étapes)
+                </label>
+                <input type="password" id="otpPassword2faInput" class="form-control" placeholder="Mot de passe secret 2FA">
+              </div>
+
+              <div class="form-check form-switch mb-4">
+                <input class="form-check-input" type="checkbox" id="otpMakeActive" checked>
+                <label class="form-check-label text-white small" for="otpMakeActive">
+                  Activer immédiatement ce compte
+                </label>
+              </div>
+
+              <div class="d-flex justify-content-between">
+                <button type="button" class="btn btn-outline-secondary btn-sm" onclick="resetOtpStep()">
+                  &larr; Modifier le numéro
+                </button>
+                <button type="button" class="btn btn-danger btn-sm px-4" onclick="verifyOtpCode()" id="btnVerifyOtp">
+                  <i class="bi bi-check2-circle me-1"></i>Valider & Connecter
+                </button>
+              </div>
+            </div>
+          </div>
+        </div>
+      </div>
     </div>
   </div>
 </div>
@@ -84,6 +377,229 @@
 
 {% block extra_scripts %}
 <script>
+let currentPhoneHash = "";
+let currentTargetPhone = "";
+
+// -------------------------------------------------------------
+// 1. Diagnostic en direct de la connexion
+// -------------------------------------------------------------
+async function testConnectionDiagnostics() {
+  const icon = document.getElementById('diagIcon');
+  if (icon) icon.classList.add('spin-animation');
+  showToast('Test de diagnostic MTProto en cours...', 'info');
+
+  try {
+    const res = await fetch('/api/admin/telegram/test-connection', { method: 'POST' });
+    const data = await res.json();
+    if (res.ok) {
+      const pingBadge = document.getElementById('pingBadge');
+      if (pingBadge) {
+        pingBadge.innerHTML = `<i class="bi bi-speedometer2 me-1"></i>Ping: ${data.ping_ms} ms`;
+        pingBadge.className = data.ping_ms < 300 ? 'badge badge-atlas-green small' : 'badge badge-atlas-amber small';
+      }
+
+      let msg = `Diagnostic MTProto :\n\n- État : ${data.is_connected ? '🟢 Connecté' : '🔴 Déconnecté'}\n- Latence : ${data.ping_ms} ms\n`;
+      if (data.account) {
+        msg += `- Utilisateur : ${data.account.first_name} (@${data.account.username || 'sans_username'}, ID: ${data.account.id})\n`;
+      }
+      msg += `- Accès au canal : ${data.channel_accessible ? '🟢 Accessible' : '🔴 Refusé ou non résolu'}`;
+      alert(msg);
+    } else {
+      showToast(data.detail || 'Erreur lors du test de connexion', 'error');
+    }
+  } catch (err) {
+    showToast('Erreur serveur lors du diagnostic', 'error');
+  } finally {
+    if (icon) icon.classList.remove('spin-animation');
+  }
+}
+
+// -------------------------------------------------------------
+// 2. Gestion des Comptes Liés
+// -------------------------------------------------------------
+async function testAccount(accountId) {
+  showToast('Test du compte en cours...', 'info');
+  try {
+    const res = await fetch(`/api/admin/telegram/accounts/${accountId}/test`, { method: 'POST' });
+    const data = await res.json();
+    if (data.success) {
+      alert(`Compte vérifié avec succès !\n\n- Utilisateur: ${data.user.first_name} (@${data.user.username || 'N/A'})\n- ID: ${data.user.id}\n- Latence: ${data.ping_ms} ms`);
+      location.reload();
+    } else {
+      alert(`Échec de test :\n${data.error}`);
+    }
+  } catch (e) {
+    showToast('Erreur réseau lors du test', 'error');
+  }
+}
+
+async function activateAccount(accountId) {
+  if (!confirm('Voulez-vous définir ce compte Telegram comme source active pour le streaming et la synchronisation ?')) return;
+
+  try {
+    const res = await fetch(`/api/admin/telegram/accounts/${accountId}/activate`, { method: 'POST' });
+    const data = await res.json();
+    if (res.ok) {
+      showToast(data.message || 'Compte activé avec succès !', 'success');
+      setTimeout(() => location.reload(), 1200);
+    } else {
+      showToast(data.detail || 'Erreur lors de l\'activation', 'error');
+    }
+  } catch (e) {
+    showToast('Erreur réseau', 'error');
+  }
+}
+
+async function deleteAccount(accountId, accountName) {
+  if (!confirm(`Êtes-vous sûr de vouloir délier le compte "${accountName}" ?`)) return;
+
+  try {
+    const res = await fetch(`/api/admin/telegram/accounts/${accountId}`, { method: 'DELETE' });
+    const data = await res.json();
+    if (res.ok) {
+      showToast(data.message || 'Compte supprimé avec succès', 'success');
+      setTimeout(() => location.reload(), 1200);
+    } else {
+      showToast(data.detail || 'Impossible de supprimer ce compte', 'error');
+    }
+  } catch (e) {
+    showToast('Erreur réseau', 'error');
+  }
+}
+
+// -------------------------------------------------------------
+// 3. Liaison par Clé StringSession
+// -------------------------------------------------------------
+async function submitAddSessionAccount(e) {
+  e.preventDefault();
+  const name = document.getElementById('sessionAccountName').value.trim();
+  const sessionStr = document.getElementById('sessionStringInput').value.trim();
+  const makeActive = document.getElementById('sessionMakeActive').checked;
+
+  if (!name || !sessionStr) return alert('Veuillez remplir tous les champs.');
+
+  const btn = document.getElementById('btnSubmitSession');
+  btn.disabled = true;
+  btn.innerHTML = '<span class="spinner-border spinner-border-sm me-1"></span> Vérification...';
+
+  try {
+    const res = await fetch('/api/admin/telegram/accounts', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({
+        name: name,
+        string_session: sessionStr,
+        make_active: makeActive,
+      })
+    });
+    const data = await res.json();
+    if (res.ok) {
+      showToast('Compte Telegram lié avec succès !', 'success');
+      setTimeout(() => location.reload(), 1200);
+    } else {
+      alert(`Erreur : ${data.detail || 'Clé de session invalide'}`);
+    }
+  } catch (err) {
+    showToast('Erreur réseau lors de la liaison', 'error');
+  } finally {
+    btn.disabled = false;
+    btn.innerHTML = '<i class="bi bi-check2-circle me-1"></i>Tester & Lier le Compte';
+  }
+}
+
+// -------------------------------------------------------------
+// 4. Authentification Interactive par Téléphone (OTP & 2FA)
+// -------------------------------------------------------------
+async function sendOtpCode() {
+  const phone = document.getElementById('otpPhoneInput').value.trim();
+  if (!phone) return alert('Veuillez saisir votre numéro de téléphone.');
+
+  const btn = document.getElementById('btnSendOtp');
+  btn.disabled = true;
+  btn.innerHTML = '<span class="spinner-border spinner-border-sm me-1"></span> Envoi du code...';
+
+  try {
+    const res = await fetch('/api/admin/telegram/auth/send-code', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ phone: phone })
+    });
+    const data = await res.json();
+    if (res.ok && data.success) {
+      currentPhoneHash = data.phone_code_hash;
+      currentTargetPhone = phone;
+      document.getElementById('otpTargetPhoneLabel').textContent = phone;
+      document.getElementById('otpStep1').style.display = 'none';
+      document.getElementById('otpStep2').style.display = 'block';
+      showToast(data.message || 'Code envoyé !', 'success');
+    } else {
+      alert(`Erreur : ${data.detail || 'Échec d\'envoi du code'}`);
+    }
+  } catch (err) {
+    showToast('Erreur serveur lors de l\'envoi du code', 'error');
+  } finally {
+    btn.disabled = false;
+    btn.innerHTML = '<i class="bi bi-send me-1"></i>Envoyer le code Telegram';
+  }
+}
+
+function resetOtpStep() {
+  document.getElementById('otpStep2').style.display = 'none';
+  document.getElementById('otpStep1').style.display = 'block';
+  document.getElementById('otpCodeInput').value = '';
+}
+
+async function verifyOtpCode() {
+  const code = document.getElementById('otpCodeInput').value.trim();
+  if (!code) return alert('Veuillez saisir le code reçu sur Telegram.');
+
+  const pwd2fa = document.getElementById('otpPassword2faInput').value.trim();
+  const name = document.getElementById('otpAccountName').value.trim() || `Compte ${currentTargetPhone}`;
+  const makeActive = document.getElementById('otpMakeActive').checked;
+
+  const btn = document.getElementById('btnVerifyOtp');
+  btn.disabled = true;
+  btn.innerHTML = '<span class="spinner-border spinner-border-sm me-1"></span> Validation...';
+
+  try {
+    const res = await fetch('/api/admin/telegram/auth/verify-code', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({
+        phone: currentTargetPhone,
+        code: code,
+        phone_code_hash: currentPhoneHash,
+        password_2fa: pwd2fa || null,
+        account_name: name,
+        make_active: makeActive,
+      })
+    });
+    const data = await res.json();
+    if (data.needs_2fa) {
+      document.getElementById('otp2faContainer').style.display = 'block';
+      alert('Votre compte Telegram est protégé par un mot de passe en 2 étapes (2FA). Veuillez saisir votre mot de passe ci-dessous et cliquer à nouveau sur Valider.');
+      btn.disabled = false;
+      btn.innerHTML = '<i class="bi bi-shield-lock me-1"></i>Valider avec mot de passe 2FA';
+      return;
+    }
+
+    if (res.ok && data.success) {
+      showToast('Compte Telegram connecté et lié avec succès !', 'success');
+      setTimeout(() => location.reload(), 1500);
+    } else {
+      alert(`Erreur : ${data.detail || data.error || 'Code invalide'}`);
+    }
+  } catch (e) {
+    showToast('Erreur serveur lors de la validation', 'error');
+  } finally {
+    btn.disabled = false;
+    btn.innerHTML = '<i class="bi bi-check2-circle me-1"></i>Valider & Connecter';
+  }
+}
+
+// -------------------------------------------------------------
+// 5. Configuration Globale & Canal
+// -------------------------------------------------------------
 async function testChannel() {
   const target = document.getElementById('targetChannelInput').value.trim();
   if (!target) return alert('Veuillez saisir un identifiant de canal.');
@@ -97,7 +613,7 @@ async function testChannel() {
     });
     const data = await res.json();
     if (data.success) {
-      alert(`Canal vérifié avec succès !\n\n- Titre: ${data.title}\n- ID: ${data.formatted_id || data.id}\n- Type: ${data.type}`);
+      alert(`Canal vérifié avec succès !\n\n- Titre: ${data.title}\n- ID: ${data.formatted_id || data.id}\n- Type: ${data.is_channel ? 'Canal' : 'Groupe'}\n- Messages récents lus: ${data.sample_messages_found}`);
     } else {
       alert(`Échec de vérification :\n${data.error}`);
     }
@@ -125,6 +641,33 @@ async function submitChangeChannel(e) {
       showToast(data.detail || 'Erreur lors du changement de canal', 'error');
     }
   } catch (err) {
+    showToast('Erreur réseau', 'error');
+  }
+}
+
+async function submitUpdateApiConfig(e) {
+  e.preventDefault();
+  const apiIdVal = document.getElementById('apiIdInput').value.trim();
+  const apiHashVal = document.getElementById('apiHashInput').value.trim();
+
+  const body = {};
+  if (apiIdVal) body.api_id = parseInt(apiIdVal, 10);
+  if (apiHashVal) body.api_hash = apiHashVal;
+
+  try {
+    const res = await fetch('/api/admin/telegram/config', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify(body)
+    });
+    const data = await res.json();
+    if (res.ok) {
+      showToast(data.message || 'Configuration enregistrée !', 'success');
+      setTimeout(() => location.reload(), 1500);
+    } else {
+      showToast(data.detail || 'Erreur de sauvegarde', 'error');
+    }
+  } catch (e) {
     showToast('Erreur réseau', 'error');
   }
 }

@@ -1,25 +1,31 @@
-"""
-Gestionnaire et client asynchrone Telethon MTProto pour l'API VidTele.
-"""
 import asyncio
 import logging
+import time
 from pathlib import Path
 from typing import Optional
 from telethon import TelegramClient
 from telethon.sessions import StringSession
-from telethon.errors import FloodWaitError
+from telethon.errors import (
+    FloodWaitError,
+    SessionPasswordNeededError,
+    PhoneCodeInvalidError,
+    PhoneCodeExpiredError,
+    PasswordHashInvalidError,
+)
 from app.config import settings
 
 logger = logging.getLogger("vidtele.telegram")
 
 
 class TelegramManager:
-    """Gestionnaire centralisé de la connexion Telegram MTProto."""
+    """Gestionnaire centralisé de la connexion Telegram MTProto (Multi-Comptes)."""
 
     def __init__(self):
         self._client: Optional[TelegramClient] = None
         self._is_started: bool = False
         self._channel_entity = None
+        self._pending_auth: dict = {}  # Pour authentification OTP par téléphone
+
         session_name = settings.TELEGRAM_SESSION_NAME
         if Path(session_name).is_absolute():
             self._session_path = Path(session_name)
@@ -365,7 +371,244 @@ class TelegramManager:
                 return None
         return None
 
+    # -----------------------------------------------------------------
+    # Gestion Multi-Comptes & Outils de Diagnostic / Authentification
+    # -----------------------------------------------------------------
+
+    async def test_session_string(
+        self,
+        string_session: str,
+        api_id: Optional[int] = None,
+        api_hash: Optional[str] = None,
+    ) -> dict:
+        """
+        Teste une chaîne StringSession de manière isolée sans affecter le client actif.
+        Mesure la latence ping et récupère le profil de l'utilisateur.
+        """
+        target_api_id = api_id or settings.TELEGRAM_API_ID
+        target_api_hash = api_hash or settings.TELEGRAM_API_HASH
+        if not target_api_id or not target_api_hash:
+            return {
+                "success": False,
+                "error": "Identifiants API manquants (TELEGRAM_API_ID / TELEGRAM_API_HASH).",
+            }
+
+        client = TelegramClient(
+            StringSession(string_session.strip()),
+            target_api_id,
+            target_api_hash,
+            connection_retries=2,
+            request_retries=2,
+        )
+        try:
+            start_t = time.perf_counter()
+            await client.connect()
+            if not await client.is_user_authorized():
+                await client.disconnect()
+                return {
+                    "success": False,
+                    "error": "Session Telegram expirée ou non autorisée sur les serveurs MTProto.",
+                }
+
+            me = await client.get_me()
+            ping_ms = round((time.perf_counter() - start_t) * 1000, 1)
+
+            user_info = {
+                "id": me.id,
+                "first_name": getattr(me, "first_name", "") or "",
+                "username": getattr(me, "username", "") or "",
+                "phone": getattr(me, "phone", "") or "",
+            }
+            await client.disconnect()
+
+            return {
+                "success": True,
+                "user": user_info,
+                "ping_ms": ping_ms,
+            }
+        except Exception as e:
+            try:
+                await client.disconnect()
+            except Exception:
+                pass
+            return {
+                "success": False,
+                "error": f"Erreur lors du test de la session : {str(e)}",
+            }
+
+    async def send_phone_code(
+        self,
+        phone: str,
+        api_id: Optional[int] = None,
+        api_hash: Optional[str] = None,
+    ) -> dict:
+        """
+        Envoie une demande de code de vérification OTP Telegram pour un numéro donné.
+        Conserve le client en attente pour la validation de l'étape suivante.
+        """
+        target_api_id = api_id or settings.TELEGRAM_API_ID
+        target_api_hash = api_hash or settings.TELEGRAM_API_HASH
+        if not target_api_id or not target_api_hash:
+            return {
+                "success": False,
+                "error": "API_ID ou API_HASH non configuré.",
+            }
+
+        phone_clean = phone.strip().replace(" ", "").replace("-", "")
+        client = TelegramClient(
+            StringSession(),
+            target_api_id,
+            target_api_hash,
+        )
+        try:
+            await client.connect()
+            sent = await client.send_code_request(phone_clean)
+            self._pending_auth[phone_clean] = {
+                "client": client,
+                "phone_code_hash": sent.phone_code_hash,
+                "api_id": target_api_id,
+                "api_hash": target_api_hash,
+                "timestamp": time.time(),
+            }
+            return {
+                "success": True,
+                "phone_code_hash": sent.phone_code_hash,
+                "message": f"Code d'authentification envoyé avec succès à {phone_clean}.",
+            }
+        except Exception as e:
+            try:
+                await client.disconnect()
+            except Exception:
+                pass
+            return {
+                "success": False,
+                "error": f"Échec de l'envoi du code : {str(e)}",
+            }
+
+    async def verify_phone_code(
+        self,
+        phone: str,
+        code: str,
+        phone_code_hash: str,
+        password_2fa: Optional[str] = None,
+    ) -> dict:
+        """
+        Valide le code OTP reçu (et le mot de passe 2FA si activé),
+        puis génère une clé StringSession persistante.
+        """
+        phone_clean = phone.strip().replace(" ", "").replace("-", "")
+        pending = self._pending_auth.get(phone_clean)
+
+        if not pending:
+            return {
+                "success": False,
+                "error": "Session d'authentification expirée. Veuillez renvoyer un code.",
+            }
+
+        client: TelegramClient = pending["client"]
+        code_clean = code.strip()
+
+        try:
+            try:
+                await client.sign_in(phone=phone_clean, code=code_clean, phone_code_hash=phone_code_hash)
+            except SessionPasswordNeededError:
+                if not password_2fa:
+                    return {
+                        "success": False,
+                        "needs_2fa": True,
+                        "message": "Votre compte Telegram requiert un mot de passe de vérification en 2 étapes (2FA).",
+                    }
+                await client.sign_in(password=password_2fa.strip())
+
+            me = await client.get_me()
+            session_str = StringSession.save(client.session)
+
+            user_info = {
+                "id": me.id,
+                "first_name": getattr(me, "first_name", "") or "",
+                "username": getattr(me, "username", "") or "",
+                "phone": getattr(me, "phone", "") or "",
+            }
+
+            # Nettoyer la session en attente
+            del self._pending_auth[phone_clean]
+            await client.disconnect()
+
+            return {
+                "success": True,
+                "string_session": session_str,
+                "user": user_info,
+            }
+        except PhoneCodeInvalidError:
+            return {"success": False, "error": "Code Telegram invalide. Vérifiez le code à 5 chiffres."}
+        except PhoneCodeExpiredError:
+            return {"success": False, "error": "Le code a expiré. Veuillez en demander un nouveau."}
+        except PasswordHashInvalidError:
+            return {"success": False, "needs_2fa": True, "error": "Mot de passe 2FA incorrect."}
+        except Exception as e:
+            return {"success": False, "error": f"Échec de vérification : {str(e)}"}
+
+    async def switch_active_account(
+        self,
+        string_session: str,
+        api_id: Optional[int] = None,
+        api_hash: Optional[str] = None,
+    ) -> dict:
+        """
+        Bascule le client MTProto actif sur un nouveau compte sans redémarrer le serveur.
+        """
+        await self.stop()
+
+        settings.TELEGRAM_STRING_SESSION = string_session.strip()
+        if api_id:
+            settings.TELEGRAM_API_ID = api_id
+        if api_hash:
+            settings.TELEGRAM_API_HASH = api_hash
+
+        success = await self.start()
+        status = await self.get_connection_status()
+
+        return {
+            "success": success,
+            "status": status,
+        }
+
+    async def get_detailed_diagnostics(self) -> dict:
+        """
+        Effectue un diagnostic complet de la connexion :
+        État de la liaison, ping réseau, compte MTProto, accès au canal cible et permissions.
+        """
+        start_t = time.perf_counter()
+        base_status = await self.get_connection_status()
+        ping_ms = round((time.perf_counter() - start_t) * 1000, 1)
+
+        channel_accessible = False
+        message_count = 0
+        error_msg = None
+
+        if base_status.get("is_connected") and settings.TELEGRAM_CHANNEL_ID:
+            try:
+                entity = await self.get_channel_entity()
+                if entity:
+                    channel_accessible = True
+                    try:
+                        msgs = await self._client.get_messages(entity, limit=3)
+                        message_count = len(msgs)
+                    except Exception:
+                        pass
+            except Exception as e:
+                error_msg = str(e)
+
+        return {
+            **base_status,
+            "ping_ms": ping_ms,
+            "channel_accessible": channel_accessible,
+            "message_count": message_count,
+            "error_detail": error_msg,
+        }
+
 
 # Instance unique (Singleton)
 telegram_manager = TelegramManager()
+
 

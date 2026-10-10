@@ -1,15 +1,19 @@
 """
-Routeur pour l'interface web d'administration StreamAdmin (HTML + Jinja2 + Bootstrap 5).
+Routeur pour l'interface web d'administration Atlas Play (HTML + Jinja2 + Bootstrap 5).
 """
 from pathlib import Path
+from typing import Optional
 from fastapi import APIRouter, Depends, HTTPException, Request
-from fastapi.responses import HTMLResponse
+from fastapi.responses import HTMLResponse, RedirectResponse
 from fastapi.templating import Jinja2Templates
 from sqlalchemy import desc, func, select
 from sqlalchemy.ext.asyncio import AsyncSession
+from sqlalchemy.orm import selectinload
 
+from app.config import settings
 from app.database import get_db
-from app.models import Episode, HomeRow, InviteCode, Movie, Season, Series, User, Video
+from app.models import Episode, HomeRow, InviteCode, Movie, Season, Series, SystemSetting, TelegramAccount, User, Video
+from app.security import create_access_token, decode_token, verify_password
 from app.services.cache_service import cache_service
 from app.services.stream_manager import stream_manager
 from app.telegram_client import telegram_manager
@@ -21,12 +25,120 @@ templates = Jinja2Templates(directory=str(templates_dir))
 router = APIRouter(tags=["Web Administration"])
 
 
+async def get_web_admin(request: Request, db: AsyncSession) -> Optional[User]:
+    """Récupère l'administrateur connecté via le cookie 'admin_token' ou l'en-tête Authorization."""
+    token = request.cookies.get("admin_token")
+    if not token:
+        auth_hdr = request.headers.get("Authorization")
+        if auth_hdr and auth_hdr.startswith("Bearer "):
+            token = auth_hdr.split(" ")[1].strip()
+
+    if not token:
+        return None
+
+    try:
+        payload = decode_token(token, expected_type="access")
+        user_id_str = payload.get("sub")
+        if not user_id_str or not user_id_str.isdigit():
+            return None
+        user_id = int(user_id_str)
+        stmt = select(User).where(User.id == user_id, User.is_active == True, User.role == "admin")
+        result = await db.execute(stmt)
+        return result.scalar_one_or_none()
+    except Exception:
+        return None
+
+
+# -------------------------------------------------------------
+# 1. Authentification Web Admin (Connexion & Déconnexion)
+# -------------------------------------------------------------
+
+@router.get("/admin/login", response_class=HTMLResponse)
+async def admin_login_page(
+    request: Request,
+    next: Optional[str] = None,
+    error: Optional[str] = None,
+    db: AsyncSession = Depends(get_db),
+):
+    """Affiche la page de connexion sécurisée Atlas Play."""
+    admin_user = await get_web_admin(request, db)
+    if admin_user:
+        return RedirectResponse(url=next or "/admin", status_code=303)
+    return templates.TemplateResponse(
+        request=request,
+        name="login.html",
+        context={"error": error, "next_url": next},
+    )
+
+
+@router.post("/admin/login")
+async def admin_login_submit(
+    request: Request,
+    next: Optional[str] = None,
+    db: AsyncSession = Depends(get_db),
+):
+    """Traite la connexion administrateur et configure le cookie persistant admin_token."""
+    form = await request.form()
+    username = str(form.get("username", "")).strip()
+    password = str(form.get("password", "")).strip()
+
+    stmt = select(User).where(User.username == username)
+    result = await db.execute(stmt)
+    user = result.scalar_one_or_none()
+
+    if not user or not verify_password(password, user.hashed_password):
+        return templates.TemplateResponse(
+            request=request,
+            name="login.html",
+            context={"error": "Identifiants invalides. Nom d'utilisateur ou mot de passe incorrect.", "next_url": next},
+            status_code=400,
+        )
+
+    if not user.is_active or user.role != "admin":
+        return templates.TemplateResponse(
+            request=request,
+            name="login.html",
+            context={"error": "Accès refusé : privilèges administrateur requis pour ce panneau.", "next_url": next},
+            status_code=403,
+        )
+
+    token = create_access_token(user.id, user.username, user.role)
+    redirect_target = next if next and next.startswith("/admin") else "/admin"
+    response = RedirectResponse(url=redirect_target, status_code=303)
+    response.set_cookie(
+        key="admin_token",
+        value=token,
+        httponly=True,
+        max_age=86400 * 30,  # 30 jours
+        samesite="lax",
+        path="/",
+    )
+    return response
+
+
+@router.get("/admin/logout")
+@router.post("/admin/logout")
+async def admin_logout(request: Request):
+    """Déconnecte l'administrateur, détruit le cookie et redirige vers /admin/login."""
+    response = RedirectResponse(url="/admin/login", status_code=303)
+    response.delete_cookie(key="admin_token", path="/")
+    return response
+
+
+# -------------------------------------------------------------
+# 2. Tableau de Bord & Pages de Gestion
+# -------------------------------------------------------------
+
 @router.get("/admin", response_class=HTMLResponse)
 async def admin_dashboard_page(
     request: Request,
     db: AsyncSession = Depends(get_db),
 ):
-    """Sert le tableau de bord StreamAdmin interactif (FR / AR)."""
+    """Sert le tableau de bord Atlas Play interactif (FR / EN / AR)."""
+    admin_user = await get_web_admin(request, db)
+    if not admin_user:
+        return RedirectResponse(url=f"/admin/login?next={request.url.path}", status_code=303)
+
     # 1. Métriques globales
     vid_stmt = select(
         func.count(Video.id),
@@ -35,7 +147,6 @@ async def admin_dashboard_page(
     )
     total_videos, total_views, total_duration = (await db.execute(vid_stmt)).one()
 
-    # Compteurs spécifiques
     pub_vids_count = (await db.execute(select(func.count(Video.id)).where(Video.is_published == True))).scalar_one()
     raw_vids_count = (await db.execute(select(func.count(Video.id)).where(Video.is_published == False))).scalar_one()
 
@@ -46,7 +157,6 @@ async def admin_dashboard_page(
     active_users = (await db.execute(select(func.count(User.id)).where(User.is_active == True))).scalar_one()
     invites_count = (await db.execute(select(func.count(InviteCode.id)).where(InviteCode.is_used == False))).scalar_one()
 
-    # 2. Cache et flux actifs
     cache_stats = cache_service.get_cache_stats()
     stream_stats = await stream_manager.get_active_stream_counts(db)
 
@@ -65,21 +175,11 @@ async def admin_dashboard_page(
         "streams": stream_stats,
     }
 
-    # 3. Dernières séries
     recent_series = (await db.execute(select(Series).order_by(desc(Series.created_at)).limit(6))).scalars().all()
-
-    # 4. Vidéos brutes Telegram en attente
     raw_videos = (
         await db.execute(select(Video).where(Video.is_published == False).order_by(desc(Video.telegram_date)).limit(10))
     ).scalars().all()
-
-    # 5. Utilisateurs récents
     recent_users = (await db.execute(select(User).order_by(desc(User.created_at)).limit(8))).scalars().all()
-
-    # 6. Admin actuel
-    admin_user = (await db.execute(select(User).where(User.role == "admin").limit(1))).scalar_one_or_none()
-
-    # 7. État Telegram
     telegram_status = await telegram_manager.get_connection_status()
 
     return templates.TemplateResponse(
@@ -103,12 +203,14 @@ async def admin_series_page(
     db: AsyncSession = Depends(get_db),
 ):
     """Sert la page de liste des séries."""
+    admin_user = await get_web_admin(request, db)
+    if not admin_user:
+        return RedirectResponse(url=f"/admin/login?next={request.url.path}", status_code=303)
+
     series_list = (await db.execute(select(Series).order_by(desc(Series.created_at)))).scalars().all()
     for s in series_list:
         s_count = (await db.execute(select(func.count(Season.id)).where(Season.series_id == s.id))).scalar_one()
         setattr(s, "seasons_count", s_count)
-
-    admin_user = (await db.execute(select(User).where(User.role == "admin").limit(1))).scalar_one_or_none()
 
     return templates.TemplateResponse(
         request=request,
@@ -121,8 +223,6 @@ async def admin_series_page(
     )
 
 
-from sqlalchemy.orm import selectinload
-
 @router.get("/admin/series/{series_id}", response_class=HTMLResponse)
 async def admin_series_detail_page(
     series_id: int,
@@ -130,6 +230,10 @@ async def admin_series_detail_page(
     db: AsyncSession = Depends(get_db),
 ):
     """Sert la page détaillée d'une série avec ses saisons et épisodes."""
+    admin_user = await get_web_admin(request, db)
+    if not admin_user:
+        return RedirectResponse(url=f"/admin/login?next={request.url.path}", status_code=303)
+
     stmt = (
         select(Series)
         .options(
@@ -143,12 +247,9 @@ async def admin_series_detail_page(
     if not series:
         raise HTTPException(status_code=404, detail="Série introuvable")
 
-    # Vidéos brutes disponibles pour rattachement
     raw_videos = (
         await db.execute(select(Video).order_by(desc(Video.telegram_date)).limit(50))
     ).scalars().all()
-
-    admin_user = (await db.execute(select(User).where(User.role == "admin").limit(1))).scalar_one_or_none()
 
     return templates.TemplateResponse(
         request=request,
@@ -168,9 +269,12 @@ async def admin_movies_page(
     db: AsyncSession = Depends(get_db),
 ):
     """Sert la page du catalogue des films."""
+    admin_user = await get_web_admin(request, db)
+    if not admin_user:
+        return RedirectResponse(url=f"/admin/login?next={request.url.path}", status_code=303)
+
     movies_list = (await db.execute(select(Movie).order_by(desc(Movie.created_at)))).scalars().all()
     raw_videos = (await db.execute(select(Video).order_by(desc(Video.telegram_date)).limit(50))).scalars().all()
-    admin_user = (await db.execute(select(User).where(User.role == "admin").limit(1))).scalar_one_or_none()
 
     return templates.TemplateResponse(
         request=request,
@@ -190,8 +294,11 @@ async def admin_raw_videos_page(
     db: AsyncSession = Depends(get_db),
 ):
     """Sert la bibliothèque brute des vidéos Telegram."""
+    admin_user = await get_web_admin(request, db)
+    if not admin_user:
+        return RedirectResponse(url=f"/admin/login?next={request.url.path}", status_code=303)
+
     raw_videos = (await db.execute(select(Video).order_by(desc(Video.telegram_date)).limit(100))).scalars().all()
-    admin_user = (await db.execute(select(User).where(User.role == "admin").limit(1))).scalar_one_or_none()
 
     return templates.TemplateResponse(
         request=request,
@@ -209,9 +316,22 @@ async def admin_telegram_page(
     request: Request,
     db: AsyncSession = Depends(get_db),
 ):
-    """Sert la page de gestion Telegram MTProto."""
+    """Sert la page de gestion Multi-Comptes et infrastructure Telegram MTProto."""
+    admin_user = await get_web_admin(request, db)
+    if not admin_user:
+        return RedirectResponse(url=f"/admin/login?next={request.url.path}", status_code=303)
+
     telegram_status = await telegram_manager.get_connection_status()
-    admin_user = (await db.execute(select(User).where(User.role == "admin").limit(1))).scalar_one_or_none()
+
+    # Récupération de tous les comptes Telegram configurés
+    stmt_acc = select(TelegramAccount).order_by(desc(TelegramAccount.is_active), desc(TelegramAccount.created_at))
+    accounts = (await db.execute(stmt_acc)).scalars().all()
+
+    telegram_config = {
+        "api_id": settings.TELEGRAM_API_ID if settings.TELEGRAM_API_ID != 0 else "",
+        "has_api_hash": bool(settings.TELEGRAM_API_HASH and settings.TELEGRAM_API_HASH != "none"),
+        "channel_id": settings.TELEGRAM_CHANNEL_ID or "",
+    }
 
     return templates.TemplateResponse(
         request=request,
@@ -219,6 +339,8 @@ async def admin_telegram_page(
         context={
             "active_page": "telegram",
             "telegram": telegram_status,
+            "accounts": accounts,
+            "config": telegram_config,
             "current_user": admin_user,
         },
     )
@@ -230,8 +352,11 @@ async def admin_users_page(
     db: AsyncSession = Depends(get_db),
 ):
     """Sert la gestion des comptes utilisateurs."""
+    admin_user = await get_web_admin(request, db)
+    if not admin_user:
+        return RedirectResponse(url=f"/admin/login?next={request.url.path}", status_code=303)
+
     users = (await db.execute(select(User).order_by(desc(User.created_at)).limit(100))).scalars().all()
-    admin_user = (await db.execute(select(User).where(User.role == "admin").limit(1))).scalar_one_or_none()
 
     return templates.TemplateResponse(
         request=request,
@@ -249,9 +374,12 @@ async def admin_invitations_page(
     request: Request,
     db: AsyncSession = Depends(get_db),
 ):
-    """Sert la gestion des codes d'invitation."""
+    """Sert la gestion des codes d'invitation VIP."""
+    admin_user = await get_web_admin(request, db)
+    if not admin_user:
+        return RedirectResponse(url=f"/admin/login?next={request.url.path}", status_code=303)
+
     invites = (await db.execute(select(InviteCode).order_by(desc(InviteCode.created_at)).limit(100))).scalars().all()
-    admin_user = (await db.execute(select(User).where(User.role == "admin").limit(1))).scalar_one_or_none()
 
     return templates.TemplateResponse(
         request=request,
@@ -270,8 +398,11 @@ async def admin_home_editor_page(
     db: AsyncSession = Depends(get_db),
 ):
     """Sert l'éditeur de l'accueil mobile."""
+    admin_user = await get_web_admin(request, db)
+    if not admin_user:
+        return RedirectResponse(url=f"/admin/login?next={request.url.path}", status_code=303)
+
     home_rows = (await db.execute(select(HomeRow).order_by(HomeRow.order_index))).scalars().all()
-    admin_user = (await db.execute(select(User).where(User.role == "admin").limit(1))).scalar_one_or_none()
 
     return templates.TemplateResponse(
         request=request,
@@ -289,10 +420,11 @@ async def admin_settings_page(
     request: Request,
     db: AsyncSession = Depends(get_db),
 ):
-    """Sert la page des paramètres."""
-    admin_user = (await db.execute(select(User).where(User.role == "admin").limit(1))).scalar_one_or_none()
+    """Sert la page des paramètres système et mises à jour de l'application."""
+    admin_user = await get_web_admin(request, db)
+    if not admin_user:
+        return RedirectResponse(url=f"/admin/login?next={request.url.path}", status_code=303)
 
-    from app.models import SystemSetting
     settings_keys = [
         "app_latest_version",
         "app_min_version",

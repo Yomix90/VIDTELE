@@ -136,16 +136,21 @@
         </nav>
       </div>
 
-      <!-- Pied de page avec avatar profil -->
+      <!-- Pied de page avec avatar profil et déconnexion -->
       <div class="sidebar-footer mt-auto">
-        <div class="sidebar-profile">
-          <div class="profile-avatar">
-            {{ (current_user.username[:2] if current_user and current_user.username else 'AP') | upper }}
+        <div class="d-flex align-items-center justify-content-between w-100 gap-2">
+          <div class="sidebar-profile flex-grow-1 overflow-hidden">
+            <div class="profile-avatar">
+              {{ (current_user.username[:2] if current_user and current_user.username else 'AP') | upper }}
+            </div>
+            <div class="sidebar-profile-info overflow-hidden">
+              <div class="fw-bold text-white small text-truncate">{{ current_user.username if current_user else 'Admin' }}</div>
+              <div class="small text-muted text-truncate">{{ current_user.role if current_user else 'Administrateur' }}</div>
+            </div>
           </div>
-          <div class="sidebar-profile-info overflow-hidden">
-            <div class="fw-bold text-white small text-truncate">{{ current_user.username if current_user else 'Admin' }}</div>
-            <div class="small text-muted text-truncate">{{ current_user.role if current_user else 'Administrateur' }}</div>
-          </div>
+          <a href="/admin/logout" class="btn btn-outline-danger btn-sm d-flex align-items-center justify-content-center p-2 rounded-3 border-opacity-50" title="Déconnexion" style="width: 36px; height: 36px; flex-shrink: 0;" aria-label="Déconnexion">
+            <i class="bi bi-box-arrow-right fs-6"></i>
+          </a>
         </div>
       </div>
     </aside>
@@ -184,6 +189,12 @@
           <a href="/docs" target="_blank" class="btn btn-outline-info btn-sm d-none d-md-flex align-items-center gap-1">
             <i class="bi bi-code-slash"></i>
             <span>API Docs</span>
+          </a>
+
+          <!-- Bouton Déconnexion Topbar -->
+          <a href="/admin/logout" class="btn btn-outline-danger btn-sm d-flex align-items-center gap-1 shadow-sm">
+            <i class="bi bi-box-arrow-right"></i>
+            <span data-i18n="logout">Déconnexion</span>
           </a>
         </div>
       </header>
