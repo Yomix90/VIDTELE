@@ -696,24 +696,50 @@ class _ReelsScreenState extends ConsumerState<ReelsScreen>
         }
       }
 
-      // Omission stricte du paramètre token s'il est vide
-      final String tokenParam = (streamToken != null && streamToken.isNotEmpty)
-          ? '?token=$streamToken'
-          : '';
-      final streamUri = Uri.parse(
-        '$baseUrl${ApiConstants.videoStream(item.id)}$tokenParam',
-      );
-      debugPrint('[ReelsScreen] Initialisation flux index $idx (vid ${item.id}) -> $streamUri');
+      // Initialisation résiliente du contrôleur (avec réessai automatique si le token expire)
+      VideoPlayerController ctrl;
+      try {
+        final String tokenParam = (streamToken != null && streamToken.isNotEmpty)
+            ? '?token=$streamToken'
+            : '';
+        final streamUri = Uri.parse(
+          '$baseUrl${ApiConstants.videoStream(item.id)}$tokenParam',
+        );
+        debugPrint('[ReelsScreen] Initialisation flux index $idx (vid ${item.id}) -> $streamUri');
 
-      final ctrl = VideoPlayerController.networkUrl(
-        streamUri,
-        httpHeaders: {
-          if (accessToken != null && accessToken.isNotEmpty)
-            'Authorization': 'Bearer $accessToken',
-        },
-      );
+        ctrl = VideoPlayerController.networkUrl(
+          streamUri,
+          httpHeaders: {
+            if (accessToken != null && accessToken.isNotEmpty)
+              'Authorization': 'Bearer $accessToken',
+          },
+        );
+        await ctrl.initialize();
+      } catch (initErr) {
+        debugPrint('[ReelsScreen] Premier essai échoué pour $idx ($initErr), renouvellement du jeton de flux...');
+        try {
+          final tokenRes = await apiClient.dio.post(
+            ApiConstants.videoStreamToken(item.id),
+          );
+          streamToken = tokenRes.data['stream_token'];
+        } catch (_) {
+          try {
+            final tokenRes = await apiClient.dio.get(
+              ApiConstants.videoStreamToken(item.id),
+            );
+            streamToken = tokenRes.data['stream_token'];
+          } catch (_) {}
+        }
+        final String retryTokenParam = (streamToken != null && streamToken.isNotEmpty)
+            ? '?token=$streamToken'
+            : '';
+        final retryStreamUri = Uri.parse(
+          '$baseUrl${ApiConstants.videoStream(item.id)}$retryTokenParam',
+        );
+        ctrl = VideoPlayerController.networkUrl(retryStreamUri);
+        await ctrl.initialize();
+      }
 
-      await ctrl.initialize();
       stopwatch.stop();
       debugPrint('[ReelsScreen] ⚡ TTFF index $idx (vid ${item.id}): ${stopwatch.elapsedMilliseconds} ms');
       ctrl.setPlaybackSpeed(_playbackSpeed);
@@ -1640,21 +1666,37 @@ class _ReelsScreenState extends ConsumerState<ReelsScreen>
                         },
                       ),
 
-                    // 3. Miniature d'attente temporaire (affichée UNIQUEMENT avant le début effectif de la lecture)
-                    if (ctrl == null || !ctrl.value.isInitialized || (!ctrl.value.isPlaying && ctrl.value.position == Duration.zero))
-                      if (thumbUrl != null && thumbUrl.isNotEmpty)
-                        Positioned.fill(
-                          child: CachedNetworkImage(
-                            imageUrl: thumbUrl,
-                            fit: BoxFit.contain,
-                            alignment: Alignment.center,
-                            placeholder: (_, __) => Container(color: Colors.black),
-                            errorWidget: (_, __, ___) => Container(color: Colors.black),
-                          ),
-                        ),
+                    // 3. Miniature d'attente temporaire (affichée de façon ultra-réactive avant que la vidéo ne démarre)
+                    if (thumbUrl != null && thumbUrl.isNotEmpty)
+                      Positioned.fill(
+                        child: ctrl == null
+                            ? CachedNetworkImage(
+                                imageUrl: thumbUrl,
+                                fit: BoxFit.contain,
+                                alignment: Alignment.center,
+                                placeholder: (_, __) => Container(color: Colors.black),
+                                errorWidget: (_, __, ___) => Container(color: Colors.black),
+                              )
+                            : ValueListenableBuilder<VideoPlayerValue>(
+                                valueListenable: ctrl,
+                                builder: (context, val, _) {
+                                  // Dès que la première image est prête ou en cours de lecture, disparition instantanée
+                                  if (val.isInitialized && (val.isPlaying || val.position > Duration.zero)) {
+                                    return const SizedBox.shrink();
+                                  }
+                                  return CachedNetworkImage(
+                                    imageUrl: thumbUrl,
+                                    fit: BoxFit.contain,
+                                    alignment: Alignment.center,
+                                    placeholder: (_, __) => Container(color: Colors.black),
+                                    errorWidget: (_, __, ___) => Container(color: Colors.black),
+                                  );
+                                },
+                              ),
+                      ),
 
-                    // 4. Indicateur de chargement / Buffering discret
-                    if (ctrl == null || !ctrl.value.isInitialized || ctrl.value.isBuffering)
+                    // 4. Indicateur de chargement / Buffering discret réactif
+                    if (ctrl == null)
                       Center(
                         child: Container(
                           padding: const EdgeInsets.all(16),
@@ -1667,6 +1709,28 @@ class _ReelsScreenState extends ConsumerState<ReelsScreen>
                             color: AppTheme.netflixRed,
                           ),
                         ),
+                      )
+                    else
+                      ValueListenableBuilder<VideoPlayerValue>(
+                        valueListenable: ctrl,
+                        builder: (context, val, _) {
+                          if (val.isInitialized && !val.isBuffering) {
+                            return const SizedBox.shrink();
+                          }
+                          return Center(
+                            child: Container(
+                              padding: const EdgeInsets.all(16),
+                              decoration: BoxDecoration(
+                                color: Colors.black.withValues(alpha: 0.5),
+                                shape: BoxShape.circle,
+                              ),
+                              child: const CircularProgressIndicator(
+                                strokeWidth: 2.5,
+                                color: AppTheme.netflixRed,
+                              ),
+                            ),
+                          );
+                        },
                       ),
 
                     // 5. Dégradé sombre cinématique (haut et bas) avec masquage automatique

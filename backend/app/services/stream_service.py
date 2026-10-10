@@ -301,34 +301,49 @@ class StreamService:
             return
         asyncio.create_task(self.prewarm_video(video))
 
-    async def prewarm_next_episodes_in_series(self, current_video: Video, db: AsyncSession, count: int = 2) -> None:
+    async def prewarm_next_episodes_in_series(
+        self,
+        current_video: Video,
+        db: Optional[AsyncSession] = None,
+        count: int = 2,
+    ) -> None:
         """
         Détecte les épisodes suivants de la même série et préchauffe en avance leur cache.
         Permet un passage instantané (< 0.5 s) lors du swipe vertical.
+        Gère de manière autonome sa propre session de base de données si aucune n'est fournie.
         """
         try:
+            from app.database import AsyncSessionLocal
             from app.models import Episode
-            # Trouver l'épisode actuel
-            stmt = select(Episode).where(Episode.telegram_video_id == current_video.id)
-            current_ep = (await db.execute(stmt)).scalar_one_or_none()
-            if not current_ep or not current_ep.season_id:
-                return
 
-            # Trouver les épisodes suivants dans la même saison
-            stmt_next = (
-                select(Video)
-                .join(Episode, Episode.telegram_video_id == Video.id)
-                .where(
-                    Episode.season_id == current_ep.season_id,
-                    Episode.number > current_ep.number,
-                    Video.is_published == True,
+            async def _find_and_enqueue(session: AsyncSession) -> None:
+                # Trouver l'épisode actuel
+                stmt = select(Episode).where(Episode.telegram_video_id == current_video.id)
+                current_ep = (await session.execute(stmt)).scalar_one_or_none()
+                if not current_ep or not current_ep.season_id:
+                    return
+
+                # Trouver les épisodes suivants dans la même saison
+                stmt_next = (
+                    select(Video)
+                    .join(Episode, Episode.telegram_video_id == Video.id)
+                    .where(
+                        Episode.season_id == current_ep.season_id,
+                        Episode.number > current_ep.number,
+                        Video.is_published == True,
+                    )
+                    .order_by(Episode.number.asc())
+                    .limit(count)
                 )
-                .order_by(Episode.number.asc())
-                .limit(count)
-            )
-            next_videos = (await db.execute(stmt_next)).scalars().all()
-            for nxt in next_videos:
-                self.enqueue_prewarm(nxt)
+                next_videos = (await session.execute(stmt_next)).scalars().all()
+                for nxt in next_videos:
+                    self.enqueue_prewarm(nxt)
+
+            if db is not None:
+                await _find_and_enqueue(db)
+            else:
+                async with AsyncSessionLocal() as session:
+                    await _find_and_enqueue(session)
         except Exception as e:
             logger.debug(f"[Prewarm] Erreur lors de la recherche des épisodes suivants: {e}")
 

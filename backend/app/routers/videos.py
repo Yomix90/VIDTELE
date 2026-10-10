@@ -1,6 +1,7 @@
 """
 Routeur pour les vidéos : liste, catégories, détails et miniatures.
 """
+import asyncio
 import math
 from datetime import datetime, timedelta, timezone
 from pathlib import Path
@@ -264,10 +265,12 @@ async def get_video_thumbnail(video_id: int, db: AsyncSession = Depends(get_db))
     """
     Renvoie le fichier image de la miniature avec mise en cache HTTP.
     """
-    # 1. Vérifier si video_id correspond à un id de vidéo ou telegram_message_id
-    stmt = select(Video).where(or_(Video.id == video_id, Video.telegram_message_id == video_id))
-    result = await db.execute(stmt)
-    video = result.scalar_one_or_none()
+    # 1. Vérifier si video_id correspond à un id de vidéo ou telegram_message_id (priorité absolue à l'ID primaire)
+    stmt = select(Video).where(Video.id == video_id)
+    video = (await db.execute(stmt)).scalar_one_or_none()
+    if not video:
+        stmt_tg = select(Video).where(Video.telegram_message_id == video_id)
+        video = (await db.execute(stmt_tg)).scalars().first()
 
     if not video:
         raise HTTPException(status_code=404, detail="Miniature introuvable")
@@ -312,8 +315,12 @@ async def get_stream_token(
     Génère un jeton signé temporaire pour le lecteur vidéo mobile.
     Permet la lecture sans avoir à configurer des en-têtes Authorization complexes dans le player.
     """
-    stmt = select(Video).where(or_(Video.id == video_id, Video.telegram_message_id == video_id))
+    stmt = select(Video).where(Video.id == video_id)
     video = (await db.execute(stmt)).scalar_one_or_none()
+    if not video:
+        stmt_tg = select(Video).where(Video.telegram_message_id == video_id)
+        video = (await db.execute(stmt_tg)).scalars().first()
+
     if not video or (not video.is_published and current_user.role != "admin"):
         raise HTTPException(status_code=404, detail="Vidéo introuvable ou non publiée")
 
@@ -375,10 +382,12 @@ async def stream_video(
     if not user or not user.is_active:
         raise HTTPException(status_code=401, detail="Utilisateur introuvable ou compte désactivé")
 
-    # 2. Récupération de la vidéo (supporte l'ID interne ou le telegram_message_id)
-    stmt = select(Video).where(or_(Video.id == video_id, Video.telegram_message_id == video_id))
-    result = await db.execute(stmt)
-    video = result.scalar_one_or_none()
+    # 2. Récupération de la vidéo (priorité absolue à l'ID primaire Video.id)
+    stmt = select(Video).where(Video.id == video_id)
+    video = (await db.execute(stmt)).scalar_one_or_none()
+    if not video:
+        stmt_tg = select(Video).where(Video.telegram_message_id == video_id)
+        video = (await db.execute(stmt_tg)).scalars().first()
 
     if not video or (not video.is_published and user.role != "admin"):
         raise HTTPException(status_code=404, detail="Vidéo introuvable ou non publiée")
@@ -400,7 +409,7 @@ async def stream_video(
         video.views_count += 1
         await db.commit()
         # Préchargement anticipé transparent des 2 épisodes suivants de la même série
-        asyncio.create_task(stream_service.prewarm_next_episodes_in_series(video, db))
+        asyncio.create_task(stream_service.prewarm_next_episodes_in_series(video))
 
     # 5. Délégation au moteur de streaming Range 206
     return await stream_service.create_streaming_response(video, range_header)
