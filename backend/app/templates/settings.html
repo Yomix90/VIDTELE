@@ -466,6 +466,124 @@ async function uploadApkToServer() {
     showToast('Erreur réseau lors du téléversement de l\'APK', 'error');
   }
 }
+
+let lastBenchRecommendedLimit = 30;
+
+async function saveStreamingSettings(e) {
+  if (e && e.preventDefault) e.preventDefault();
+  const maxGlobal = parseInt(document.getElementById('streamMaxGlobal').value, 10);
+  const maxPerUser = parseInt(document.getElementById('streamMaxPerUser').value, 10);
+
+  if (!maxGlobal || maxGlobal < 1) {
+    showToast('La limite globale doit être supérieure ou égale à 1.', 'warning');
+    return;
+  }
+  if (!maxPerUser || maxPerUser < 1) {
+    showToast('La limite par utilisateur doit être supérieure ou égale à 1.', 'warning');
+    return;
+  }
+
+  try {
+    const res = await fetch('/api/admin/streaming-settings', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({
+        max_concurrent_global: maxGlobal,
+        max_concurrent_per_user: maxPerUser
+      })
+    });
+    const data = await res.json();
+    if (res.ok && data.success) {
+      showToast(data.message || 'Limites de streaming enregistrées avec succès !', 'success');
+    } else {
+      showToast(data.detail || 'Erreur lors de l\'enregistrement des limites', 'error');
+    }
+  } catch (err) {
+    showToast('Erreur serveur lors de la mise à jour des limites', 'error');
+  }
+}
+
+async function runVpsBenchmark() {
+  const concurrency = parseInt(document.getElementById('benchConcurrency').value, 10);
+  const duration = parseFloat(document.getElementById('benchDuration').value);
+  const mode = document.getElementById('benchMode').value;
+  const startBtn = document.getElementById('benchStartBtn');
+  const progressContainer = document.getElementById('benchProgressContainer');
+  const resultsContainer = document.getElementById('benchResultsContainer');
+  const progressBar = document.getElementById('benchProgressBar');
+
+  startBtn.disabled = true;
+  startBtn.innerHTML = '<span class="spinner-border spinner-border-sm me-1"></span>Benchmark en cours...';
+  progressContainer.classList.remove('d-none');
+  resultsContainer.classList.add('d-none');
+  progressBar.style.width = '100%';
+
+  showToast(`Test de charge lancé : ${concurrency} flux simultanés (${duration}s)...`, 'info');
+
+  try {
+    const res = await fetch('/api/admin/benchmark/run', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({
+        concurrency: concurrency,
+        duration_seconds: duration,
+        mode: mode
+      })
+    });
+
+    const data = await res.json();
+    if (res.ok && data.success) {
+      document.getElementById('resThroughputMbps').textContent = `${data.throughput_mbps} Mbps`;
+      document.getElementById('resThroughputMbS').textContent = `${data.throughput_mb_s} Mo/s`;
+      document.getElementById('resAvgLatency').textContent = `${data.latency.avg_ms} ms`;
+      document.getElementById('resP95Latency').textContent = `P95: ${data.latency.p95_ms} ms (min: ${data.latency.min_ms} ms)`;
+      document.getElementById('resSuccessStreams').textContent = `${data.successful_streams} / ${data.concurrency_tested}`;
+      document.getElementById('resTotalChunks').textContent = `${data.total_chunks_streamed} blocs de 256 Ko`;
+
+      const cap = data.capacity_estimates || {};
+      document.getElementById('resCapSd').textContent = `~${cap.sd_480p_users} spectateurs`;
+      document.getElementById('resCapHd').textContent = `~${cap.hd_720p_users} spectateurs`;
+      document.getElementById('resCapFhd').textContent = `~${cap.fhd_1080p_users} spectateurs`;
+
+      lastBenchRecommendedLimit = cap.recommended_global_limit || 30;
+      document.getElementById('resRecommendedLimit').textContent = `${lastBenchRecommendedLimit}`;
+
+      // Diagnostics & Actions
+      const diagBody = document.getElementById('resDiagBody');
+      const applyBtn = document.getElementById('resApplyLimitBtn');
+
+      if (data.diagnostics && data.diagnostics.length > 0) {
+        diagBody.innerHTML = data.diagnostics.map(d => `<div>• ${d}</div>`).join('');
+      } else {
+        diagBody.textContent = `Votre VPS est capable de supporter confortablement jusqu'à ${lastBenchRecommendedLimit} flux simultanés.`;
+      }
+
+      if (lastBenchRecommendedLimit > (cap.current_global_limit || 30)) {
+        applyBtn.classList.remove('d-none');
+        applyBtn.textContent = `Ajuster la limite serveur à ${lastBenchRecommendedLimit} flux`;
+      } else {
+        applyBtn.classList.add('d-none');
+      }
+
+      resultsContainer.classList.remove('d-none');
+      showToast(`Test réussi : Débit mesuré ${data.throughput_mbps} Mbps !`, 'success');
+    } else {
+      showToast(data.detail || 'Erreur pendant le benchmark de streaming', 'error');
+    }
+  } catch (err) {
+    showToast('Erreur réseau ou délai dépassé lors du benchmark', 'error');
+  } finally {
+    startBtn.disabled = false;
+    startBtn.innerHTML = '<i class="bi bi-play-circle-fill me-1"></i>Lancer le Benchmark';
+    progressContainer.classList.add('d-none');
+  }
+}
+
+async function applyRecommendedLimitFromBench() {
+  document.getElementById('streamMaxGlobal').value = lastBenchRecommendedLimit;
+  await saveStreamingSettings(new Event('submit'));
+  document.getElementById('resApplyLimitBtn').classList.add('d-none');
+}
 </script>
 
 {% endblock %}
