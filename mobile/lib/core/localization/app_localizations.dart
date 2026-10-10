@@ -368,6 +368,27 @@ class AppLocalizations {
           ? 'Sync successful! +$added added, $updated updated ($scanned messages scanned).'
           : 'Sync réussie ! +$added ajoutées, $updated mises à jour ($scanned messages scannés).');
 
+  // ==================== SÉRIES, MA LISTE & RECHERCHE ====================
+  String get similarSeries => isArabic
+      ? 'أعمال مشابهة'
+      : (isEnglish ? 'Similar Titles' : 'Titres similaires');
+  String get watchVertical => isArabic
+      ? 'مشاهدة عمودية (Reels)'
+      : (isEnglish ? 'Watch Vertical (Reels)' : 'Regarder en vertical');
+  String get addedToMyList => isArabic
+      ? 'تمت الإضافة إلى قائمتي'
+      : (isEnglish ? 'Added to My List' : 'Ajouté à Ma liste');
+  String get removedFromMyList => isArabic
+      ? 'تمت الإزالة من قائمتي'
+      : (isEnglish ? 'Removed from My List' : 'Retiré de Ma liste');
+  String get expand => isArabic ? 'المزيد' : (isEnglish ? 'More' : 'Plus');
+  String get collapse => isArabic ? 'أقل' : (isEnglish ? 'Less' : 'Moins');
+  String get shareSeries => isArabic ? 'مشاركة' : (isEnglish ? 'Share' : 'Partager');
+  String get filterAll => isArabic ? 'الكل' : (isEnglish ? 'All' : 'Tout');
+  String get filterSeries => isArabic ? 'مسلسلات' : (isEnglish ? 'Series' : 'Séries');
+  String get filterInProgress => isArabic ? 'قيد المشاهدة' : (isEnglish ? 'In Progress' : 'En cours');
+  String get episodesHeader => isArabic ? 'الحلقات' : (isEnglish ? 'Episodes' : 'Épisodes');
+
   // ==================== FORMATTERS ====================
   String formatDuration(int seconds) {
     if (seconds <= 0) {

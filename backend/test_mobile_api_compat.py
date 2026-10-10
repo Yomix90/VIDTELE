@@ -162,6 +162,24 @@ async def test_mobile_compatibility():
             assert "has_more" in feed_data
             print(f"[OK] 17. GET /api/feed -> 200 OK ({len(feed_data['items'])} éléments dans le feed vertical)")
 
+            # 18. Endpoint Détail Série enrichi (/api/series/1)
+            r_series = await client.get("/api/series/1", headers=headers)
+            assert r_series.status_code == 200
+            series_detail = r_series.json()
+            assert "title_fr" in series_detail
+            assert "seasons" in series_detail
+            assert "genres" in series_detail
+            assert "similar_series" in series_detail
+            assert "is_favorite" in series_detail
+            print(f"[OK] 18. GET /api/series/1 -> 200 OK ('{series_detail['title_fr']}', {len(series_detail['similar_series'])} similaires)")
+
+            # 19. Endpoint Bascule Favori Série (/api/series/1/favorite)
+            r_fav_series = await client.post("/api/series/1/favorite", headers=headers)
+            assert r_fav_series.status_code == 200
+            fav_data = r_fav_series.json()
+            assert "is_favorite" in fav_data
+            print(f"[OK] 19. POST /api/series/1/favorite -> 200 OK (is_favorite: {fav_data['is_favorite']})")
+
         print("=" * 65)
         print("CONFORMITE 100% VALIDEE : AUCUNE REGRESSION SUR L'API MOBILE !")
         print("=" * 65)

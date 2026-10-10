@@ -81,6 +81,12 @@ class VideoModel {
     return fraction.clamp(0.0, 1.0);
   }
 
+  /// Indique si la vidéo est un épisode de série
+  bool get isSeriesEpisode =>
+      seasonNumber != null ||
+      episodeNumber != null ||
+      category.toLowerCase().contains('série');
+
   /// Taille du fichier en Mo
   String get formattedFileSize {
     final mb = fileSizeBytes / (1024 * 1024);

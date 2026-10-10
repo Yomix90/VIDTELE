@@ -194,6 +194,26 @@ async def get_feed_alias(
     )
 
 
+@app.get("/api/series/{series_id}", tags=["Séries"])
+async def get_series_detail_alias(
+    series_id: int,
+    current_user: User = Depends(get_current_active_user),
+    db: AsyncSession = Depends(get_db),
+):
+    """Alias racine pour le détail d'une série avec épisodes et séries similaires."""
+    return await videos.get_public_series_detail(series_id=series_id, current_user=current_user, db=db)
+
+
+@app.post("/api/series/{series_id}/favorite", tags=["Séries"])
+async def toggle_series_favorite_alias(
+    series_id: int,
+    current_user: User = Depends(get_current_active_user),
+    db: AsyncSession = Depends(get_db),
+):
+    """Alias racine pour basculer le statut favori d'une série."""
+    return await videos.toggle_series_favorite(series_id=series_id, current_user=current_user, db=db)
+
+
 @app.get("/api/app/version", tags=["Application Mobile"])
 async def check_app_version(
     current_version: Optional[str] = None,

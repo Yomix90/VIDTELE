@@ -1112,6 +1112,49 @@ async def get_public_series_detail(
             "episodes": eps_out,
         })
 
+    # 1. Vérifier si l'utilisateur a cette série dans ses favoris
+    is_series_favorite = False
+    if video_ids:
+        fav_stmt = select(Favorite.id).where(
+            Favorite.user_id == current_user.id,
+            Favorite.video_id.in_(video_ids),
+        ).limit(1)
+        if (await db.execute(fav_stmt)).scalar_one_or_none():
+            is_series_favorite = True
+
+    # 2. Extraire les genres/catégories distincts
+    genres_set = set()
+    for v in video_map.values():
+        if v.category and v.category != "Série":
+            genres_set.add(v.category)
+    if not genres_set:
+        genres_set = {"Drame", "Micro-série"}
+    genres_list = sorted(list(genres_set))
+
+    # 3. Séries similaires
+    similar_stmt = select(Series).where(
+        Series.visibility == "published",
+        Series.id != series.id,
+    ).order_by(desc(Series.rating), desc(Series.created_at)).limit(6)
+    similar_res = (await db.execute(similar_stmt)).scalars().all()
+    similar_out = []
+    for sim in similar_res:
+        sim_seasons = (await db.execute(select(Season.id).where(Season.series_id == sim.id))).scalars().all()
+        sim_ep_count = 0
+        if sim_seasons:
+            sim_ep_count = (await db.execute(select(func.count(Episode.id)).where(Episode.season_id.in_(sim_seasons)))).scalar() or 0
+        similar_out.append({
+            "id": sim.id,
+            "title_fr": sim.title_fr,
+            "title_ar": sim.title_ar,
+            "title_en": sim.title_en,
+            "poster_path": sim.poster_path,
+            "banner_path": sim.banner_path or sim.poster_path,
+            "rating": sim.rating,
+            "year_start": sim.year_start,
+            "episodes_count": sim_ep_count,
+        })
+
     return {
         "id": series.id,
         "slug": series.slug,
@@ -1129,5 +1172,55 @@ async def get_public_series_detail(
         "seasons_count": len(seasons_out),
         "episodes_count": len(episodes),
         "last_watched_episode_id": last_watched_ep,
+        "genres": genres_list,
+        "is_favorite": is_series_favorite,
+        "similar_series": similar_out,
         "seasons": seasons_out,
     }
+
+
+@router.post("/series/{series_id}/favorite")
+async def toggle_series_favorite(
+    series_id: int,
+    current_user: User = Depends(get_current_active_user),
+    db: AsyncSession = Depends(get_db),
+):
+    """
+    Bascule l'état favori d'une série pour l'utilisateur connecté.
+    Ajoute ou retire le premier épisode disponible de la table des favoris.
+    """
+    series = (await db.execute(select(Series).where(Series.id == series_id))).scalar_one_or_none()
+    if not series:
+        raise HTTPException(status_code=404, detail="Série introuvable.")
+
+    ep_stmt = (
+        select(Episode)
+        .join(Season, Episode.season_id == Season.id)
+        .where(Season.series_id == series_id)
+        .order_by(Season.number.asc(), Episode.number.asc())
+        .limit(1)
+    )
+    first_ep = (await db.execute(ep_stmt)).scalar_one_or_none()
+    
+    vid_id = first_ep.telegram_video_id if first_ep else None
+    if not vid_id:
+        fallback_vid = (await db.execute(select(Video.id).order_by(Video.id.asc()).limit(1))).scalar_one_or_none()
+        vid_id = fallback_vid
+
+    if not vid_id:
+        raise HTTPException(status_code=400, detail="Aucune vidéo disponible sur le serveur.")
+
+    fav_stmt = select(Favorite).where(
+        Favorite.user_id == current_user.id,
+        Favorite.video_id == vid_id,
+    )
+    existing_fav = (await db.execute(fav_stmt)).scalar_one_or_none()
+    if existing_fav:
+        await db.delete(existing_fav)
+        await db.commit()
+        return {"status": "removed", "is_favorite": False, "message": "Série retirée des favoris"}
+    else:
+        new_fav = Favorite(user_id=current_user.id, video_id=vid_id)
+        db.add(new_fav)
+        await db.commit()
+        return {"status": "added", "is_favorite": True, "message": "Série ajoutée aux favoris"}

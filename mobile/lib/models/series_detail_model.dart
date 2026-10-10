@@ -144,6 +144,55 @@ class SeasonModel {
   }
 }
 
+/// Modèle d'une série similaire ou recommandée
+class SimilarSeriesModel {
+  final int id;
+  final String titleFr;
+  final String? titleAr;
+  final String? titleEn;
+  final String? posterPath;
+  final String? bannerPath;
+  final double? rating;
+  final int? yearStart;
+  final int episodesCount;
+
+  SimilarSeriesModel({
+    required this.id,
+    required this.titleFr,
+    this.titleAr,
+    this.titleEn,
+    this.posterPath,
+    this.bannerPath,
+    this.rating,
+    this.yearStart,
+    required this.episodesCount,
+  });
+
+  String getLocalizedTitle(String langCode) {
+    if (langCode == 'ar' && titleAr != null && titleAr!.trim().isNotEmpty) {
+      return titleAr!;
+    }
+    if (langCode == 'en' && titleEn != null && titleEn!.trim().isNotEmpty) {
+      return titleEn!;
+    }
+    return titleFr;
+  }
+
+  factory SimilarSeriesModel.fromJson(Map<String, dynamic> json) {
+    return SimilarSeriesModel(
+      id: json['id'] ?? 0,
+      titleFr: json['title_fr'] ?? 'Série',
+      titleAr: json['title_ar'],
+      titleEn: json['title_en'],
+      posterPath: json['poster_path'],
+      bannerPath: json['banner_path'],
+      rating: (json['rating'] as num?)?.toDouble(),
+      yearStart: json['year_start'],
+      episodesCount: json['episodes_count'] ?? 0,
+    );
+  }
+}
+
 /// Modèle complet de détail d'une série
 class SeriesDetailModel {
   final int id;
@@ -162,6 +211,9 @@ class SeriesDetailModel {
   final int seasonsCount;
   final int episodesCount;
   final int? lastWatchedEpisodeId;
+  final List<String> genres;
+  final bool isFavorite;
+  final List<SimilarSeriesModel> similarSeries;
   final List<SeasonModel> seasons;
 
   SeriesDetailModel({
@@ -181,6 +233,9 @@ class SeriesDetailModel {
     required this.seasonsCount,
     required this.episodesCount,
     this.lastWatchedEpisodeId,
+    this.genres = const [],
+    this.isFavorite = false,
+    this.similarSeries = const [],
     required this.seasons,
   });
 
@@ -204,9 +259,45 @@ class SeriesDetailModel {
     return synopsisFr;
   }
 
+  SeriesDetailModel copyWith({
+    bool? isFavorite,
+    int? lastWatchedEpisodeId,
+  }) {
+    return SeriesDetailModel(
+      id: id,
+      slug: slug,
+      titleFr: titleFr,
+      titleAr: titleAr,
+      titleEn: titleEn,
+      synopsisFr: synopsisFr,
+      synopsisAr: synopsisAr,
+      synopsisEn: synopsisEn,
+      yearStart: yearStart,
+      rating: rating,
+      status: status,
+      posterPath: posterPath,
+      bannerPath: bannerPath,
+      seasonsCount: seasonsCount,
+      episodesCount: episodesCount,
+      lastWatchedEpisodeId: lastWatchedEpisodeId ?? this.lastWatchedEpisodeId,
+      genres: genres,
+      isFavorite: isFavorite ?? this.isFavorite,
+      similarSeries: similarSeries,
+      seasons: seasons,
+    );
+  }
+
   factory SeriesDetailModel.fromJson(Map<String, dynamic> json) {
     final sList = (json['seasons'] as List? ?? [])
         .map((e) => SeasonModel.fromJson(e))
+        .toList();
+
+    final simList = (json['similar_series'] as List? ?? [])
+        .map((e) => SimilarSeriesModel.fromJson(e))
+        .toList();
+
+    final gList = (json['genres'] as List? ?? [])
+        .map((e) => e.toString())
         .toList();
 
     return SeriesDetailModel(
@@ -226,6 +317,9 @@ class SeriesDetailModel {
       seasonsCount: json['seasons_count'] ?? sList.length,
       episodesCount: json['episodes_count'] ?? 0,
       lastWatchedEpisodeId: json['last_watched_episode_id'],
+      genres: gList.isNotEmpty ? gList : const ['Micro-série', 'Drame'],
+      isFavorite: json['is_favorite'] ?? false,
+      similarSeries: simList,
       seasons: sList,
     );
   }

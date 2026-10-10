@@ -1,16 +1,25 @@
+import 'package:cached_network_image/cached_network_image.dart';
 import 'package:flutter/material.dart';
+import 'package:flutter/services.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
+
+import '../../core/constants/api_constants.dart';
 import '../../core/localization/app_localizations.dart';
+import '../../core/storage/storage_service.dart';
 import '../../core/theme/app_theme.dart';
+import '../../core/utils/image_utils.dart';
+import '../../models/series_detail_model.dart';
 import '../../models/video_model.dart';
+import '../../providers/locale_provider.dart';
 import '../../providers/video_provider.dart';
 import '../../widgets/empty_state.dart';
 import '../../widgets/shimmer_placeholder.dart';
 import '../../widgets/touchable_scale.dart';
 import '../../widgets/video_card.dart';
 import '../player/video_player_screen.dart';
+import '../series/series_detail_screen.dart';
 
-/// Écran dédié à la recherche et à l'exploration par catégorie / genre
+/// Écran dédié à la recherche dynamique, exploration par catégorie et suggestions
 class SearchScreen extends ConsumerStatefulWidget {
   const SearchScreen({super.key});
 
@@ -21,6 +30,15 @@ class SearchScreen extends ConsumerStatefulWidget {
 class _SearchScreenState extends ConsumerState<SearchScreen> {
   final TextEditingController _controller = TextEditingController();
   String _selectedCategory = '';
+
+  static const List<String> _popularSuggestions = [
+    'Drame',
+    'Action',
+    'Micro-série',
+    'Romance',
+    'Thriller',
+    'Comédie',
+  ];
 
   @override
   void dispose() {
@@ -46,6 +64,9 @@ class _SearchScreenState extends ConsumerState<SearchScreen> {
     final l10n = context.l10n;
     final allVideosAsync = ref.watch(videoListProvider);
     final categoriesAsync = ref.watch(categoriesProvider);
+    final seriesListAsync = ref.watch(seriesListProvider);
+    final currentLocale = ref.watch(localeProvider);
+    final langCode = currentLocale.languageCode;
     final query = _controller.text.trim().toLowerCase();
 
     return Scaffold(
@@ -53,7 +74,7 @@ class _SearchScreenState extends ConsumerState<SearchScreen> {
       body: SafeArea(
         child: Column(
           children: [
-            // 1. Barre de recherche moderne
+            // 1. Barre de recherche moderne avec retour haptique
             Padding(
               padding: const EdgeInsets.fromLTRB(16, 12, 16, 8),
               child: Container(
@@ -73,6 +94,7 @@ class _SearchScreenState extends ConsumerState<SearchScreen> {
                         ? IconButton(
                             icon: const Icon(Icons.close, color: Colors.white54, size: 20),
                             onPressed: () {
+                              HapticFeedback.lightImpact();
                               _controller.clear();
                               setState(() {});
                             },
@@ -105,6 +127,7 @@ class _SearchScreenState extends ConsumerState<SearchScreen> {
                         padding: const EdgeInsets.only(right: 8, bottom: 4, top: 4),
                         child: TouchableScale(
                           onTap: () {
+                            HapticFeedback.selectionClick();
                             setState(() {
                               _selectedCategory = isSelected ? '' : catName;
                             });
@@ -123,7 +146,7 @@ class _SearchScreenState extends ConsumerState<SearchScreen> {
                             ),
                             child: Center(
                               child: Text(
-                                isAll ? 'Tout' : catName,
+                                isAll ? l10n.filterAll : catName,
                                 style: TextStyle(
                                   color: isSelected ? Colors.white : Colors.white70,
                                   fontSize: 12.5,
@@ -142,9 +165,56 @@ class _SearchScreenState extends ConsumerState<SearchScreen> {
               error: (_, __) => const SizedBox.shrink(),
             ),
 
-            const SizedBox(height: 8),
+            // Suggestions rapides si la recherche est vide
+            if (query.isEmpty && _selectedCategory.isEmpty)
+              Padding(
+                padding: const EdgeInsets.fromLTRB(16, 8, 16, 8),
+                child: Row(
+                  children: [
+                    const Icon(Icons.trending_up, color: AppTheme.netflixRed, size: 16),
+                    const SizedBox(width: 6),
+                    Text(
+                      'Recherches populaires :',
+                      style: TextStyle(color: Colors.white.withValues(alpha: 0.6), fontSize: 12),
+                    ),
+                    const SizedBox(width: 8),
+                    Expanded(
+                      child: SingleChildScrollView(
+                        scrollDirection: Axis.horizontal,
+                        child: Row(
+                          children: _popularSuggestions.map((tag) {
+                            return Padding(
+                              padding: const EdgeInsets.only(right: 6),
+                              child: GestureDetector(
+                                onTap: () {
+                                  HapticFeedback.selectionClick();
+                                  _controller.text = tag;
+                                  setState(() {});
+                                },
+                                child: Container(
+                                  padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 3),
+                                  decoration: BoxDecoration(
+                                    color: Colors.white.withValues(alpha: 0.06),
+                                    borderRadius: BorderRadius.circular(10),
+                                  ),
+                                  child: Text(
+                                    tag,
+                                    style: const TextStyle(color: Colors.white70, fontSize: 11),
+                                  ),
+                                ),
+                              ),
+                            );
+                          }).toList(),
+                        ),
+                      ),
+                    ),
+                  ],
+                ),
+              ),
 
-            // 3. Résultats de recherche en grille
+            const SizedBox(height: 4),
+
+            // 3. Résultats de recherche (Séries + Vidéos)
             Expanded(
               child: allVideosAsync.when(
                 loading: () => GridView.builder(
@@ -179,7 +249,25 @@ class _SearchScreenState extends ConsumerState<SearchScreen> {
                     }).toList();
                   }
 
-                  if (filtered.isEmpty) {
+                  // Séries correspondantes depuis seriesListAsync
+                  final matchingSeries = seriesListAsync.maybeWhen(
+                    data: (seriesList) {
+                      if (query.isEmpty) return seriesList;
+                      return seriesList.where((s) {
+                        final titleFr = s.titleFr.toLowerCase();
+                        final titleAr = (s.titleAr ?? '').toLowerCase();
+                        final titleEn = (s.titleEn ?? '').toLowerCase();
+                        final hasGenre = s.genres.any((g) => g.toLowerCase().contains(query));
+                        return titleFr.contains(query) ||
+                            titleAr.contains(query) ||
+                            titleEn.contains(query) ||
+                            hasGenre;
+                      }).toList();
+                    },
+                    orElse: () => <SeriesDetailModel>[],
+                  );
+
+                  if (filtered.isEmpty && matchingSeries.isEmpty) {
                     return EmptyStateView(
                       icon: Icons.search_off_rounded,
                       title: query.isNotEmpty
@@ -198,21 +286,144 @@ class _SearchScreenState extends ConsumerState<SearchScreen> {
                     );
                   }
 
-                  return GridView.builder(
-                    padding: const EdgeInsets.all(16),
-                    gridDelegate: const SliverGridDelegateWithFixedCrossAxisCount(
-                      crossAxisCount: 3,
-                      childAspectRatio: 0.68,
-                      crossAxisSpacing: 10,
-                      mainAxisSpacing: 12,
-                    ),
-                    itemCount: filtered.length,
-                    itemBuilder: (context, index) {
-                      final video = filtered[index];
-                      return VideoCard(
-                        video: video,
-                        heroTag: 'search_video_${video.id}',
-                        onTap: () => _onVideoSelected(video, filtered),
+                  return FutureBuilder<String>(
+                    future: storageService.getServerUrl(),
+                    builder: (context, snapshot) {
+                      final baseUrl = snapshot.data ?? ApiConstants.defaultBaseUrl;
+
+                      return CustomScrollView(
+                        slivers: [
+                          // Section Séries trouvées
+                          if (matchingSeries.isNotEmpty) ...[
+                            SliverToBoxAdapter(
+                              child: Padding(
+                                padding: const EdgeInsets.fromLTRB(16, 12, 16, 8),
+                                child: Text(
+                                  l10n.filterSeries,
+                                  style: const TextStyle(
+                                    color: Colors.white,
+                                    fontSize: 16,
+                                    fontWeight: FontWeight.bold,
+                                  ),
+                                ),
+                              ),
+                            ),
+                            SliverToBoxAdapter(
+                              child: SizedBox(
+                                height: 160,
+                                child: ListView.builder(
+                                  scrollDirection: Axis.horizontal,
+                                  padding: const EdgeInsets.symmetric(horizontal: 16),
+                                  itemCount: matchingSeries.length,
+                                  itemBuilder: (context, index) {
+                                    final s = matchingSeries[index];
+                                    final sTitle = s.getLocalizedTitle(langCode);
+                                    final posterUrl = ImageUtils.resolveUrl(s.posterPath, baseUrl);
+
+                                    return Container(
+                                      width: 100,
+                                      margin: const EdgeInsets.only(right: 10),
+                                      child: TouchableScale(
+                                        onTap: () {
+                                          Navigator.push(
+                                            context,
+                                            MaterialPageRoute(
+                                              builder: (_) => SeriesDetailScreen(
+                                                seriesId: s.id,
+                                                initialTitle: sTitle,
+                                                initialPoster: s.posterPath,
+                                              ),
+                                            ),
+                                          );
+                                        },
+                                        child: Column(
+                                          crossAxisAlignment: CrossAxisAlignment.start,
+                                          children: [
+                                            ClipRRect(
+                                              borderRadius: BorderRadius.circular(6),
+                                              child: AspectRatio(
+                                                aspectRatio: 2 / 3,
+                                                child: (posterUrl != null && posterUrl.isNotEmpty)
+                                                    ? CachedNetworkImage(
+                                                        imageUrl: posterUrl,
+                                                        fit: BoxFit.cover,
+                                                        placeholder: (context, url) => Container(color: AppTheme.netflixDarkGray),
+                                                        errorWidget: (context, url, error) => Container(
+                                                          color: AppTheme.netflixDarkGray,
+                                                          child: const Icon(Icons.movie, color: Colors.white24),
+                                                        ),
+                                                      )
+                                                    : Container(
+                                                        color: AppTheme.netflixDarkGray,
+                                                        child: const Icon(Icons.movie, color: Colors.white24),
+                                                      ),
+                                              ),
+                                            ),
+                                            const SizedBox(height: 4),
+                                            Text(
+                                              sTitle,
+                                              maxLines: 1,
+                                              overflow: TextOverflow.ellipsis,
+                                              style: const TextStyle(
+                                                color: Colors.white,
+                                                fontSize: 11.5,
+                                                fontWeight: FontWeight.w600,
+                                              ),
+                                            ),
+                                          ],
+                                        ),
+                                      ),
+                                    );
+                                  },
+                                ),
+                              ),
+                            ),
+                            const SliverToBoxAdapter(child: SizedBox(height: 8)),
+                          ],
+
+                          // Section Vidéos / Épisodes
+                          if (filtered.isNotEmpty) ...[
+                            if (matchingSeries.isNotEmpty)
+                              const SliverToBoxAdapter(
+                                child: Padding(
+                                  padding: EdgeInsets.fromLTRB(16, 8, 16, 8),
+                                  child: Text(
+                                    'Vidéos & Épisodes',
+                                    style: TextStyle(
+                                      color: Colors.white,
+                                      fontSize: 16,
+                                      fontWeight: FontWeight.bold,
+                                    ),
+                                  ),
+                                ),
+                              ),
+                            SliverPadding(
+                              padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 8),
+                              sliver: SliverGrid(
+                                gridDelegate: const SliverGridDelegateWithFixedCrossAxisCount(
+                                  crossAxisCount: 3,
+                                  childAspectRatio: 0.68,
+                                  crossAxisSpacing: 10,
+                                  mainAxisSpacing: 12,
+                                ),
+                                delegate: SliverChildBuilderDelegate(
+                                  (context, index) {
+                                    final video = filtered[index];
+                                    return TouchableScale(
+                                      onTap: () => _onVideoSelected(video, filtered),
+                                      child: VideoCard(
+                                        video: video,
+                                        heroTag: 'search_video_${video.id}',
+                                        onTap: () => _onVideoSelected(video, filtered),
+                                      ),
+                                    );
+                                  },
+                                  childCount: filtered.length,
+                                ),
+                              ),
+                            ),
+                          ],
+                        ],
                       );
                     },
                   );

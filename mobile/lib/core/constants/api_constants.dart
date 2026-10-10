@@ -22,6 +22,7 @@ class ApiConstants {
   static const String videos = '/api/videos';
   static const String series = '/api/videos/series';
   static String seriesDetail(int id) => '/api/videos/series/$id';
+  static String seriesFavorite(int id) => '/api/series/$id/favorite';
   static const String categories = '/api/videos/categories';
   static String videoDetail(int id) => '/api/videos/$id';
   static String videoThumbnail(int id) => '/api/videos/$id/thumbnail';
