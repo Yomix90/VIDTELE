@@ -188,28 +188,23 @@ class _LoginScreenState extends ConsumerState<LoginScreen> {
                   Column(
                     children: [
                       Container(
-                        width: 76,
-                        height: 76,
+                        width: 84,
+                        height: 84,
                         decoration: BoxDecoration(
-                          gradient: const LinearGradient(
-                            colors: [Color(0xFFE50914), Color(0xFF990008)],
-                            begin: Alignment.topLeft,
-                            end: Alignment.bottomRight,
-                          ),
                           borderRadius: BorderRadius.circular(20),
                           boxShadow: [
                             BoxShadow(
-                              color: AppTheme.netflixRed.withValues(alpha: 0.4),
-                              blurRadius: 20,
+                              color: AppTheme.netflixRed.withValues(alpha: 0.45),
+                              blurRadius: 24,
                               offset: const Offset(0, 8),
                             ),
                           ],
                         ),
-                        child: const Center(
-                          child: Icon(
-                            Icons.play_arrow_rounded,
-                            size: 52,
-                            color: Colors.white,
+                        child: ClipRRect(
+                          borderRadius: BorderRadius.circular(20),
+                          child: Image.asset(
+                            'assets/images/atlas_play_icon.png',
+                            fit: BoxFit.cover,
                           ),
                         ),
                       ),

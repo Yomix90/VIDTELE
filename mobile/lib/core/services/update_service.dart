@@ -8,7 +8,7 @@ import '../theme/app_theme.dart';
 
 /// Service gérant la détection et l'affichage des mises à jour de l'application Atlas Play.
 class UpdateService {
-  static const String currentAppVersion = '1.0.0';
+  static const String currentAppVersion = '1.1.0';
 
   /// Vérifie la version auprès du backend et affiche une boîte de dialogue si nécessaire.
   static Future<void> checkForUpdates(BuildContext context, {bool silentOnNoUpdate = true}) async {

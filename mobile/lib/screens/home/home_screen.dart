@@ -82,29 +82,38 @@ class _HomeScreenState extends ConsumerState<HomeScreen> {
                     )
                   : Row(
                       children: [
-                        Container(
-                          padding: const EdgeInsets.symmetric(horizontal: 7, vertical: 2),
-                          decoration: BoxDecoration(
-                            color: AppTheme.netflixRed,
-                            borderRadius: BorderRadius.circular(3),
-                          ),
-                          child: const Text(
-                            'V',
-                            style: TextStyle(
-                              color: Colors.white,
-                              fontWeight: FontWeight.w900,
-                              fontSize: 20,
-                            ),
+                        ClipRRect(
+                          borderRadius: BorderRadius.circular(6),
+                          child: Image.asset(
+                            'assets/images/atlas_play_icon.png',
+                            width: 28,
+                            height: 28,
+                            fit: BoxFit.cover,
                           ),
                         ),
-                        const SizedBox(width: 8),
-                        const Text(
-                          'VIDTELE',
-                          style: TextStyle(
-                            color: AppTheme.netflixRed,
-                            fontWeight: FontWeight.w900,
-                            letterSpacing: 1.5,
-                            fontSize: 20,
+                        const SizedBox(width: 9),
+                        RichText(
+                          text: const TextSpan(
+                            children: [
+                              TextSpan(
+                                text: 'ATLAS ',
+                                style: TextStyle(
+                                  color: Colors.white,
+                                  fontWeight: FontWeight.w900,
+                                  letterSpacing: 2,
+                                  fontSize: 18,
+                                ),
+                              ),
+                              TextSpan(
+                                text: 'PLAY',
+                                style: TextStyle(
+                                  color: AppTheme.netflixRed,
+                                  fontWeight: FontWeight.w900,
+                                  letterSpacing: 2,
+                                  fontSize: 18,
+                                ),
+                              ),
+                            ],
                           ),
                         ),
                       ],
