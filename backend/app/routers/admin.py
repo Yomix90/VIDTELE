@@ -1,6 +1,7 @@
 """
 Routeur d'administration complet : Statistiques, Utilisateurs, Invitations, Cache et Synchronisation.
 """
+import aiofiles
 import os
 import secrets
 import shutil
@@ -1790,8 +1791,9 @@ async def upload_video_direct_to_telegram(
     temp_file_path = str(cache_upload_dir / safe_temp_name)
 
     try:
-        with open(temp_file_path, "wb") as buffer:
-            shutil.copyfileobj(file.file, buffer)
+        async with aiofiles.open(temp_file_path, "wb") as buffer:
+            while chunk := await file.read(2 * 1024 * 1024):  # Chunks de 2 Mo asynchrones
+                await buffer.write(chunk)
 
         upload_caption = caption or title or original_filename
 

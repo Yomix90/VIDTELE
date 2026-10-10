@@ -390,18 +390,43 @@ class TelegramManager:
         if not channel:
             raise RuntimeError("Canal Telegram cible introuvable ou inaccessible.")
 
-        from telethon.tl.types import DocumentAttributeFilename
-        msg = await self._client.send_file(
-            channel,
-            file=file_path,
-            caption=caption or file_name,
-            supports_streaming=True,
-            progress_callback=progress_callback,
-            attributes=[
-                DocumentAttributeFilename(file_name=file_name),
-            ],
-        )
-        return {"success": True, "message": msg}
+        from telethon.tl.types import DocumentAttributeFilename, DocumentAttributeVideo
+        from app.services.fast_telethon import fast_upload_file
+
+        # 1. Téléversement accéléré MTProto par morceaux parallèles
+        try:
+            uploaded_file = await fast_upload_file(
+                client=self._client,
+                file_path=file_path,
+                file_name=file_name,
+                max_workers=6,
+                progress_callback=progress_callback,
+            )
+            # Publication sur le canal privé avec streaming actif
+            msg = await self._client.send_file(
+                channel,
+                file=uploaded_file,
+                caption=caption or file_name,
+                supports_streaming=True,
+                attributes=[
+                    DocumentAttributeFilename(file_name=file_name),
+                    DocumentAttributeVideo(0, 1280, 720, supports_streaming=True),
+                ],
+            )
+            return {"success": True, "message": msg}
+        except Exception as e:
+            logger.warning(f"Fast MTProto upload a échoué ({e}), repli sur client.send_file standard...")
+            msg = await self._client.send_file(
+                channel,
+                file=file_path,
+                caption=caption or file_name,
+                supports_streaming=True,
+                progress_callback=progress_callback,
+                attributes=[
+                    DocumentAttributeFilename(file_name=file_name),
+                ],
+            )
+            return {"success": True, "message": msg}
 
     async def delete_telegram_messages(self, message_ids: List[int]) -> bool:
         """

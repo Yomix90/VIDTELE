@@ -190,6 +190,7 @@ async def login(
         user_id=user.id,
         username=user.username,
         role=user.role,
+        ads_free=getattr(user, "ads_free", False) or False,
     )
 
 
@@ -232,6 +233,7 @@ async def refresh_token(
         user_id=user.id,
         username=user.username,
         role=user.role,
+        ads_free=getattr(user, "ads_free", False) or False,
     )
 
 

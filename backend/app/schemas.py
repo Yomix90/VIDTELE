@@ -29,6 +29,7 @@ class TokenResponse(BaseModel):
     user_id: int
     username: str
     role: str
+    ads_free: bool = False
 
 
 class RefreshTokenRequest(BaseModel):
@@ -50,6 +51,7 @@ class UserResponse(BaseModel):
     role: str
     is_active: bool
     max_concurrent_streams: int
+    ads_free: bool = False
     created_at: datetime
     last_login_at: Optional[datetime] = None
 
@@ -61,13 +63,36 @@ class UserCreateAdmin(BaseModel):
     password: str = Field(..., min_length=6)
     role: str = Field(default="user", pattern="^(admin|user)$")
     max_concurrent_streams: int = Field(default=2, ge=1, le=10)
+    ads_free: bool = False
 
 
 class UserUpdateAdmin(BaseModel):
     role: Optional[str] = Field(default=None, pattern="^(admin|user)$")
     is_active: Optional[bool] = None
     max_concurrent_streams: Optional[int] = Field(default=None, ge=1, le=10)
+    ads_free: Optional[bool] = None
     password: Optional[str] = Field(default=None, min_length=6)
+
+
+# -------------------------------------------------------------
+# Schémas Monétisation & Publicités (AdMob Rewarded)
+# -------------------------------------------------------------
+
+class AdsConfigResponse(BaseModel):
+    enabled: bool = True
+    min_videos_per_cycle: int = 4
+    max_videos_per_cycle: int = 5
+    watch_completion_threshold: float = 0.70
+    reward_amount: int = 1
+    fallback_bypass_enabled: bool = True
+
+
+class AdAnalyticsEvent(BaseModel):
+    event_type: str = Field(..., description="prompt_shown | reward_earned | ad_dismissed | ad_failed")
+    video_id: Optional[str] = None
+    cycle_watched_count: Optional[int] = None
+    error_message: Optional[str] = None
+    metadata: Optional[Dict[str, Any]] = None
 
 
 # -------------------------------------------------------------

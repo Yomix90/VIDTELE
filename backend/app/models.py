@@ -34,6 +34,7 @@ class User(Base):
     hashed_password: Mapped[str] = mapped_column(String(255), nullable=False)
     role: Mapped[str] = mapped_column(String(16), default="user", nullable=False)  # "super_admin", "admin" ou "user"
     is_active: Mapped[bool] = mapped_column(Boolean, default=True, nullable=False)
+    ads_free: Mapped[bool] = mapped_column(Boolean, default=False, nullable=False)
     max_screens: Mapped[int] = mapped_column(Integer, default=2, nullable=False)
     max_concurrent_streams: Mapped[int] = mapped_column(Integer, default=2, nullable=False)
     expires_at: Mapped[Optional[datetime]] = mapped_column(DateTime, nullable=True)

@@ -206,6 +206,18 @@ async def get_current_admin(
     return current_user
 
 
+async def get_optional_current_user(
+    request: Request = None,
+    auth: Optional[HTTPAuthorizationCredentials] = Depends(security_bearer),
+    db: AsyncSession = Depends(get_db),
+) -> Optional[User]:
+    """Extrait l'utilisateur s'il est authentifié, sinon renvoie None sans lever d'erreur."""
+    try:
+        return await get_current_user(request=request, auth=auth, db=db)
+    except Exception:
+        return None
+
+
 def get_client_ip(request: Request) -> str:
     """Récupère l'adresse IP réelle du client (gère les proxys Nginx X-Forwarded-For)."""
     forwarded = request.headers.get("X-Forwarded-For")

@@ -15,7 +15,7 @@ from typing import List, Optional
 from app.config import settings
 from app.database import AsyncSessionLocal, get_db, init_db
 from app.models import InviteCode, User
-from app.routers import admin, admin_web, auth, library, videos
+from app.routers import admin, admin_web, ads, auth, library, videos
 from app.schemas import FeedResponse, HomeScreenResponse, TopSeriesItem
 from app.security import get_current_active_user, hash_password
 from app.services.sync_service import sync_service
@@ -144,6 +144,7 @@ app.include_router(videos.router)
 app.include_router(library.router)
 app.include_router(admin.router)
 app.include_router(admin_web.router)
+app.include_router(ads.router)
 
 
 @app.get("/api/health", tags=["Système"])

@@ -180,8 +180,36 @@ async def test_mobile_compatibility():
             assert "is_favorite" in fav_data
             print(f"[OK] 19. POST /api/series/1/favorite -> 200 OK (is_favorite: {fav_data['is_favorite']})")
 
+        # 20. Endpoint Configuration Publicitaire AdMob (/api/config/ads)
+        # Test utilisateur public (non admin) -> enabled: True
+        r_ads_anon = await client.get("/api/config/ads")
+        assert r_ads_anon.status_code == 200
+        ads_cfg_anon = r_ads_anon.json()
+        assert ads_cfg_anon["enabled"] is True
+        assert ads_cfg_anon["min_videos_per_cycle"] == 4
+        assert ads_cfg_anon["max_videos_per_cycle"] == 5
+        assert ads_cfg_anon["watch_completion_threshold"] == 0.70
+
+        # Test utilisateur admin connecté -> exemption automatique (enabled: False)
+        r_ads_admin = await client.get("/api/config/ads", headers=headers)
+        assert r_ads_admin.status_code == 200
+        assert r_ads_admin.json()["enabled"] is False
+        print(f"[OK] 20. GET /api/config/ads -> 200 OK (Public: enabled={ads_cfg_anon['enabled']}, Admin: enabled=False [exemption validée])")
+
+        # 21. Endpoint Analytics & Télémétrie Publicitaire (/api/analytics/ads)
+        analytics_payload = {
+            "event_type": "reward_earned",
+            "video_id": "1",
+            "cycle_watched_count": 4,
+            "error_message": None,
+        }
+        r_analytics = await client.post("/api/analytics/ads", json=analytics_payload, headers=headers)
+        assert r_analytics.status_code == 200
+        assert "message" in r_analytics.json()
+        print(f"[OK] 21. POST /api/analytics/ads -> 200 OK ('{r_analytics.json()['message']}')")
+
         print("=" * 65)
-        print("CONFORMITE 100% VALIDEE : AUCUNE REGRESSION SUR L'API MOBILE !")
+        print("CONFORMITE 100% VALIDEE : 21 ENDPOINTS VERIFIES AVEC SUCCES !")
         print("=" * 65)
 
 

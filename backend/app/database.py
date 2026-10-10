@@ -79,6 +79,7 @@ async def init_db() -> None:
             ("max_screens", "INTEGER DEFAULT 2 NOT NULL"),
             ("expires_at", "DATETIME"),
             ("invited_by", "INTEGER REFERENCES users(id) ON DELETE SET NULL"),
+            ("ads_free", "BOOLEAN DEFAULT 0 NOT NULL"),
         ]
         try:
             res_u = await conn.execute(text("PRAGMA table_info(users)"))
