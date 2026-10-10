@@ -131,11 +131,22 @@ app.add_middleware(
     allow_headers=["*"],
 )
 
-# Fichiers statiques StreamAdmin (CSS, JS, images)
+# Fichiers statiques et uploads persistants
 from pathlib import Path
 from fastapi.staticfiles import StaticFiles
+
+# Dossier d'uploads persistant (dans le volume Docker /app/data/uploads ou local static/uploads)
+persistent_uploads = Path("/app/data/uploads") if Path("/app/data").is_dir() else (Path(__file__).resolve().parent / "static" / "uploads")
+persistent_uploads.mkdir(parents=True, exist_ok=True)
+(persistent_uploads / "apk").mkdir(parents=True, exist_ok=True)
+
 static_dir = Path(__file__).resolve().parent / "static"
 static_dir.mkdir(parents=True, exist_ok=True)
+(static_dir / "uploads").mkdir(parents=True, exist_ok=True)
+
+# 1. Monter prioritairement /static/uploads vers le stockage persistant
+app.mount("/static/uploads", StaticFiles(directory=str(persistent_uploads)), name="static_uploads")
+# 2. Monter le reste des fichiers statiques (CSS, JS, Jinja assets)
 app.mount("/static", StaticFiles(directory=str(static_dir)), name="static")
 
 # Inclusion des routeurs

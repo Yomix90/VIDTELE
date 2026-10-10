@@ -1208,17 +1208,22 @@ async def create_series(
     db: AsyncSession = Depends(get_db),
 ):
     """Crée une nouvelle série et initialise automatiquement la Saison 1."""
-    base_slug = slugify(data.title_fr)
-    # Assurer l'unicité du slug
+    title_fr = (data.title_fr or data.title_ar or data.title_en or "").strip()
+    if not title_fr:
+        raise HTTPException(status_code=400, detail="Veuillez renseigner au moins un titre pour la série.")
+
+    base_slug = slugify(title_fr)
     existing = (await db.execute(select(Series).where(Series.slug == base_slug))).scalar_one_or_none()
     slug = f"{base_slug}-{secrets.token_hex(2)}" if existing else base_slug
 
     new_series = Series(
         slug=slug,
-        title_fr=data.title_fr.strip(),
+        title_fr=title_fr,
         title_ar=data.title_ar.strip() if data.title_ar else None,
+        title_en=data.title_en.strip() if data.title_en else None,
         synopsis_fr=data.synopsis_fr.strip() if data.synopsis_fr else None,
         synopsis_ar=data.synopsis_ar.strip() if data.synopsis_ar else None,
+        synopsis_en=data.synopsis_en.strip() if data.synopsis_en else None,
         year_start=data.year_start,
         rating=data.rating,
         status=data.status,
@@ -1666,13 +1671,28 @@ async def update_app_update_settings(
 # 12. Téléversement d'Images sur le Serveur VPS (Affiches / Bannières)
 # =============================================================
 
+def get_persistent_uploads_dir(subfolder: str = "") -> Path:
+    """
+    Retourne le dossier d'uploads persistant :
+    - /app/data/uploads si dans le conteneur Docker (volume persistant vidtele_data:/app/data)
+    - ou app/static/uploads en développement local.
+    """
+    if Path("/app/data").is_dir():
+        base = Path("/app/data/uploads")
+    else:
+        base = Path(__file__).resolve().parent.parent / "static" / "uploads"
+    target = base / subfolder if subfolder else base
+    target.mkdir(parents=True, exist_ok=True)
+    return target
+
+
 @router.post("/upload-image")
 async def upload_image_to_vps(
     file: UploadFile = File(...),
     current_admin: User = Depends(get_current_admin),
 ):
     """
-    Sauvegarde une affiche ou bannière sur le serveur VPS dans /static/uploads/.
+    Sauvegarde une affiche ou bannière sur le serveur VPS dans le stockage persistant.
     Renvoie l'URL publique accessible par l'application mobile et l'interface web.
     """
     allowed_extensions = {".jpg", ".jpeg", ".png", ".webp", ".gif"}
@@ -1683,15 +1703,23 @@ async def upload_image_to_vps(
             detail=f"Format d'image non supporté ({ext}). Formats acceptés : JPG, PNG, WEBP, GIF.",
         )
 
-    upload_dir = Path("app/static/uploads")
-    upload_dir.mkdir(parents=True, exist_ok=True)
-
+    upload_dir = get_persistent_uploads_dir()
     filename = f"{uuid.uuid4().hex[:12]}_{secrets.token_hex(4)}{ext}"
     dest_path = upload_dir / filename
 
     try:
-        with open(dest_path, "wb") as buffer:
-            shutil.copyfileobj(file.file, buffer)
+        async with aiofiles.open(dest_path, "wb") as buffer:
+            while chunk := await file.read(1024 * 512):
+                await buffer.write(chunk)
+
+        # Copie de sécurité dans app/static/uploads si distinct pour compatibilité locale
+        local_static = Path(__file__).resolve().parent.parent / "static" / "uploads" / filename
+        if local_static != dest_path:
+            try:
+                local_static.parent.mkdir(parents=True, exist_ok=True)
+                shutil.copyfile(dest_path, local_static)
+            except Exception:
+                pass
     except Exception as e:
         raise HTTPException(status_code=500, detail=f"Erreur lors de l'enregistrement de l'image : {str(e)}")
 
@@ -1715,7 +1743,7 @@ async def upload_apk_to_vps(
     db: AsyncSession = Depends(get_db),
 ):
     """
-    Sauvegarde un fichier d'application Android (.apk) sur le serveur VPS dans /static/uploads/apk/.
+    Sauvegarde un fichier d'application Android (.apk) sur le serveur VPS dans le stockage persistant.
     Renvoie l'URL publique directe de téléchargement.
     """
     ext = os.path.splitext(file.filename)[1].lower() if file.filename else ".apk"
@@ -1725,19 +1753,28 @@ async def upload_apk_to_vps(
             detail="Seuls les fichiers avec l'extension .apk sont autorisés.",
         )
 
-    upload_dir = Path("app/static/uploads/apk")
-    upload_dir.mkdir(parents=True, exist_ok=True)
-
+    upload_dir = get_persistent_uploads_dir("apk")
     safe_original_name = os.path.basename(file.filename) if file.filename else "atlas-play.apk"
     base_name = os.path.splitext(safe_original_name)[0]
     filename = f"{base_name}_{uuid.uuid4().hex[:6]}.apk"
     dest_path = upload_dir / filename
 
     try:
-        with open(dest_path, "wb") as buffer:
-            shutil.copyfileobj(file.file, buffer)
+        async with aiofiles.open(dest_path, "wb") as buffer:
+            while chunk := await file.read(1024 * 1024 * 2):
+                await buffer.write(chunk)
         # Conserver une copie à chemin fixe pour le téléchargement direct
         shutil.copyfile(dest_path, upload_dir / "atlas-play.apk")
+
+        # Copie locale de compatibilité
+        local_apk = Path(__file__).resolve().parent.parent / "static" / "uploads" / "apk"
+        if local_apk != upload_dir:
+            try:
+                local_apk.mkdir(parents=True, exist_ok=True)
+                shutil.copyfile(dest_path, local_apk / filename)
+                shutil.copyfile(dest_path, local_apk / "atlas-play.apk")
+            except Exception:
+                pass
     except Exception as e:
         raise HTTPException(status_code=500, detail=f"Erreur lors de l'enregistrement de l'APK : {str(e)}")
 
@@ -1870,10 +1907,10 @@ async def update_series(
         series.year_start = data.year_start
     if data.rating is not None:
         series.rating = data.rating
-    if data.poster_path is not None:
-        series.poster_path = data.poster_path.strip() if data.poster_path else None
-    if data.banner_path is not None:
-        series.banner_path = data.banner_path.strip() if data.banner_path else None
+    if data.poster_path is not None and data.poster_path.strip():
+        series.poster_path = data.poster_path.strip()
+    if data.banner_path is not None and data.banner_path.strip():
+        series.banner_path = data.banner_path.strip()
     if data.status is not None:
         series.status = data.status
     if data.visibility is not None and data.visibility != series.visibility:
@@ -2059,10 +2096,10 @@ async def update_movie(
         movie.duration_sec = data.duration_sec
     if data.rating is not None:
         movie.rating = data.rating
-    if data.poster_path is not None:
-        movie.poster_path = data.poster_path.strip() if data.poster_path else None
-    if data.banner_path is not None:
-        movie.banner_path = data.banner_path.strip() if data.banner_path else None
+    if data.poster_path is not None and data.poster_path.strip():
+        movie.poster_path = data.poster_path.strip()
+    if data.banner_path is not None and data.banner_path.strip():
+        movie.banner_path = data.banner_path.strip()
     if data.visibility is not None:
         movie.visibility = data.visibility
         if movie.telegram_video_id:
@@ -2438,15 +2475,29 @@ async def translate_with_gemini(
     current_admin: User = Depends(get_current_admin),
 ):
     """
-    Traduit et génère automatiquement les métadonnées FR / AR / EN
-    avec synopsis cinématiques et suggestion de genres.
+    Traduit et génère intelligemment les métadonnées FR / AR / EN
+    avec synopsis cinématiques et suggestion de genres (détecte l'arabe, français, anglais).
     """
-    if not data.title:
-        raise HTTPException(status_code=400, detail="Veuillez fournir au moins un titre.")
+    has_any_title = bool((data.title and data.title.strip()) or 
+                         (data.title_fr and data.title_fr.strip()) or 
+                         (data.title_ar and data.title_ar.strip()) or 
+                         (data.title_en and data.title_en.strip()))
+
+    if not has_any_title:
+        raise HTTPException(
+            status_code=400,
+            detail="Veuillez renseigner au moins un titre (en arabe, français ou anglais) pour lancer la traduction IA.",
+        )
 
     res = await gemini_service.translate_and_enrich(
         title=data.title,
+        title_fr=data.title_fr,
+        title_ar=data.title_ar,
+        title_en=data.title_en,
         synopsis=data.synopsis,
+        synopsis_fr=data.synopsis_fr,
+        synopsis_ar=data.synopsis_ar,
+        synopsis_en=data.synopsis_en,
         content_type=data.content_type,
     )
     return res

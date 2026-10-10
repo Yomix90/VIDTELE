@@ -122,13 +122,20 @@ class GeminiService:
 
     async def translate_and_enrich(
         self,
-        title: str,
+        title: Optional[str] = None,
+        title_fr: Optional[str] = None,
+        title_ar: Optional[str] = None,
+        title_en: Optional[str] = None,
         synopsis: Optional[str] = None,
+        synopsis_fr: Optional[str] = None,
+        synopsis_ar: Optional[str] = None,
+        synopsis_en: Optional[str] = None,
         content_type: str = "series",
     ) -> Dict[str, Any]:
         """
-        Traduit et génère les métadonnées multilingues complètes (FR / AR / EN)
-        avec synopsis cinématique et suggestion de genres.
+        Traduit et génère intelligemment les métadonnées multilingues complètes (FR / AR / EN).
+        Détecte automatiquement si l'utilisateur a saisi en Arabe, Français ou Anglais,
+        conserve la langue d'origine et traduit vers toutes les autres langues.
         """
         conf = await self.get_config()
         api_key = conf.get("api_key")
@@ -136,47 +143,91 @@ class GeminiService:
         if model in ("gemini-2.0-flash-exp", "gemini-exp", ""):
             model = self.DEFAULT_MODEL
 
+        # Détermination des valeurs de référence fournies
+        primary_title = (title_ar or title_fr or title_en or title or "").strip()
+        primary_synopsis = (synopsis_ar or synopsis_fr or synopsis_en or synopsis or "").strip()
+
         if not api_key:
-            logger.info("Aucune clé API Gemini configurée. Utilisation du fallback basique.")
+            logger.info("Aucune clé API Gemini configurée. Utilisation du fallback intelligent.")
             return {
-                "title_fr": title,
-                "title_ar": title,
-                "title_en": title,
-                "synopsis_fr": synopsis or "",
-                "synopsis_ar": synopsis or "",
-                "synopsis_en": synopsis or "",
+                "title_fr": title_fr or primary_title,
+                "title_ar": title_ar or primary_title,
+                "title_en": title_en or primary_title,
+                "synopsis_fr": synopsis_fr or primary_synopsis,
+                "synopsis_ar": synopsis_ar or primary_synopsis,
+                "synopsis_en": synopsis_en or primary_synopsis,
                 "genres": [],
                 "year": None,
                 "rating_estimated": 7.5,
                 "warning": "Veuillez renseigner votre clé API Gemini dans les Paramètres pour activer la traduction automatique par IA.",
             }
 
-        prompt = f"""Tu es un expert international en métadonnées de films et séries TV pour la plateforme de streaming Atlas Play.
-Analyse le titre et le synopsis suivants (qui peuvent être en français, arabe, anglais ou autre langue) :
-Type de contenu: {content_type}
-Titre fourni: {title}
-Synopsis fourni: {synopsis or "Non fourni"}
+        # Construction des éléments fournis pour le prompt
+        provided_parts = []
+        if title_ar:
+            provided_parts.append(f"- Titre en Arabe fourni : \"{title_ar}\"")
+        if title_fr:
+            provided_parts.append(f"- Titre en Français fourni : \"{title_fr}\"")
+        if title_en:
+            provided_parts.append(f"- Titre en Anglais fourni : \"{title_en}\"")
+        if title and not (title_ar or title_fr or title_en):
+            provided_parts.append(f"- Titre fourni (langue à détecter) : \"{title}\"")
 
-Génère un objet JSON STRICT avec les champs suivants :
+        if synopsis_ar:
+            provided_parts.append(f"- Synopsis en Arabe fourni : \"{synopsis_ar}\"")
+        if synopsis_fr:
+            provided_parts.append(f"- Synopsis en Français fourni : \"{synopsis_fr}\"")
+        if synopsis_en:
+            provided_parts.append(f"- Synopsis en Anglais fourni : \"{synopsis_en}\"")
+        if synopsis and not (synopsis_ar or synopsis_fr or synopsis_en):
+            provided_parts.append(f"- Synopsis fourni (langue à détecter) : \"{synopsis}\"")
+
+        provided_text = "\n".join(provided_parts) if provided_parts else f"- Titre : \"{primary_title}\""
+
+        prompt = f"""Tu es un expert cinématographique international bilingue et trilingue (Français, Arabe, Anglais) pour la plateforme de streaming Atlas Play.
+L'utilisateur te fournit des métadonnées pour un contenu de type '{content_type}'.
+
+ÉLÉMENTS FOURNIS PAR L'UTILISATEUR :
+{provided_text}
+
+MISSION D'ENRICHISSEMENT INTELLIGENT :
+1. Détecte la langue de chaque champ fourni :
+   - Si l'utilisateur a saisi en ARABE (ex: قيامة عثمان, صلاح الدين الأيوبي, شباب البومب, etc.) :
+     * Conserve impérativement le titre authentique arabe dans 'title_ar' (en écriture arabe soignée).
+     * Traduis et déduis le titre officiel ou naturel en FRANÇAIS dans 'title_fr' (ex: "L'Épopée d'Osman" ou le titre officiel).
+     * Déduis le titre international en ANGLAIS dans 'title_en' (ex: "Kurulus: Osman").
+     * Si un synopsis en arabe est fourni, traduis-le fidèlement et professionnellement en français ('synopsis_fr') et anglais ('synopsis_en').
+   - Si l'utilisateur a saisi en FRANÇAIS :
+     * Conserve le titre français dans 'title_fr'.
+     * Traduis en arabe littéraire fluide et élégant (فصحى جذابة) dans 'title_ar'.
+     * Traduis en anglais dans 'title_en'.
+   - Si l'utilisateur a saisi en ANGLAIS :
+     * Conserve le titre anglais dans 'title_en'.
+     * Traduis en français dans 'title_fr'.
+     * Traduis en arabe dans 'title_ar'.
+2. Si le film ou la série est célèbre dans les bases mondiales (TMDB, IMDb, Wikipédia), utilise les titres officiels réels reconnus.
+3. Rédige un synopsis captivant et engageant pour chaque langue (1 ou 2 paragraphes).
+4. Suggère les genres correspondants parmi : action, drame, comedie, policier, mystere, famille, science-fiction, animation.
+
+RÉPONDS STRICTEMENT AU FORMAT JSON SUIVANT (SANS TEXTE AUTOUR) :
 {{
-  "title_fr": "Titre officiel ou traduit en français",
-  "title_ar": "Titre officiel ou cinématique en arabe (écriture arabe standard)",
-  "title_en": "Titre officiel ou en anglais",
-  "synopsis_fr": "Un synopsis cinématique captivant et professionnel en français (1 ou 2 paragraphes)",
-  "synopsis_ar": "Un synopsis cinématique captivant en arabe standard moderne (فصحى جذابة)",
-  "synopsis_en": "A captivating, professional synopsis in English",
-  "genres": ["liste des genres correspondants parmi: action, drame, comedie, policier, mystere, famille, science-fiction, animation"],
+  "title_fr": "Titre en français",
+  "title_ar": "Titre en arabe",
+  "title_en": "Titre en anglais",
+  "synopsis_fr": "Synopsis cinématographique en français",
+  "synopsis_ar": "ملخص سينمائي جذاب ومشوق باللغة العربية الفصحى",
+  "synopsis_en": "Compelling cinematic synopsis in English",
+  "genres": ["genre1", "genre2"],
   "year": 2024,
   "age_rating": "Tous publics ou 12+ ou 16+ ou 18+",
-  "rating_estimated": 7.8
-}}
-Réponds UNIQUEMENT avec le JSON, sans balises markdown ni texte autour."""
+  "rating_estimated": 8.0
+}}"""
 
         url = f"https://generativelanguage.googleapis.com/v1beta/models/{model}:generateContent?key={api_key}"
         payload = {
             "contents": [{"parts": [{"text": prompt}]}],
             "generationConfig": {
-                "temperature": 0.4,
+                "temperature": 0.3,
             }
         }
 
@@ -187,33 +238,38 @@ Réponds UNIQUEMENT avec le JSON, sans balises markdown ni texte autour."""
                     err_txt = res.text
                     logger.error(f"Erreur API Gemini ({res.status_code}): {err_txt}")
                     return {
-                        "title_fr": title,
-                        "title_ar": title,
-                        "title_en": title,
-                        "synopsis_fr": synopsis or "",
-                        "synopsis_ar": synopsis or "",
-                        "synopsis_en": synopsis or "",
+                        "title_fr": title_fr or primary_title,
+                        "title_ar": title_ar or primary_title,
+                        "title_en": title_en or primary_title,
+                        "synopsis_fr": synopsis_fr or primary_synopsis,
+                        "synopsis_ar": synopsis_ar or primary_synopsis,
+                        "synopsis_en": synopsis_en or primary_synopsis,
                         "genres": [],
-                        "error": f"Erreur Google Gemini: {res.status_code}",
+                        "error": f"Erreur Google Gemini ({res.status_code})",
                     }
 
                 data = res.json()
                 text_out = data["candidates"][0]["content"]["parts"][0]["text"].strip()
-                
+
                 # Nettoyage d'éventuels backticks markdown
                 if text_out.startswith("```"):
-                    text_out = re.sub(r"^```(?:json)?\n", "", text_out)
-                    text_out = re.sub(r"\n```$", "", text_out)
+                    text_out = re.sub(r"^```(?:json)?\s*", "", text_out)
+                    text_out = re.sub(r"\s*```$", "", text_out)
+
+                # Extraction d'un bloc JSON {...} si du texte parasite l'entoure
+                json_match = re.search(r"\{.*\}", text_out, re.DOTALL)
+                if json_match:
+                    text_out = json_match.group(0)
 
                 parsed = json.loads(text_out)
                 return {
                     "success": True,
-                    "title_fr": parsed.get("title_fr") or title,
-                    "title_ar": parsed.get("title_ar") or title,
-                    "title_en": parsed.get("title_en") or title,
-                    "synopsis_fr": parsed.get("synopsis_fr") or synopsis or "",
-                    "synopsis_ar": parsed.get("synopsis_ar") or synopsis or "",
-                    "synopsis_en": parsed.get("synopsis_en") or synopsis or "",
+                    "title_fr": parsed.get("title_fr") or title_fr or primary_title,
+                    "title_ar": parsed.get("title_ar") or title_ar or primary_title,
+                    "title_en": parsed.get("title_en") or title_en or primary_title,
+                    "synopsis_fr": parsed.get("synopsis_fr") or synopsis_fr or primary_synopsis,
+                    "synopsis_ar": parsed.get("synopsis_ar") or synopsis_ar or primary_synopsis,
+                    "synopsis_en": parsed.get("synopsis_en") or synopsis_en or primary_synopsis,
                     "genres": parsed.get("genres", []),
                     "year": parsed.get("year"),
                     "age_rating": parsed.get("age_rating", "Tous publics"),
@@ -222,12 +278,12 @@ Réponds UNIQUEMENT avec le JSON, sans balises markdown ni texte autour."""
             except Exception as e:
                 logger.error(f"Exception lors de l'appel Gemini : {e}", exc_info=True)
                 return {
-                    "title_fr": title,
-                    "title_ar": title,
-                    "title_en": title,
-                    "synopsis_fr": synopsis or "",
-                    "synopsis_ar": synopsis or "",
-                    "synopsis_en": synopsis or "",
+                    "title_fr": title_fr or primary_title,
+                    "title_ar": title_ar or primary_title,
+                    "title_en": title_en or primary_title,
+                    "synopsis_fr": synopsis_fr or primary_synopsis,
+                    "synopsis_ar": synopsis_ar or primary_synopsis,
+                    "synopsis_en": synopsis_en or primary_synopsis,
                     "genres": [],
                     "error": str(e),
                 }

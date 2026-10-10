@@ -115,16 +115,16 @@
 
           <div class="row g-2 mb-3">
             <div class="col-12 col-md-4">
-              <label class="form-label small">Titre (Français) *</label>
-              <input type="text" id="movieTitle" class="form-control" placeholder="ex: Inception" required>
+              <label class="form-label small">Titre (Français)</label>
+              <input type="text" id="movieTitle" class="form-control" placeholder="ex: Inception">
             </div>
             <div class="col-12 col-md-4">
               <label class="form-label small">Titre (Arabe)</label>
-              <input type="text" id="movieTitleAr" class="form-control" dir="rtl" placeholder="اختياري">
+              <input type="text" id="movieTitleAr" class="form-control" dir="rtl" placeholder="عنوان الفيلم بالعربية">
             </div>
             <div class="col-12 col-md-4">
               <label class="form-label small">Titre (Anglais)</label>
-              <input type="text" id="movieTitleEn" class="form-control" placeholder="Optional">
+              <input type="text" id="movieTitleEn" class="form-control" placeholder="Movie English Title">
             </div>
           </div>
 
@@ -152,11 +152,14 @@
           <div class="mb-3">
             <label class="form-label small">Affiche (Poster 2:3)</label>
             <div class="input-group mb-2">
-              <input type="text" id="moviePoster" class="form-control" placeholder="https://... ou téléverser sur VPS">
+              <input type="text" id="moviePoster" class="form-control" placeholder="https://... ou téléverser sur VPS" oninput="updateImagePreview('moviePoster', 'moviePosterPreview')">
               <label class="btn btn-outline-secondary" for="uploadMoviePosterFile">
                 <i class="bi bi-cloud-arrow-up me-1"></i>Téléverser Image
               </label>
-              <input type="file" id="uploadMoviePosterFile" class="d-none" accept="image/*" onchange="uploadImageToServer('uploadMoviePosterFile', 'moviePoster')">
+              <input type="file" id="uploadMoviePosterFile" class="d-none" accept="image/*" onchange="uploadImageToServer('uploadMoviePosterFile', 'moviePoster', 'moviePosterPreview')">
+            </div>
+            <div id="moviePosterPreview" class="d-none mt-2 p-1 border border-secondary border-opacity-50 rounded bg-black text-center" style="max-width: 140px;">
+              <img src="" alt="Aperçu Affiche" class="img-fluid rounded" style="max-height: 180px; object-fit: cover;">
             </div>
           </div>
 
@@ -167,6 +170,10 @@
           <div class="mb-3">
             <label class="form-label small">Synopsis (Arabe)</label>
             <textarea id="movieSynopsisAr" class="form-control" rows="2" dir="rtl" placeholder="ملخص الفيلم..."></textarea>
+          </div>
+          <div class="mb-3">
+            <label class="form-label small">Synopsis (Anglais)</label>
+            <textarea id="movieSynopsisEn" class="form-control" rows="2" placeholder="Movie synopsis..."></textarea>
           </div>
 
           <div class="mb-3 form-check">
@@ -204,8 +211,8 @@
 
           <div class="row g-2 mb-3">
             <div class="col-12 col-md-4">
-              <label class="form-label small">Titre (Français) *</label>
-              <input type="text" id="editMovieTitleFr" class="form-control" required>
+              <label class="form-label small">Titre (Français)</label>
+              <input type="text" id="editMovieTitleFr" class="form-control">
             </div>
             <div class="col-12 col-md-4">
               <label class="form-label small">Titre (Arabe)</label>
@@ -248,11 +255,14 @@
           <div class="mb-3">
             <label class="form-label small">Affiche (Poster 2:3)</label>
             <div class="input-group mb-2">
-              <input type="text" id="editMoviePoster" class="form-control" placeholder="https://... ou téléverser sur VPS">
+              <input type="text" id="editMoviePoster" class="form-control" placeholder="https://... ou téléverser sur VPS" oninput="updateImagePreview('editMoviePoster', 'editMoviePosterPreview')">
               <label class="btn btn-outline-secondary" for="uploadEditMoviePosterFile">
                 <i class="bi bi-cloud-arrow-up me-1"></i>Téléverser Image
               </label>
-              <input type="file" id="uploadEditMoviePosterFile" class="d-none" accept="image/*" onchange="uploadImageToServer('uploadEditMoviePosterFile', 'editMoviePoster')">
+              <input type="file" id="uploadEditMoviePosterFile" class="d-none" accept="image/*" onchange="uploadImageToServer('uploadEditMoviePosterFile', 'editMoviePoster', 'editMoviePosterPreview')">
+            </div>
+            <div id="editMoviePosterPreview" class="d-none mt-2 p-1 border border-secondary border-opacity-50 rounded bg-black text-center" style="max-width: 140px;">
+              <img src="" alt="Aperçu Affiche" class="img-fluid rounded" style="max-height: 180px; object-fit: cover;">
             </div>
           </div>
 
@@ -260,11 +270,14 @@
           <div class="mb-3">
             <label class="form-label small">Bannière (Backdrop 16:9)</label>
             <div class="input-group mb-2">
-              <input type="text" id="editMovieBanner" class="form-control" placeholder="https://... ou téléverser sur VPS">
+              <input type="text" id="editMovieBanner" class="form-control" placeholder="https://... ou téléverser sur VPS" oninput="updateImagePreview('editMovieBanner', 'editMovieBannerPreview')">
               <label class="btn btn-outline-secondary" for="uploadEditMovieBannerFile">
                 <i class="bi bi-cloud-arrow-up me-1"></i>Téléverser Image
               </label>
-              <input type="file" id="uploadEditMovieBannerFile" class="d-none" accept="image/*" onchange="uploadImageToServer('uploadEditMovieBannerFile', 'editMovieBanner')">
+              <input type="file" id="uploadEditMovieBannerFile" class="d-none" accept="image/*" onchange="uploadImageToServer('uploadEditMovieBannerFile', 'editMovieBanner', 'editMovieBannerPreview')">
+            </div>
+            <div id="editMovieBannerPreview" class="d-none mt-2 p-1 border border-secondary border-opacity-50 rounded bg-black text-center" style="max-width: 280px;">
+              <img src="" alt="Aperçu Bannière" class="img-fluid rounded" style="max-height: 120px; object-fit: cover;">
             </div>
           </div>
 
@@ -294,7 +307,20 @@
 
 {% block extra_scripts %}
 <script>
-async function uploadImageToServer(fileInputId, targetInputId) {
+function updateImagePreview(inputId, previewContainerId) {
+  const url = (document.getElementById(inputId).value || '').trim();
+  const container = document.getElementById(previewContainerId);
+  if (!container) return;
+  const img = container.querySelector('img');
+  if (url) {
+    if (img) img.src = url;
+    container.classList.remove('d-none');
+  } else {
+    container.classList.add('d-none');
+  }
+}
+
+async function uploadImageToServer(fileInputId, targetInputId, previewContainerId) {
   const fileInput = document.getElementById(fileInputId);
   if (!fileInput.files || !fileInput.files[0]) return;
   const file = fileInput.files[0];
@@ -311,6 +337,9 @@ async function uploadImageToServer(fileInputId, targetInputId) {
     const data = await res.json();
     if (res.ok && data.success) {
       document.getElementById(targetInputId).value = data.url;
+      if (previewContainerId) {
+        updateImagePreview(targetInputId, previewContainerId);
+      }
       showToast('Image enregistrée sur le VPS avec succès !', 'success');
     } else {
       showToast(data.detail || 'Erreur lors de l\'enregistrement', 'error');
@@ -322,41 +351,61 @@ async function uploadImageToServer(fileInputId, targetInputId) {
 
 async function autoTranslateMovieWithGemini(mode) {
   const isEdit = mode === 'edit';
-  const titleField = isEdit ? 'editMovieTitleFr' : 'movieTitle';
-  const synField = isEdit ? 'editMovieSynopsisFr' : 'movieSynopsis';
-  const title = document.getElementById(titleField).value.trim();
-  const synopsis = document.getElementById(synField).value.trim();
+  const prefix = isEdit ? 'editMovie' : 'movie';
+  const titleFr = (document.getElementById(isEdit ? 'editMovieTitleFr' : 'movieTitle').value || '').trim();
+  const titleAr = (document.getElementById(prefix + 'TitleAr').value || '').trim();
+  const titleEn = (document.getElementById(prefix + 'TitleEn').value || '').trim();
+  const synFr = (document.getElementById(isEdit ? 'editMovieSynopsisFr' : 'movieSynopsis').value || '').trim();
+  const synAr = (document.getElementById(prefix + 'SynopsisAr').value || '').trim();
+  const synEn = (document.getElementById(prefix + 'SynopsisEn').value || '').trim();
 
-  if (!title) {
-    showToast('Veuillez renseigner au moins un titre français.', 'warning');
+  if (!titleFr && !titleAr && !titleEn) {
+    showToast('Veuillez renseigner au moins un titre (Arabe, Français ou Anglais).', 'warning');
     return;
   }
 
-  showToast('Traduction et enrichissement avec Gemini AI...', 'info');
+  showToast('Traduction intelligente avec Gemini AI...', 'info');
   try {
     const res = await fetch('/api/admin/ai/translate', {
       method: 'POST',
       headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify({ title: title, synopsis: synopsis, content_type: 'movie' })
+      body: JSON.stringify({
+        title_fr: titleFr || null,
+        title_ar: titleAr || null,
+        title_en: titleEn || null,
+        synopsis_fr: synFr || null,
+        synopsis_ar: synAr || null,
+        synopsis_en: synEn || null,
+        content_type: 'movie'
+      })
     });
     const data = await res.json();
     if (res.ok) {
       if (isEdit) {
+        if (data.title_fr) document.getElementById('editMovieTitleFr').value = data.title_fr;
         if (data.title_ar) document.getElementById('editMovieTitleAr').value = data.title_ar;
         if (data.title_en) document.getElementById('editMovieTitleEn').value = data.title_en;
-        if (data.synopsis_fr && !synopsis) document.getElementById('editMovieSynopsisFr').value = data.synopsis_fr;
+        if (data.synopsis_fr) document.getElementById('editMovieSynopsisFr').value = data.synopsis_fr;
         if (data.synopsis_ar) document.getElementById('editMovieSynopsisAr').value = data.synopsis_ar;
         if (data.synopsis_en) document.getElementById('editMovieSynopsisEn').value = data.synopsis_en;
         if (data.year && !document.getElementById('editMovieYear').value) {
           document.getElementById('editMovieYear').value = data.year;
         }
+        if (data.rating && !document.getElementById('editMovieRating').value) {
+          document.getElementById('editMovieRating').value = data.rating;
+        }
       } else {
+        if (data.title_fr) document.getElementById('movieTitle').value = data.title_fr;
         if (data.title_ar) document.getElementById('movieTitleAr').value = data.title_ar;
         if (data.title_en) document.getElementById('movieTitleEn').value = data.title_en;
-        if (data.synopsis_fr && !synopsis) document.getElementById('movieSynopsis').value = data.synopsis_fr;
+        if (data.synopsis_fr) document.getElementById('movieSynopsis').value = data.synopsis_fr;
         if (data.synopsis_ar) document.getElementById('movieSynopsisAr').value = data.synopsis_ar;
+        if (data.synopsis_en) document.getElementById('movieSynopsisEn').value = data.synopsis_en;
         if (data.year && !document.getElementById('movieYear').value) {
           document.getElementById('movieYear').value = data.year;
+        }
+        if (data.rating && !document.getElementById('movieRating').value) {
+          document.getElementById('movieRating').value = data.rating;
         }
       }
       if (data.warning) {
@@ -374,16 +423,25 @@ async function autoTranslateMovieWithGemini(mode) {
 
 async function submitCreateMovie(e) {
   e.preventDefault();
+  const titleFr = document.getElementById('movieTitle').value.trim();
+  const titleAr = document.getElementById('movieTitleAr').value.trim();
+  const titleEn = document.getElementById('movieTitleEn').value.trim();
+  if (!titleFr && !titleAr && !titleEn) {
+    showToast('Veuillez renseigner au moins un titre.', 'warning');
+    return;
+  }
+
   const payload = {
-    title_fr: document.getElementById('movieTitle').value.trim(),
-    title_ar: document.getElementById('movieTitleAr').value.trim() || null,
-    title_en: document.getElementById('movieTitleEn').value.trim() || null,
+    title_fr: titleFr || titleAr || titleEn,
+    title_ar: titleAr || null,
+    title_en: titleEn || null,
     year: document.getElementById('movieYear').value ? parseInt(document.getElementById('movieYear').value) : null,
     rating: document.getElementById('movieRating').value ? parseFloat(document.getElementById('movieRating').value) : null,
     telegram_video_id: document.getElementById('movieRawVideo').value ? parseInt(document.getElementById('movieRawVideo').value) : null,
     poster_path: document.getElementById('moviePoster').value.trim() || null,
     synopsis_fr: document.getElementById('movieSynopsis').value.trim() || null,
     synopsis_ar: document.getElementById('movieSynopsisAr').value.trim() || null,
+    synopsis_en: document.getElementById('movieSynopsisEn').value.trim() || null,
     visibility: document.getElementById('moviePublish').checked ? 'published' : 'draft',
   };
 
@@ -419,6 +477,9 @@ function openEditMovieModal(id, titleFr, titleAr, titleEn, year, rating, poster,
   document.getElementById('editMovieSynopsisEn').value = synEn || '';
   document.getElementById('editMovieVideoSelect').value = vidId || 0;
   document.getElementById('editMovieVisibility').value = visibility || 'published';
+
+  updateImagePreview('editMoviePoster', 'editMoviePosterPreview');
+  updateImagePreview('editMovieBanner', 'editMovieBannerPreview');
 
   const modal = bootstrap.Modal.getOrCreateInstance(document.getElementById('modalEditMovie'));
   modal.show();

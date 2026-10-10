@@ -271,16 +271,16 @@
 
           <div class="row g-2 mb-3">
             <div class="col-12 col-md-4">
-              <label class="form-label small">Titre de la Série (Français) *</label>
-              <input type="text" id="batchSeriesTitleFr" class="form-control" placeholder="ex: Game of Thrones" required>
+              <label class="form-label small">Titre de la Série (Français)</label>
+              <input type="text" id="batchSeriesTitleFr" class="form-control" placeholder="ex: Game of Thrones">
             </div>
             <div class="col-12 col-md-4">
               <label class="form-label small">Titre (Arabe)</label>
-              <input type="text" id="batchSeriesTitleAr" class="form-control" dir="rtl" placeholder="صراع العروش">
+              <input type="text" id="batchSeriesTitleAr" class="form-control" dir="rtl" placeholder="عنوان المسلسل بالعربية">
             </div>
             <div class="col-12 col-md-4">
               <label class="form-label small">Titre (Anglais)</label>
-              <input type="text" id="batchSeriesTitleEn" class="form-control" placeholder="Game of Thrones">
+              <input type="text" id="batchSeriesTitleEn" class="form-control" placeholder="Series English Title">
             </div>
           </div>
 
@@ -288,11 +288,14 @@
           <div class="mb-3">
             <label class="form-label small">Affiche de la Série (Poster 2:3)</label>
             <div class="input-group mb-2">
-              <input type="text" id="batchSeriesPoster" class="form-control" placeholder="https://... ou téléverser sur VPS">
+              <input type="text" id="batchSeriesPoster" class="form-control" placeholder="https://... ou téléverser sur VPS" oninput="updateImagePreview('batchSeriesPoster', 'batchSeriesPosterPreview')">
               <label class="btn btn-outline-secondary" for="uploadBatchPosterFile">
                 <i class="bi bi-cloud-arrow-up me-1"></i>Téléverser Image
               </label>
-              <input type="file" id="uploadBatchPosterFile" class="d-none" accept="image/*" onchange="uploadImageToServer('uploadBatchPosterFile', 'batchSeriesPoster')">
+              <input type="file" id="uploadBatchPosterFile" class="d-none" accept="image/*" onchange="uploadImageToServer('uploadBatchPosterFile', 'batchSeriesPoster', 'batchSeriesPosterPreview')">
+            </div>
+            <div id="batchSeriesPosterPreview" class="d-none mt-2 p-1 border border-secondary border-opacity-50 rounded bg-black text-center" style="max-width: 140px;">
+              <img src="" alt="Aperçu Affiche" class="img-fluid rounded" style="max-height: 180px; object-fit: cover;">
             </div>
           </div>
 
@@ -497,27 +500,79 @@ function openBatchSeriesModal() {
   modal.show();
 }
 
+function updateImagePreview(inputId, previewContainerId) {
+  const url = (document.getElementById(inputId).value || '').trim();
+  const container = document.getElementById(previewContainerId);
+  if (!container) return;
+  const img = container.querySelector('img');
+  if (url) {
+    if (img) img.src = url;
+    container.classList.remove('d-none');
+  } else {
+    container.classList.add('d-none');
+  }
+}
+
+async function uploadImageToServer(fileInputId, targetInputId, previewContainerId) {
+  const fileInput = document.getElementById(fileInputId);
+  if (!fileInput.files || !fileInput.files[0]) return;
+  const file = fileInput.files[0];
+
+  const formData = new FormData();
+  formData.append('file', file);
+
+  showToast('Téléversement de l\'image sur le serveur VPS...', 'info');
+  try {
+    const res = await fetch('/api/admin/upload-image', {
+      method: 'POST',
+      body: formData,
+    });
+    const data = await res.json();
+    if (res.ok && data.success) {
+      document.getElementById(targetInputId).value = data.url;
+      if (previewContainerId) {
+        updateImagePreview(targetInputId, previewContainerId);
+      }
+      showToast('Image enregistrée sur le VPS avec succès !', 'success');
+    } else {
+      showToast(data.detail || 'Erreur lors de l\'enregistrement', 'error');
+    }
+  } catch (e) {
+    showToast('Erreur d\'upload image', 'error');
+  }
+}
+
 // 2. Traduction Gemini pour série par lot
 async function autoTranslateBatchSeriesWithGemini() {
-  const title = document.getElementById('batchSeriesTitleFr').value.trim();
-  const synopsis = document.getElementById('batchSeriesSynopsisFr').value.trim();
-  if (!title) {
-    showToast('Veuillez renseigner au moins un titre français.', 'warning');
+  const titleFr = document.getElementById('batchSeriesTitleFr').value.trim();
+  const titleAr = document.getElementById('batchSeriesTitleAr').value.trim();
+  const titleEn = document.getElementById('batchSeriesTitleEn').value.trim();
+  const synopsisFr = document.getElementById('batchSeriesSynopsisFr').value.trim();
+
+  if (!titleFr && !titleAr && !titleEn) {
+    showToast('Veuillez renseigner au moins un titre (Arabe, Français ou Anglais).', 'warning');
     return;
   }
 
-  showToast('Traduction et enrichissement avec Gemini AI...', 'info');
+  showToast('Traduction intelligente avec Gemini AI...', 'info');
   try {
     const res = await fetch('/api/admin/ai/translate', {
       method: 'POST',
       headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify({ title: title, synopsis: synopsis, content_type: 'series' })
+      body: JSON.stringify({
+        title_fr: titleFr || null,
+        title_ar: titleAr || null,
+        title_en: titleEn || null,
+        synopsis_fr: synopsisFr || null,
+        content_type: 'series'
+      })
     });
     const data = await res.json();
     if (res.ok) {
+      if (data.title_fr) document.getElementById('batchSeriesTitleFr').value = data.title_fr;
       if (data.title_ar) document.getElementById('batchSeriesTitleAr').value = data.title_ar;
       if (data.title_en) document.getElementById('batchSeriesTitleEn').value = data.title_en;
-      if (data.synopsis_fr && !synopsis) document.getElementById('batchSeriesSynopsisFr').value = data.synopsis_fr;
+      if (data.synopsis_fr) document.getElementById('batchSeriesSynopsisFr').value = data.synopsis_fr;
       if (data.warning) {
         showToast(data.warning, 'warning');
       } else {
@@ -540,14 +595,22 @@ async function submitBatchSeriesCreation(e) {
     return;
   }
 
+  const titleFr = document.getElementById('batchSeriesTitleFr').value.trim();
+  const titleAr = document.getElementById('batchSeriesTitleAr').value.trim();
+  const titleEn = document.getElementById('batchSeriesTitleEn').value.trim();
+  if (!titleFr && !titleAr && !titleEn) {
+    showToast('Veuillez renseigner au moins un titre pour la série.', 'warning');
+    return;
+  }
+
   const btn = document.getElementById('btnSubmitBatchSeries');
   btn.disabled = true;
   btn.innerHTML = '<span class="spinner-border spinner-border-sm me-1"></span>Création en cours...';
 
   const payload = {
-    title_fr: document.getElementById('batchSeriesTitleFr').value.trim(),
-    title_ar: document.getElementById('batchSeriesTitleAr').value.trim() || null,
-    title_en: document.getElementById('batchSeriesTitleEn').value.trim() || null,
+    title_fr: titleFr || titleAr || titleEn,
+    title_ar: titleAr || null,
+    title_en: titleEn || null,
     synopsis_fr: document.getElementById('batchSeriesSynopsisFr').value.trim() || null,
     poster_path: document.getElementById('batchSeriesPoster').value.trim() || null,
     video_ids: selected,

@@ -354,11 +354,14 @@
           <div class="mb-3">
             <label class="form-label small">Affiche (Poster 2:3)</label>
             <div class="input-group mb-2">
-              <input type="text" id="editSeriesPoster" class="form-control" value="{{ series.poster_path or '' }}" placeholder="https://... ou fichier VPS">
+              <input type="text" id="editSeriesPoster" class="form-control" value="{{ series.poster_path or '' }}" placeholder="https://... ou fichier VPS" oninput="updateImagePreview('editSeriesPoster', 'editSeriesPosterPreview')">
               <label class="btn btn-outline-secondary" for="uploadPosterFile">
                 <i class="bi bi-cloud-arrow-up me-1"></i>Téléverser Image
               </label>
-              <input type="file" id="uploadPosterFile" class="d-none" accept="image/*" onchange="uploadImageToServer('uploadPosterFile', 'editSeriesPoster')">
+              <input type="file" id="uploadPosterFile" class="d-none" accept="image/*" onchange="uploadImageToServer('uploadPosterFile', 'editSeriesPoster', 'editSeriesPosterPreview')">
+            </div>
+            <div id="editSeriesPosterPreview" class="{% if not series.poster_path %}d-none{% endif %} mt-2 p-1 border border-secondary border-opacity-50 rounded bg-black text-center" style="max-width: 140px;">
+              <img src="{{ series.poster_path or '' }}" alt="Aperçu Affiche" class="img-fluid rounded" style="max-height: 180px; object-fit: cover;">
             </div>
           </div>
 
@@ -366,11 +369,14 @@
           <div class="mb-3">
             <label class="form-label small">Bannière (Backdrop 16:9)</label>
             <div class="input-group mb-2">
-              <input type="text" id="editSeriesBanner" class="form-control" value="{{ series.banner_path or '' }}" placeholder="https://... ou fichier VPS">
+              <input type="text" id="editSeriesBanner" class="form-control" value="{{ series.banner_path or '' }}" placeholder="https://... ou fichier VPS" oninput="updateImagePreview('editSeriesBanner', 'editSeriesBannerPreview')">
               <label class="btn btn-outline-secondary" for="uploadBannerFile">
                 <i class="bi bi-cloud-arrow-up me-1"></i>Téléverser Image
               </label>
-              <input type="file" id="uploadBannerFile" class="d-none" accept="image/*" onchange="uploadImageToServer('uploadBannerFile', 'editSeriesBanner')">
+              <input type="file" id="uploadBannerFile" class="d-none" accept="image/*" onchange="uploadImageToServer('uploadBannerFile', 'editSeriesBanner', 'editSeriesBannerPreview')">
+            </div>
+            <div id="editSeriesBannerPreview" class="{% if not series.banner_path %}d-none{% endif %} mt-2 p-1 border border-secondary border-opacity-50 rounded bg-black text-center" style="max-width: 280px;">
+              <img src="{{ series.banner_path or '' }}" alt="Aperçu Bannière" class="img-fluid rounded" style="max-height: 120px; object-fit: cover;">
             </div>
           </div>
 
@@ -468,7 +474,20 @@ function openEditSeriesModal() {
   modal.show();
 }
 
-async function uploadImageToServer(fileInputId, targetInputId) {
+function updateImagePreview(inputId, previewContainerId) {
+  const url = (document.getElementById(inputId).value || '').trim();
+  const container = document.getElementById(previewContainerId);
+  if (!container) return;
+  const img = container.querySelector('img');
+  if (url) {
+    if (img) img.src = url;
+    container.classList.remove('d-none');
+  } else {
+    container.classList.add('d-none');
+  }
+}
+
+async function uploadImageToServer(fileInputId, targetInputId, previewContainerId) {
   const fileInput = document.getElementById(fileInputId);
   if (!fileInput.files || !fileInput.files[0]) return;
   const file = fileInput.files[0];
@@ -485,6 +504,9 @@ async function uploadImageToServer(fileInputId, targetInputId) {
     const data = await res.json();
     if (res.ok && data.success) {
       document.getElementById(targetInputId).value = data.url;
+      if (previewContainerId) {
+        updateImagePreview(targetInputId, previewContainerId);
+      }
       showToast('Image enregistrée sur le VPS avec succès !', 'success');
     } else {
       showToast(data.detail || 'Erreur lors de l\'enregistrement', 'error');
@@ -495,29 +517,46 @@ async function uploadImageToServer(fileInputId, targetInputId) {
 }
 
 async function autoTranslateSeriesWithGemini() {
-  const title = document.getElementById('editSeriesTitleFr').value.trim();
-  const synopsis = document.getElementById('editSeriesSynopsisFr').value.trim();
-  if (!title) {
-    showToast('Veuillez renseigner au moins un titre français.', 'warning');
+  const titleFr = document.getElementById('editSeriesTitleFr').value.trim();
+  const titleAr = document.getElementById('editSeriesTitleAr').value.trim();
+  const titleEn = document.getElementById('editSeriesTitleEn').value.trim();
+  const synopsisFr = document.getElementById('editSeriesSynopsisFr').value.trim();
+  const synopsisAr = document.getElementById('editSeriesSynopsisAr').value.trim();
+  const synopsisEn = document.getElementById('editSeriesSynopsisEn').value.trim();
+
+  if (!titleFr && !titleAr && !titleEn) {
+    showToast('Veuillez renseigner un titre (en Arabe, Français ou Anglais).', 'warning');
     return;
   }
 
-  showToast('Traduction et enrichissement avec Gemini AI...', 'info');
+  showToast('Traduction intelligente avec Gemini AI...', 'info');
   try {
     const res = await fetch('/api/admin/ai/translate', {
       method: 'POST',
       headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify({ title: title, synopsis: synopsis, content_type: 'series' })
+      body: JSON.stringify({
+        title_fr: titleFr || null,
+        title_ar: titleAr || null,
+        title_en: titleEn || null,
+        synopsis_fr: synopsisFr || null,
+        synopsis_ar: synopsisAr || null,
+        synopsis_en: synopsisEn || null,
+        content_type: 'series'
+      })
     });
     const data = await res.json();
     if (res.ok) {
+      if (data.title_fr) document.getElementById('editSeriesTitleFr').value = data.title_fr;
       if (data.title_ar) document.getElementById('editSeriesTitleAr').value = data.title_ar;
       if (data.title_en) document.getElementById('editSeriesTitleEn').value = data.title_en;
-      if (data.synopsis_fr && !synopsis) document.getElementById('editSeriesSynopsisFr').value = data.synopsis_fr;
+      if (data.synopsis_fr) document.getElementById('editSeriesSynopsisFr').value = data.synopsis_fr;
       if (data.synopsis_ar) document.getElementById('editSeriesSynopsisAr').value = data.synopsis_ar;
       if (data.synopsis_en) document.getElementById('editSeriesSynopsisEn').value = data.synopsis_en;
       if (data.year && !document.getElementById('editSeriesYear').value) {
         document.getElementById('editSeriesYear').value = data.year;
+      }
+      if (data.rating && !document.getElementById('editSeriesRating').value) {
+        document.getElementById('editSeriesRating').value = data.rating;
       }
       if (data.warning) {
         showToast(data.warning, 'warning');

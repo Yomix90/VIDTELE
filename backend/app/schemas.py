@@ -520,10 +520,12 @@ class FeedResponse(BaseModel):
 
 
 class SeriesCreate(BaseModel):
-    title_fr: str = Field(..., min_length=1, max_length=255)
+    title_fr: Optional[str] = None
     title_ar: Optional[str] = None
+    title_en: Optional[str] = None
     synopsis_fr: Optional[str] = None
     synopsis_ar: Optional[str] = None
+    synopsis_en: Optional[str] = None
     year_start: Optional[int] = None
     rating: Optional[float] = None
     status: str = "ongoing"
@@ -732,8 +734,14 @@ class BatchAddToExistingSeries(BaseModel):
 
 
 class GeminiTranslateRequest(BaseModel):
-    title: str
+    title: Optional[str] = None
+    title_fr: Optional[str] = None
+    title_ar: Optional[str] = None
+    title_en: Optional[str] = None
     synopsis: Optional[str] = None
+    synopsis_fr: Optional[str] = None
+    synopsis_ar: Optional[str] = None
+    synopsis_en: Optional[str] = None
     content_type: str = "series"
 
 
