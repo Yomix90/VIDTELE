@@ -254,6 +254,7 @@ async def delete_invite(
 # -------------------------------------------------------------
 
 @router.post("/sync", response_model=SyncStatusResponse)
+@router.post("/telegram/sync", response_model=SyncStatusResponse)
 async def trigger_manual_sync(
     current_admin: User = Depends(get_current_admin),
 ):
@@ -274,11 +275,22 @@ async def trigger_manual_sync(
         return SyncStatusResponse(status="already_running")
 
     stats = await sync_service.sync_channel()
+    if stats.get("status") == "channel_not_found":
+        raise HTTPException(
+            status_code=status.HTTP_400_BAD_REQUEST,
+            detail="Canal Telegram introuvable ou compte non membre du canal. Vérifiez l'identifiant du canal dans l'onglet Telegram.",
+        )
+    if stats.get("status") == "not_connected":
+        raise HTTPException(
+            status_code=status.HTTP_400_BAD_REQUEST,
+            detail="Client Telegram non connecté. Activez ou testez votre compte dans l'onglet Telegram.",
+        )
     if stats.get("status") == "error":
         raise HTTPException(
             status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
             detail=f"Erreur de synchronisation Telegram: {stats.get('error')}",
         )
+
 
     return SyncStatusResponse(
         status="completed",
@@ -289,6 +301,7 @@ async def trigger_manual_sync(
 
 
 @router.get("/sync-status")
+@router.get("/telegram/sync-status")
 async def get_sync_status(
     current_admin: User = Depends(get_current_admin),
 ):
@@ -299,6 +312,8 @@ async def get_sync_status(
     }
 
 
+@router.post("/cache/purge", response_model=MessageResponse)
+@router.delete("/cache/purge", response_model=MessageResponse)
 @router.delete("/cache", response_model=MessageResponse)
 async def purge_cache(
     current_admin: User = Depends(get_current_admin),
