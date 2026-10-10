@@ -23,36 +23,71 @@
   </div>
 </div>
 
+<!-- Barre de Filtres Rapides & Recherche -->
+<div class="d-flex flex-wrap align-items-center justify-content-between gap-3 mb-4">
+  <div class="d-flex flex-wrap align-items-center gap-2">
+    <a href="/admin/raw-videos?filter=unassigned" class="btn btn-sm {% if active_filter == 'unassigned' %}btn-warning text-dark fw-bold shadow-sm{% else %}btn-outline-secondary text-white{% endif %} d-flex align-items-center gap-2">
+      <i class="bi bi-funnel-fill"></i>
+      <span>Vidéos non classées</span>
+      <span class="badge {% if active_filter == 'unassigned' %}bg-dark text-warning{% else %}bg-warning text-dark{% endif %} rounded-pill">{{ unassigned_count }}</span>
+    </a>
+    <a href="/admin/raw-videos?filter=all" class="btn btn-sm {% if active_filter == 'all' %}btn-danger fw-bold shadow-sm{% else %}btn-outline-secondary text-white{% endif %} d-flex align-items-center gap-2">
+      <i class="bi bi-collection-play"></i>
+      <span>Toutes les vidéos</span>
+      <span class="badge bg-secondary rounded-pill">{{ total_count }}</span>
+    </a>
+    <a href="/admin/raw-videos?filter=assigned" class="btn btn-sm {% if active_filter == 'assigned' %}btn-success fw-bold shadow-sm{% else %}btn-outline-secondary text-white{% endif %} d-flex align-items-center gap-2">
+      <i class="bi bi-check2-circle"></i>
+      <span>Classées / Publiées</span>
+      <span class="badge bg-success rounded-pill">{{ assigned_count }}</span>
+    </a>
+  </div>
+
+  <div class="d-flex align-items-center gap-2">
+    <div class="input-group input-group-sm" style="max-width: 320px;">
+      <span class="input-group-text bg-dark border-secondary text-muted"><i class="bi bi-search"></i></span>
+      <input type="text" id="rawVideosSearchInput" class="form-control bg-dark text-white border-secondary" placeholder="Filtrer par titre ou fichier..." onkeyup="filterTableRows(this.value)">
+    </div>
+  </div>
+</div>
+
 <!-- Barre d'action flottante pour sélection par lots (Affichée dès qu'au moins 1 vidéo est cochée) -->
 <div id="batchActionBar" class="card-dark border border-danger border-opacity-50 p-3 mb-4 shadow-lg d-none align-items-center justify-content-between">
   <div class="d-flex align-items-center gap-3">
     <div class="badge bg-danger fs-6 px-3 py-2"><span id="batchSelectedCount">0</span> vidéo(s) sélectionnée(s)</div>
-    <div class="text-muted small d-none d-md-block">Créez automatiquement une série complète avec ordonnancement automatique des épisodes (S01E01, S01E02...).</div>
+    <div class="text-muted small d-none d-lg-block">Sélectionnez vos vidéos brutes et organisez-les facilement en série ou supprimez-les.</div>
   </div>
-  <div class="d-flex align-items-center gap-2">
+  <div class="d-flex flex-wrap align-items-center gap-2">
     <button class="btn btn-outline-secondary btn-sm" onclick="deselectAllBatch()">Tout désélectionner</button>
     <button class="btn btn-outline-danger btn-sm d-flex align-items-center gap-1 shadow-sm" onclick="confirmBatchDeleteVideos()">
       <i class="bi bi-trash3-fill"></i>
-      <span>Supprimer la sélection</span>
+      <span>Supprimer</span>
+    </button>
+    <button class="btn btn-warning btn-sm d-flex align-items-center gap-1 shadow-sm text-dark fw-bold" onclick="openBatchAddToExistingSeriesModal()">
+      <i class="bi bi-folder-plus"></i>
+      <span>Ajouter à une Série Existante</span>
     </button>
     <button class="btn btn-danger btn-sm d-flex align-items-center gap-1 shadow-sm" onclick="openBatchSeriesModal()">
       <i class="bi bi-magic"></i>
-      <span>Créer une Série par Lots</span>
+      <span>Créer Nouvelle Série</span>
     </button>
   </div>
 </div>
 
 <div class="card-dark p-3 p-lg-4 shadow-sm">
   <div class="d-flex justify-content-between align-items-center mb-3">
-    <div class="form-check">
-      <input class="form-check-input" type="checkbox" id="selectAllCheckbox" onchange="toggleSelectAll(this)">
-      <label class="form-check-label small text-muted" for="selectAllCheckbox">Tout sélectionner</label>
+    <div class="d-flex align-items-center gap-3">
+      <div class="form-check mb-0">
+        <input class="form-check-input" type="checkbox" id="selectAllCheckbox" onchange="toggleSelectAll(this)">
+        <label class="form-check-label small text-white fw-semibold" for="selectAllCheckbox">Tout sélectionner</label>
+      </div>
+      <button type="button" class="btn btn-outline-secondary btn-xs py-0 px-2" style="font-size: 0.75rem;" onclick="selectAllVisibleVideos(true)">Sélectionner tout le tableau</button>
     </div>
-    <div class="text-muted small">{{ raw_videos|length }} vidéo(s) trouvée(s)</div>
+    <div class="text-muted small"><span id="visibleRowCount">{{ raw_videos|length }}</span> vidéo(s) affichée(s)</div>
   </div>
 
   <div class="table-responsive">
-    <table class="table-atlas">
+    <table class="table-atlas" id="rawVideosTable">
       <thead>
         <tr>
           <th style="width: 40px;"></th>
@@ -67,7 +102,7 @@
       </thead>
       <tbody>
         {% for v in raw_videos %}
-        <tr>
+        <tr class="raw-video-row" data-search="{{ v.title|lower }} {{ (v.file_name or '')|lower }}">
           <td>
             <input type="checkbox" class="form-check-input batch-video-checkbox" value="{{ v.id }}" data-title="{{ v.title }}" data-filename="{{ v.file_name or '' }}" onchange="updateBatchSelectionState()">
           </td>
@@ -88,10 +123,10 @@
           </td>
           <td class="text-muted small">{{ v.telegram_date.strftime('%d/%m/%Y %H:%M') if v.telegram_date else '--' }}</td>
           <td>
-            {% if v.is_published %}
-              <span class="badge badge-atlas-green">Publié sur Mobile</span>
+            {% if v.id in assigned_ids %}
+              <span class="badge badge-atlas-green">Classé (Épisode/Film)</span>
             {% else %}
-              <span class="badge badge-atlas-amber">Brut (Non classé)</span>
+              <span class="badge badge-atlas-amber">Non classé (En attente)</span>
             {% endif %}
           </td>
           <td class="text-end">
@@ -254,6 +289,69 @@
             <button type="button" class="btn btn-secondary" data-bs-dismiss="modal">Annuler</button>
             <button type="submit" class="btn btn-danger px-4" id="btnSubmitBatchSeries">
               <i class="bi bi-collection-play-fill me-1"></i>Créer la Série & Lier les Épisodes
+            </button>
+          </div>
+        </form>
+      </div>
+    </div>
+  </div>
+</div>
+
+<!-- Modale : Ajouter par lots à une série existante -->
+<div class="modal fade" id="modalBatchAddToExistingSeries" tabindex="-1">
+  <div class="modal-dialog modal-lg">
+    <div class="modal-content bg-dark text-white border-secondary">
+      <div class="modal-header border-secondary">
+        <h5 class="modal-title d-flex align-items-center gap-2">
+          <i class="bi bi-folder-plus text-warning"></i>
+          <span>Ajouter les Vidéos à une Série Existante</span>
+        </h5>
+        <button type="button" class="btn-close btn-close-white" data-bs-dismiss="modal"></button>
+      </div>
+      <div class="modal-body">
+        <form id="formBatchAddToSeries" onsubmit="submitBatchAddToSeries(event)">
+          <div class="mb-3">
+            <label class="form-label small fw-semibold">Choisir la Série *</label>
+            <select id="batchTargetSeriesSelect" class="form-select bg-dark text-white border-secondary" required onchange="onTargetSeriesChanged(this.value)">
+              <option value="" disabled selected>-- Sélectionnez une série existante --</option>
+              {% for s in existing_series %}
+                <option value="{{ s.id }}">{{ s.title_fr }} ({{ s.year_start or 'N/A' }}) - {{ s.seasons|length }} saison(s)</option>
+              {% endfor %}
+            </select>
+          </div>
+
+          <div class="mb-3">
+            <label class="form-label small fw-semibold">Saison de destination</label>
+            <select id="batchTargetSeasonSelect" class="form-select bg-dark text-white border-secondary">
+              <option value="auto">Détection automatique de la saison (S01, S02... crée la saison si nécessaire)</option>
+            </select>
+          </div>
+
+          <div class="mb-3 form-check">
+            <input type="checkbox" id="batchExistingAutoDetect" class="form-check-input" checked>
+            <label class="form-check-label small" for="batchExistingAutoDetect">
+              <strong>Détecter automatiquement le numéro d'épisode</strong> (E01, Ep 1, 01, S01E02, etc.)
+            </label>
+          </div>
+
+          <div class="mb-3 form-check">
+            <input type="checkbox" id="batchExistingPublishImmediate" class="form-check-input" checked>
+            <label class="form-check-label small" for="batchExistingPublishImmediate">
+              Publier immédiatement les épisodes sur l'application mobile
+            </label>
+          </div>
+
+          <!-- Liste prévisualisée des vidéos avec épisodes détectés -->
+          <div class="mb-3">
+            <label class="form-label small fw-semibold">Vidéos sélectionnées (<span id="batchExistingSummaryCount">0</span>) :</label>
+            <div id="batchExistingSelectedList" class="p-2 rounded bg-black border border-secondary border-opacity-50 small" style="max-height: 180px; overflow-y: auto;">
+            </div>
+          </div>
+
+          <div class="d-flex justify-content-end gap-2">
+            <button type="button" class="btn btn-secondary" data-bs-dismiss="modal">Annuler</button>
+            <button type="submit" class="btn btn-warning px-4 text-dark fw-bold" id="btnSubmitBatchAddToSeries">
+              <i class="bi bi-check2-circle me-1"></i>Associer à la Série
             </button>
           </div>
         </form>
@@ -443,6 +541,139 @@ async function submitBatchSeriesCreation(e) {
     showToast('Erreur serveur', 'error');
     btn.disabled = false;
     btn.innerHTML = '<i class="bi bi-collection-play-fill me-1"></i>Créer la Série & Lier les Épisodes';
+  }
+}
+
+// 3.bis Gestion de l'ajout à une série existante
+function selectAllVisibleVideos(check) {
+  const rows = document.querySelectorAll('.raw-video-row');
+  rows.forEach(r => {
+    if (r.style.display !== 'none') {
+      const cb = r.querySelector('.batch-video-checkbox');
+      if (cb) cb.checked = check;
+    }
+  });
+  const master = document.getElementById('selectAllCheckbox');
+  if (master) master.checked = check;
+  updateBatchSelectionState();
+}
+
+function filterTableRows(query) {
+  const q = (query || '').toLowerCase().trim();
+  const rows = document.querySelectorAll('.raw-video-row');
+  let visible = 0;
+  rows.forEach(r => {
+    const text = r.getAttribute('data-search') || '';
+    if (!q || text.includes(q)) {
+      r.style.display = '';
+      visible++;
+    } else {
+      r.style.display = 'none';
+    }
+  });
+  const countEl = document.getElementById('visibleRowCount');
+  if (countEl) countEl.textContent = visible;
+}
+
+function openBatchAddToExistingSeriesModal() {
+  const selected = document.querySelectorAll('.batch-video-checkbox:checked');
+  if (selected.length === 0) {
+    showToast('Veuillez sélectionner au moins une vidéo.', 'warning');
+    return;
+  }
+
+  const listContainer = document.getElementById('batchExistingSelectedList');
+  const countContainer = document.getElementById('batchExistingSummaryCount');
+  countContainer.textContent = selected.length;
+  listContainer.innerHTML = '';
+
+  selected.forEach(cb => {
+    const title = cb.getAttribute('data-title') || cb.getAttribute('data-filename') || `Vidéo #${cb.value}`;
+    const item = document.createElement('div');
+    item.className = 'py-1 border-bottom border-secondary border-opacity-25 d-flex justify-content-between align-items-center';
+    item.innerHTML = `<div><span class="badge bg-secondary me-2">#${cb.value}</span> <span class="text-white">${title}</span></div>`;
+    listContainer.appendChild(item);
+  });
+
+  const modal = bootstrap.Modal.getOrCreateInstance(document.getElementById('modalBatchAddToExistingSeries'));
+  modal.show();
+}
+
+async function onTargetSeriesChanged(seriesId) {
+  const seasonSelect = document.getElementById('batchTargetSeasonSelect');
+  if (!seasonSelect) return;
+  seasonSelect.innerHTML = '<option value="auto">Détection automatique de la saison (S01, S02... crée la saison si nécessaire)</option>';
+
+  if (!seriesId) return;
+
+  try {
+    const res = await fetch(`/api/admin/series/${seriesId}`);
+    if (res.ok) {
+      const data = await res.json();
+      if (data.seasons && data.seasons.length > 0) {
+        data.seasons.forEach(s => {
+          const opt = document.createElement('option');
+          opt.value = s.id;
+          opt.textContent = `Forcer : Saison ${s.number} (${s.title_fr || ''}) - ${s.episode_count || 0} épisode(s)`;
+          seasonSelect.appendChild(opt);
+        });
+      }
+    }
+  } catch (e) {
+    console.error('Erreur chargement saisons', e);
+  }
+}
+
+async function submitBatchAddToSeries(e) {
+  e.preventDefault();
+  const seriesId = document.getElementById('batchTargetSeriesSelect').value;
+  if (!seriesId) {
+    showToast('Veuillez choisir une série.', 'warning');
+    return;
+  }
+
+  const selected = Array.from(document.querySelectorAll('.batch-video-checkbox:checked')).map(cb => parseInt(cb.value));
+  if (selected.length === 0) {
+    showToast('Aucune vidéo sélectionnée.', 'warning');
+    return;
+  }
+
+  const seasonVal = document.getElementById('batchTargetSeasonSelect').value;
+  const seasonId = seasonVal !== 'auto' ? parseInt(seasonVal) : null;
+  const autoDetect = document.getElementById('batchExistingAutoDetect').checked;
+  const publish = document.getElementById('batchExistingPublishImmediate').checked;
+
+  const btn = document.getElementById('btnSubmitBatchAddToSeries');
+  btn.disabled = true;
+  btn.innerHTML = '<span class="spinner-border spinner-border-sm me-1"></span>Association en cours...';
+
+  const payload = {
+    series_id: parseInt(seriesId),
+    video_ids: selected,
+    season_id: seasonId,
+    auto_detect: autoDetect,
+    publish: publish,
+  };
+
+  try {
+    const res = await fetch('/api/admin/series/batch-add-videos', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify(payload),
+    });
+    const data = await res.json();
+    if (res.ok && data.success) {
+      showToast(data.message || 'Vidéos ajoutées à la série avec succès !', 'success');
+      setTimeout(() => location.href = `/admin/series/${data.series_id}`, 1200);
+    } else {
+      showToast(data.detail || 'Erreur lors de l\'association', 'error');
+      btn.disabled = false;
+      btn.innerHTML = '<i class="bi bi-check2-circle me-1"></i>Associer à la Série';
+    }
+  } catch (err) {
+    showToast('Erreur serveur', 'error');
+    btn.disabled = false;
+    btn.innerHTML = '<i class="bi bi-check2-circle me-1"></i>Associer à la Série';
   }
 }
 

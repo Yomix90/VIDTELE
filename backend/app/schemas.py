@@ -611,6 +611,14 @@ class BatchSeriesCreate(BaseModel):
     visibility: str = "published"
 
 
+class BatchAddToExistingSeries(BaseModel):
+    series_id: int
+    video_ids: List[int]
+    season_id: Optional[int] = None
+    auto_detect: bool = True
+    publish: bool = True
+
+
 class GeminiTranslateRequest(BaseModel):
     title: str
     synopsis: Optional[str] = None

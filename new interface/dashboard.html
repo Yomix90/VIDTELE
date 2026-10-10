@@ -1,0 +1,641 @@
+<!doctype html>
+<html lang="fr" data-theme="dark">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <title>StreamAdmin - Tableau de bord</title>
+
+  <!-- Polices -->
+  <link rel="preconnect" href="https://fonts.googleapis.com">
+  <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+  <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700;800;900&display=swap" rel="stylesheet">
+
+  <!-- Bootstrap 5 -->
+  <link href="https://cdn.jsdelivr.net/npm/bootstrap@5.3.3/dist/css/bootstrap.min.css" rel="stylesheet">
+
+  <!-- Bootstrap Icons -->
+  <link href="https://cdn.jsdelivr.net/npm/bootstrap-icons@1.11.3/font/bootstrap-icons.min.css" rel="stylesheet">
+
+  <!-- CSS local -->
+  <link href="assets/preview.css" rel="stylesheet">
+</head>
+<body>
+  <div class="app-shell" id="appShell">
+
+    <!-- Barre latérale -->
+    <aside class="sidebar d-flex flex-column p-3">
+      <div class="brand mb-4">
+        <i class="bi bi-badge-sd-fill"></i>
+        <span>StreamAdmin</span>
+      </div>
+
+      <nav class="nav flex-column gap-1">
+        <a class="nav-link active" href="dashboard.html">
+          <i class="bi bi-speedometer2"></i>
+          <span>Tableau de bord</span>
+        </a>
+        <a class="nav-link" href="#">
+          <i class="bi bi-people"></i>
+          <span>Utilisateurs</span>
+        </a>
+        <a class="nav-link" href="#">
+          <i class="bi bi-ticket-perforated"></i>
+          <span>Codes d'invitation</span>
+        </a>
+        <a class="nav-link" href="#">
+          <i class="bi bi-telegram"></i>
+          <span>Telegram</span>
+        </a>
+        <a class="nav-link" href="#">
+          <i class="bi bi-collection-play"></i>
+          <span>Bibliothèque brute</span>
+        </a>
+        <a class="nav-link" href="serie-detail.html">
+          <i class="bi bi-film"></i>
+          <span>Séries</span>
+        </a>
+        <a class="nav-link" href="#">
+          <i class="bi bi-camera-reels"></i>
+          <span>Films</span>
+        </a>
+        <a class="nav-link" href="#">
+          <i class="bi bi-phone"></i>
+          <span>Accueil mobile</span>
+        </a>
+        <a class="nav-link" href="#">
+          <i class="bi bi-graph-up"></i>
+          <span>Statistiques</span>
+        </a>
+        <a class="nav-link" href="#">
+          <i class="bi bi-gear"></i>
+          <span>Paramètres</span>
+        </a>
+      </nav>
+
+      <div class="mt-auto p-3 sidebar-footer">
+        <div class="d-flex align-items-center gap-2">
+          <div class="avatar avatar-red">SA</div>
+          <div class="sidebar-footer-text">
+            <div class="fw-semibold small">Super Admin</div>
+            <div class="small text-muted">admin@exemple.fr</div>
+          </div>
+        </div>
+      </div>
+    </aside>
+
+    <!-- Contenu principal -->
+    <div class="main">
+
+      <!-- Barre supérieure -->
+      <header class="topbar d-flex align-items-center gap-3 px-3 px-lg-4 py-3">
+        <button id="sidebarToggle" class="btn btn-ghost btn-sm" type="button" aria-label="Basculer la sidebar">
+          <i class="bi bi-list"></i>
+        </button>
+
+        <div class="search-box flex-grow-1" style="max-width: 560px;">
+          <div class="input-group">
+            <span class="input-group-text"><i class="bi bi-search"></i></span>
+            <input type="search" class="form-control" placeholder="Rechercher une série, un film, un utilisateur, une vidéo Telegram...">
+          </div>
+        </div>
+
+        <div class="ms-auto d-flex align-items-center gap-2">
+          <select class="form-select form-select-sm w-auto" aria-label="Langue">
+            <option selected>FR</option>
+            <option>AR</option>
+          </select>
+
+          <button class="btn btn-ghost btn-sm" type="button" title="Basculer le thème">
+            <i class="bi bi-moon-stars"></i>
+          </button>
+
+          <div class="dropdown">
+            <button class="btn btn-ghost btn-sm dropdown-toggle d-flex align-items-center gap-2" data-bs-toggle="dropdown" aria-expanded="false">
+              <span class="avatar avatar-red">SA</span>
+              <span class="d-none d-md-inline">Admin</span>
+            </button>
+            <ul class="dropdown-menu dropdown-menu-dark dropdown-menu-end">
+              <li><a class="dropdown-item" href="#"><i class="bi bi-person me-2"></i>Mon profil</a></li>
+              <li><a class="dropdown-item" href="#"><i class="bi bi-shield-lock me-2"></i>Mot de passe</a></li>
+              <li><hr class="dropdown-divider"></li>
+              <li><a class="dropdown-item text-danger" href="#"><i class="bi bi-box-arrow-right me-2"></i>Déconnexion</a></li>
+            </ul>
+          </div>
+        </div>
+      </header>
+
+      <main class="p-3 p-lg-4">
+
+        <!-- Titre + actions rapides -->
+        <div class="d-flex flex-wrap align-items-center justify-content-between gap-3 mb-4">
+          <div>
+            <h1 class="h3 mb-1">Tableau de bord</h1>
+            <div class="text-muted">Vue globale du catalogue, des utilisateurs, de Telegram et du cache.</div>
+          </div>
+          <div class="d-flex flex-wrap gap-2">
+            <button class="btn btn-ghost btn-sm">
+              <i class="bi bi-arrow-repeat me-1"></i>
+              Synchroniser maintenant
+            </button>
+            <a href="serie-detail.html" class="btn btn-accent btn-sm">
+              <i class="bi bi-plus-lg me-1"></i>
+              Ajouter une série
+            </a>
+            <button class="btn btn-ghost btn-sm">
+              <i class="bi bi-ticket-perforated me-1"></i>
+              Créer un code d'invitation
+            </button>
+          </div>
+        </div>
+
+        <!-- Alerte importante -->
+        <div class="alert d-flex align-items-center gap-3 border-warning-soft mb-4" style="background: rgba(245,158,11,0.08); border: 1px solid rgba(245,158,11,0.16); color: var(--text); border-radius: 18px;">
+          <i class="bi bi-exclamation-triangle-fill text-warning fs-4"></i>
+          <div>
+            <div class="fw-semibold">Session Telegram à surveiller</div>
+            <div class="small text-muted">Dernière synchronisation réussie il y a 2 heures. 7 vidéos brutes restent non classées.</div>
+          </div>
+          <button class="btn btn-sm btn-warning ms-auto">Vérifier Telegram</button>
+        </div>
+
+        <!-- Cartes statistiques principales -->
+        <div class="row g-3 mb-4">
+          <div class="col-12 col-md-6 col-xl-3">
+            <div class="card-dark stat-card p-3 h-100">
+              <div class="d-flex justify-content-between align-items-start">
+                <div>
+                  <div class="text-muted small">Contenus</div>
+                  <div class="h4 mb-1 mt-2">1 248 vidéos</div>
+                  <div class="small text-muted">86 séries · 214 films · 1 043 épisodes</div>
+                </div>
+                <div class="icon icon-red">
+                  <i class="bi bi-collection-play"></i>
+                </div>
+              </div>
+              <div class="mt-3 d-flex flex-wrap gap-2">
+                <span class="badge badge-success-soft">+12 cette semaine</span>
+                <span class="badge badge-soft">6 saisons</span>
+              </div>
+            </div>
+          </div>
+
+          <div class="col-12 col-md-6 col-xl-3">
+            <div class="card-dark stat-card p-3 h-100">
+              <div class="d-flex justify-content-between align-items-start">
+                <div>
+                  <div class="text-muted small">Utilisateurs</div>
+                  <div class="h4 mb-1 mt-2">1 245 comptes</div>
+                  <div class="small text-muted">1 189 actifs · 56 désactivés · 43 en ligne</div>
+                </div>
+                <div class="icon icon-purple">
+                  <i class="bi bi-people"></i>
+                </div>
+              </div>
+              <div class="mt-3 d-flex flex-wrap gap-2">
+                <span class="badge badge-success-soft">+18 nouveaux / 7j</span>
+                <span class="badge badge-soft">2 appareils max</span>
+              </div>
+            </div>
+          </div>
+
+          <div class="col-12 col-md-6 col-xl-3">
+            <div class="card-dark stat-card p-3 h-100">
+              <div class="d-flex justify-content-between align-items-start">
+                <div>
+                  <div class="text-muted small">Lectures</div>
+                  <div class="h4 mb-1 mt-2">532 aujourd'hui</div>
+                  <div class="small text-muted">3 890 / 7 jours · 14 502 / 30 jours</div>
+                </div>
+                <div class="icon icon-green">
+                  <i class="bi bi-play-circle"></i>
+                </div>
+              </div>
+              <div class="mt-3 d-flex flex-wrap gap-2">
+                <span class="badge badge-accent">27 lectures simultanées</span>
+                <span class="badge badge-soft">Pic à 21h</span>
+              </div>
+            </div>
+          </div>
+
+          <div class="col-12 col-md-6 col-xl-3">
+            <div class="card-dark stat-card p-3 h-100">
+              <div class="d-flex justify-content-between align-items-start">
+                <div>
+                  <div class="text-muted small">Infrastructure</div>
+                  <div class="h4 mb-1 mt-2">42 Go cache</div>
+                  <div class="small text-muted">Disque : 128 Go / 500 Go · Bande passante : 1,2 To</div>
+                </div>
+                <div class="icon icon-blue">
+                  <i class="bi bi-hdd-network"></i>
+                </div>
+              </div>
+              <div class="mt-3">
+                <div class="d-flex justify-content-between small text-muted mb-1">
+                  <span>Cache vidéo</span>
+                  <span>42%</span>
+                </div>
+                <div class="progress" style="height: 8px;">
+                  <div class="progress-bar" style="width: 42%;"></div>
+                </div>
+              </div>
+            </div>
+          </div>
+        </div>
+
+        <!-- Graphiques principaux -->
+        <div class="row g-3 mb-4">
+          <div class="col-12 col-xl-8">
+            <div class="card-dark p-3 h-100">
+              <div class="d-flex justify-content-between align-items-center mb-3">
+                <div>
+                  <h2 class="h6 mb-1">Lectures par jour</h2>
+                  <div class="text-muted small">30 derniers jours</div>
+                </div>
+                <span class="badge badge-soft">Temps réel</span>
+              </div>
+              <div class="chart-container">
+                <canvas id="chartPlays"></canvas>
+              </div>
+            </div>
+          </div>
+
+          <div class="col-12 col-xl-4">
+            <div class="card-dark p-3 h-100">
+              <div class="d-flex justify-content-between align-items-center mb-3">
+                <div>
+                  <h2 class="h6 mb-1">Répartition du catalogue</h2>
+                  <div class="text-muted small">Séries et films publiés</div>
+                </div>
+              </div>
+              <div class="chart-container">
+                <canvas id="chartCatalog"></canvas>
+              </div>
+            </div>
+          </div>
+        </div>
+
+        <!-- Graphiques secondaires -->
+        <div class="row g-3 mb-4">
+          <div class="col-12 col-xl-6">
+            <div class="card-dark p-3 h-100">
+              <div class="d-flex justify-content-between align-items-center mb-3">
+                <div>
+                  <h2 class="h6 mb-1">Nouveaux utilisateurs</h2>
+                  <div class="text-muted small">7 derniers jours</div>
+                </div>
+                <span class="badge badge-success-soft">+18</span>
+              </div>
+              <div class="chart-container-sm">
+                <canvas id="chartUsers"></canvas>
+              </div>
+            </div>
+          </div>
+
+          <div class="col-12 col-xl-6">
+            <div class="card-dark p-3 h-100">
+              <div class="d-flex justify-content-between align-items-center mb-3">
+                <div>
+                  <h2 class="h6 mb-1">Heures de pointe</h2>
+                  <div class="text-muted small">Lectures par tranche horaire</div>
+                </div>
+                <span class="badge badge-accent">Pic 21h</span>
+              </div>
+              <div class="chart-container-sm">
+                <canvas id="chartPeak"></canvas>
+              </div>
+            </div>
+          </div>
+        </div>
+
+        <!-- Listes rapides -->
+        <div class="row g-3">
+          <!-- Derniers contenus -->
+          <div class="col-12 col-lg-4">
+            <div class="card-dark p-3 h-100">
+              <div class="d-flex justify-content-between align-items-center mb-3">
+                <h2 class="h6 mb-0">Derniers contenus ajoutés</h2>
+                <a href="#" class="small text-decoration-none text-danger">Tout voir</a>
+              </div>
+
+              <div class="list-group list-group-flush list-group-dark">
+                <div class="list-group-item d-flex align-items-center gap-3 px-0">
+                  <div class="avatar avatar-red">LK</div>
+                  <div class="flex-grow-1">
+                    <div class="fw-semibold small">Les Kimonos</div>
+                    <div class="text-muted small">Série · Saison 2 ajoutée</div>
+                  </div>
+                  <span class="badge badge-soft">Série</span>
+                </div>
+
+                <div class="list-group-item d-flex align-items-center gap-3 px-0">
+                  <div class="avatar avatar-purple">NV</div>
+                  <div class="flex-grow-1">
+                    <div class="fw-semibold small">Nuit Verte</div>
+                    <div class="text-muted small">Film · Bannière mise à jour</div>
+                  </div>
+                  <span class="badge badge-soft">Film</span>
+                </div>
+
+                <div class="list-group-item d-flex align-items-center gap-3 px-0">
+                  <div class="avatar avatar-blue">SR</div>
+                  <div class="flex-grow-1">
+                    <div class="fw-semibold small">Sahara Rouge</div>
+                    <div class="text-muted small">Série · 4 épisodes classés</div>
+                  </div>
+                  <span class="badge badge-soft">Série</span>
+                </div>
+
+                <div class="list-group-item d-flex align-items-center gap-3 px-0">
+                  <div class="avatar avatar-green">MD</div>
+                  <div class="flex-grow-1">
+                    <div class="fw-semibold small">Mer Dorée</div>
+                    <div class="text-muted small">Film · Publié</div>
+                  </div>
+                  <span class="badge badge-soft">Film</span>
+                </div>
+              </div>
+            </div>
+          </div>
+
+          <!-- Vidéos non classées -->
+          <div class="col-12 col-lg-5">
+            <div class="card-dark p-3 h-100">
+              <div class="d-flex justify-content-between align-items-center mb-3">
+                <h2 class="h6 mb-0">Vidéos Telegram non classées</h2>
+                <span class="badge badge-warning-soft">7 à traiter</span>
+              </div>
+
+              <div class="table-responsive">
+                <table class="table table-dark table-hover align-middle mb-0">
+                  <thead>
+                    <tr>
+                      <th>Fichier</th>
+                      <th>Durée</th>
+                      <th>Détection</th>
+                      <th class="text-end">Action</th>
+                    </tr>
+                  </thead>
+                  <tbody>
+                    <tr>
+                      <td>
+                        <div class="fw-semibold small">S01E03 - Sahara Rouge.mp4</div>
+                        <div class="text-muted small">Canal : Films FR</div>
+                      </td>
+                      <td class="small">48 min</td>
+                      <td><span class="badge badge-success-soft">S01E03</span></td>
+                      <td class="text-end"><button class="btn btn-sm btn-ghost">Associer</button></td>
+                    </tr>
+                    <tr>
+                      <td>
+                        <div class="fw-semibold small">Nuit.Verre.1080p.mkv</div>
+                        <div class="text-muted small">Canal : Cinéma</div>
+                      </td>
+                      <td class="small">1h52</td>
+                      <td><span class="badge badge-accent">Film probable</span></td>
+                      <td class="text-end"><button class="btn btn-sm btn-ghost">Associer</button></td>
+                    </tr>
+                    <tr>
+                      <td>
+                        <div class="fw-semibold small">الحلقة 5 - مسلسل البحر.mp4</div>
+                        <div class="text-muted small">Canal : Arabic TV</div>
+                      </td>
+                      <td class="small">41 min</td>
+                      <td><span class="badge badge-warning-soft">Épisode 5</span></td>
+                      <td class="text-end"><button class="btn btn-sm btn-ghost">Associer</button></td>
+                    </tr>
+                  </tbody>
+                </table>
+              </div>
+            </div>
+          </div>
+
+          <!-- Alertes + connexions -->
+          <div class="col-12 col-lg-3">
+            <div class="card-dark p-3 h-100">
+              <h2 class="h6 mb-3">Alertes et dernières connexions</h2>
+
+              <div class="d-flex flex-column gap-3">
+                <div class="p-3 rounded-4" style="background: rgba(239,68,68,0.08); border: 1px solid rgba(239,68,68,0.14);">
+                  <div class="fw-semibold small">Cache presque plein</div>
+                  <div class="text-muted small">Seuil configuré : 80 Go</div>
+                </div>
+
+                <div class="p-3 rounded-4" style="background: rgba(245,158,11,0.08); border: 1px solid rgba(245,158,11,0.14);">
+                  <div class="fw-semibold small">Synchronisation à planifier</div>
+                  <div class="text-muted small">Intervalle actuel : 6h</div>
+                </div>
+
+                <div class="divider"></div>
+
+                <div class="d-flex align-items-center gap-2">
+                  <span class="avatar avatar-green">YB</span>
+                  <div class="small">
+                    <div class="fw-semibold">Yassine B.</div>
+                    <div class="text-muted">Connexion il y a 5 min</div>
+                  </div>
+                </div>
+
+                <div class="d-flex align-items-center gap-2">
+                  <span class="avatar avatar-blue">IM</span>
+                  <div class="small">
+                    <div class="fw-semibold">Ines M.</div>
+                    <div class="text-muted">Connexion il y a 18 min</div>
+                  </div>
+                </div>
+              </div>
+            </div>
+          </div>
+        </div>
+
+      </main>
+    </div>
+  </div>
+
+  <!-- Bootstrap JS -->
+  <script src="https://cdn.jsdelivr.net/npm/bootstrap@5.3.3/dist/js/bootstrap.bundle.min.js"></script>
+
+  <!-- Chart.js -->
+  <script src="https://cdn.jsdelivr.net/npm/chart.js@4.4.3/dist/chart.umd.min.js"></script>
+
+  <script>
+    // Gestion de la sidebar : repliée sur desktop, coulissante sur mobile
+    const appShell = document.getElementById("appShell");
+    const sidebarToggle = document.getElementById("sidebarToggle");
+
+    sidebarToggle.addEventListener("click", function () {
+      if (window.innerWidth < 992) {
+        appShell.classList.toggle("sidebar-open");
+      } else {
+        appShell.classList.toggle("sidebar-collapsed");
+      }
+    });
+
+    // Configuration visuelle globale des graphiques
+    Chart.defaults.color = "#94A3B8";
+    Chart.defaults.borderColor = "rgba(255,255,255,0.06)";
+    Chart.defaults.font.family = "Inter, sans-serif";
+
+    // Libellés des 30 derniers jours
+    const labels30 = Array.from({ length: 30 }, function (_, index) {
+      const date = new Date(Date.now() - (29 - index) * 86400000);
+      return date.toLocaleDateString("fr-FR", { day: "2-digit", month: "2-digit" });
+    });
+
+    // Données fictives mais déterministes pour les lectures
+    const playsData = Array.from({ length: 30 }, function (_, index) {
+      return 260 + Math.round(Math.sin(index / 3) * 80) + index * 4;
+    });
+
+    // Graphique : lectures par jour
+    new Chart(document.getElementById("chartPlays"), {
+      type: "line",
+      data: {
+        labels: labels30,
+        datasets: [{
+          label: "Lectures",
+          data: playsData,
+          borderWidth: 3,
+          tension: 0.35,
+          fill: true,
+          backgroundColor: "rgba(229, 9, 20, 0.10)",
+          borderColor: "#E50914",
+          pointRadius: 0,
+          pointHoverRadius: 5
+        }]
+      },
+      options: {
+        responsive: true,
+        maintainAspectRatio: false,
+        plugins: {
+          legend: {
+            display: false
+          }
+        },
+        scales: {
+          x: {
+            grid: {
+              display: false
+            },
+            ticks: {
+              maxTicksLimit: 8
+            }
+          },
+          y: {
+            beginAtZero: true,
+            ticks: {
+              maxTicksLimit: 6
+            }
+          }
+        }
+      }
+    });
+
+    // Graphique : répartition séries / films
+    new Chart(document.getElementById("chartCatalog"), {
+      type: "doughnut",
+      data: {
+        labels: ["Séries", "Films"],
+        datasets: [{
+          data: [86, 214],
+          backgroundColor: ["#E50914", "#7C3AED"],
+          borderColor: ["rgba(255,255,255,0.06)", "rgba(255,255,255,0.06)"],
+          borderWidth: 1,
+          hoverOffset: 10
+        }]
+      },
+      options: {
+        responsive: true,
+        maintainAspectRatio: false,
+        cutout: "68%",
+        plugins: {
+          legend: {
+            position: "bottom",
+            labels: {
+              usePointStyle: true
+            }
+          }
+        }
+      }
+    });
+
+    // Graphique : nouveaux utilisateurs par semaine
+    new Chart(document.getElementById("chartUsers"), {
+      type: "bar",
+      data: {
+        labels: ["Lun", "Mar", "Mer", "Jeu", "Ven", "Sam", "Dim"],
+        datasets: [{
+          label: "Nouveaux utilisateurs",
+          data: [2, 4, 1, 5, 3, 6, 4],
+          backgroundColor: "rgba(124, 58, 237, 0.72)",
+          hoverBackgroundColor: "#7C3AED",
+          borderRadius: 999,
+          maxBarThickness: 28
+        }]
+      },
+      options: {
+        responsive: true,
+        maintainAspectRatio: false,
+        plugins: {
+          legend: {
+            display: false
+          }
+        },
+        scales: {
+          x: {
+            grid: {
+              display: false
+            }
+          },
+          y: {
+            beginAtZero: true,
+            ticks: {
+              stepSize: 1,
+              maxTicksLimit: 6
+            }
+          }
+        }
+      }
+    });
+
+    // Graphique : heures de pointe
+    new Chart(document.getElementById("chartPeak"), {
+      type: "bar",
+      data: {
+        labels: ["08h", "10h", "12h", "14h", "16h", "18h", "20h", "21h", "22h", "23h"],
+        datasets: [{
+          label: "Lectures",
+          data: [18, 22, 35, 28, 31, 52, 88, 120, 96, 64],
+          backgroundColor: function (context) {
+            const value = context.raw;
+            return value > 100 ? "rgba(229, 9, 20, 0.82)" : "rgba(229, 9, 20, 0.38)";
+          },
+          borderRadius: 999,
+          maxBarThickness: 24
+        }]
+      },
+      options: {
+        responsive: true,
+        maintainAspectRatio: false,
+        plugins: {
+          legend: {
+            display: false
+          }
+        },
+        scales: {
+          x: {
+            grid: {
+              display: false
+            }
+          },
+          y: {
+            beginAtZero: true,
+            ticks: {
+              maxTicksLimit: 6
+            }
+          }
+        }
+      }
+    });
+  </script>
+</body>
+</html>

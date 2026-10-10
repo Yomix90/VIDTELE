@@ -95,6 +95,7 @@ class AppLocalizations {
   String get navHistory => isArabic ? 'السجل' : (isEnglish ? 'History' : 'Historique');
   String get navSettings => isArabic ? 'الإعدادات' : (isEnglish ? 'Settings' : 'Paramètres');
   String get latestSeriesTitle => isArabic ? 'أحدث المسلسلات المضافة' : (isEnglish ? 'Latest Added Series' : 'Dernières Séries Ajoutées');
+  String get series => isArabic ? 'مسلسلات' : (isEnglish ? 'TV Shows' : 'Séries TV');
 
   // ==================== HOME SCREEN ====================
   String get searchPlaceholder => isArabic

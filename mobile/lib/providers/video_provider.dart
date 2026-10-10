@@ -2,11 +2,15 @@ import 'package:flutter_riverpod/flutter_riverpod.dart';
 import '../core/api/api_client.dart';
 import '../core/constants/api_constants.dart';
 import '../models/category_model.dart';
+import '../models/series_detail_model.dart';
 import '../models/video_model.dart';
 
-/// Provider pour charger l'intégralité du catalogue vidéo.
+/// Provider pour charger l'intégralité du catalogue vidéo autonome (films, documentaires, hors épisodes de séries).
 final videoListProvider = FutureProvider.autoDispose<List<VideoModel>>((ref) async {
-  final res = await apiClient.dio.get(ApiConstants.videos, queryParameters: {'limit': 100});
+  final res = await apiClient.dio.get(
+    ApiConstants.videos,
+    queryParameters: {'limit': 100, 'exclude_episodes': true},
+  );
   if (res.statusCode == 200) {
     final List items = res.data['items'] ?? [];
     return items.map((e) => VideoModel.fromJson(e)).toList();
@@ -147,4 +151,27 @@ final latestSeriesProvider = FutureProvider.autoDispose<List<SeriesItemModel>>((
   } catch (_) {}
   return [];
 });
+
+/// Provider pour récupérer la liste de toutes les séries TV publiées.
+final seriesListProvider = FutureProvider.autoDispose<List<SeriesDetailModel>>((ref) async {
+  try {
+    final res = await apiClient.dio.get(ApiConstants.series);
+    if (res.statusCode == 200 && res.data is List) {
+      return (res.data as List).map((e) => SeriesDetailModel.fromJson(e)).toList();
+    }
+  } catch (_) {}
+  return [];
+});
+
+/// Provider pour charger le détail complet d'une série avec ses saisons et épisodes.
+final seriesDetailProvider = FutureProvider.family.autoDispose<SeriesDetailModel?, int>((ref, seriesId) async {
+  try {
+    final res = await apiClient.dio.get(ApiConstants.seriesDetail(seriesId));
+    if (res.statusCode == 200 && res.data != null) {
+      return SeriesDetailModel.fromJson(res.data);
+    }
+  } catch (_) {}
+  return null;
+});
+
 

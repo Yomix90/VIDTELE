@@ -11,6 +11,7 @@ import '../../providers/video_provider.dart';
 import '../../widgets/top_number_card.dart';
 import '../../widgets/video_card.dart';
 import '../player/video_player_screen.dart';
+import '../series/series_detail_screen.dart';
 
 /// Écran d'accueil immersif style Netflix pour VidTele.
 class HomeScreen extends ConsumerStatefulWidget {
@@ -239,6 +240,9 @@ class _HomeScreenState extends ConsumerState<HomeScreen> {
                     // 0. Slider / Carousel des Dernières Séries Ajoutées
                     _buildLatestSeriesSlider(l10n),
 
+                    // 0.bis Section Catalogue des Séries TV
+                    _buildSeriesSection(l10n),
+
                     // A. Rangée "Continuer la lecture" (si historique en cours)
                     if (continueWatching.isNotEmpty) ...[
                       _buildSectionHeader(l10n.continueWatching),
@@ -358,7 +362,6 @@ class _HomeScreenState extends ConsumerState<HomeScreen> {
   /// Section Slider / Carousel des Dernières Séries Ajoutées
   Widget _buildLatestSeriesSlider(AppLocalizations l10n) {
     final latestSeriesAsync = ref.watch(latestSeriesProvider);
-    final videoList = ref.watch(videoListProvider).value ?? [];
 
     return latestSeriesAsync.when(
       data: (seriesList) {
@@ -385,26 +388,16 @@ class _HomeScreenState extends ConsumerState<HomeScreen> {
 
                       return GestureDetector(
                         onTap: () {
-                          if (s.firstVideoId != null) {
-                            final targetVid = videoList.firstWhere(
-                              (v) => v.id == s.firstVideoId,
-                              orElse: () => VideoModel(
-                                id: s.firstVideoId!,
-                                telegramMessageId: 0,
-                                title: s.title,
-                                category: 'Série',
-                                durationSeconds: 0,
-                                fileSizeBytes: 0,
-                                mimeType: 'video/mp4',
-                                thumbnailPath: s.posterPath,
-                                viewsCount: 0,
-                                isFavorite: false,
-                                watchProgressSeconds: 0.0,
-                                isCompleted: false,
+                          Navigator.push(
+                            context,
+                            MaterialPageRoute(
+                              builder: (_) => SeriesDetailScreen(
+                                seriesId: s.id,
+                                initialTitle: s.title,
+                                initialPoster: s.posterPath,
                               ),
-                            );
-                            _onVideoSelected(targetVid, videoList);
-                          }
+                            ),
+                          );
                         },
                         child: Container(
                           width: 145,
@@ -513,6 +506,142 @@ class _HomeScreenState extends ConsumerState<HomeScreen> {
                                           '${s.year}',
                                           style: const TextStyle(color: Colors.white54, fontSize: 10),
                                         ),
+                                    ],
+                                  ),
+                                ),
+                              ],
+                            ),
+                          ),
+                        ),
+                      );
+                    },
+                  );
+                },
+              ),
+            ),
+            const SizedBox(height: 24),
+          ],
+        );
+      },
+      loading: () => const SizedBox.shrink(),
+      error: (_, __) => const SizedBox.shrink(),
+    );
+  }
+
+  /// Section Catalogue des Séries TV (affiche les cartes des séries qui s'ouvrent vers la liste des épisodes)
+  Widget _buildSeriesSection(AppLocalizations l10n) {
+    final seriesListAsync = ref.watch(seriesListProvider);
+
+    return seriesListAsync.when(
+      data: (seriesList) {
+        if (seriesList.isEmpty) return const SizedBox.shrink();
+
+        return Column(
+          crossAxisAlignment: CrossAxisAlignment.start,
+          children: [
+            _buildSectionHeader(l10n.series),
+            SizedBox(
+              height: 205,
+              child: FutureBuilder<String>(
+                future: storageService.getServerUrl(),
+                builder: (context, snapshot) {
+                  final baseUrl = snapshot.data ?? ApiConstants.defaultBaseUrl;
+
+                  return ListView.builder(
+                    scrollDirection: Axis.horizontal,
+                    padding: const EdgeInsets.symmetric(horizontal: 16),
+                    itemCount: seriesList.length,
+                    itemBuilder: (context, index) {
+                      final s = seriesList[index];
+                      final posterUrl = ImageUtils.resolveUrl(s.posterPath ?? s.bannerPath, baseUrl);
+
+                      return GestureDetector(
+                        onTap: () {
+                          Navigator.push(
+                            context,
+                            MaterialPageRoute(
+                              builder: (_) => SeriesDetailScreen(
+                                seriesId: s.id,
+                                initialTitle: s.titleFr,
+                                initialPoster: s.posterPath,
+                              ),
+                            ),
+                          );
+                        },
+                        child: Container(
+                          width: 135,
+                          margin: const EdgeInsets.only(right: 12),
+                          decoration: BoxDecoration(
+                            color: AppTheme.netflixCard,
+                            borderRadius: BorderRadius.circular(8),
+                            boxShadow: [
+                              BoxShadow(
+                                color: Colors.black.withValues(alpha: 0.5),
+                                blurRadius: 6,
+                                offset: const Offset(0, 3),
+                              ),
+                            ],
+                          ),
+                          child: ClipRRect(
+                            borderRadius: BorderRadius.circular(8),
+                            child: Stack(
+                              fit: StackFit.expand,
+                              children: [
+                                if (posterUrl != null && posterUrl.isNotEmpty)
+                                  CachedNetworkImage(
+                                    imageUrl: posterUrl,
+                                    fit: BoxFit.cover,
+                                    placeholder: (context, url) => Container(color: const Color(0xFF1F1F1F)),
+                                    errorWidget: (context, url, error) => Container(
+                                      color: const Color(0xFF1F1F1F),
+                                      child: const Icon(Icons.tv, size: 40, color: Colors.white24),
+                                    ),
+                                  )
+                                else
+                                  Container(
+                                    color: const Color(0xFF1F1F1F),
+                                    child: const Icon(Icons.tv, size: 40, color: Colors.white24),
+                                  ),
+                                Positioned.fill(
+                                  child: Container(
+                                    decoration: BoxDecoration(
+                                      gradient: LinearGradient(
+                                        begin: Alignment.topCenter,
+                                        end: Alignment.bottomCenter,
+                                        colors: [
+                                          Colors.transparent,
+                                          Colors.black.withValues(alpha: 0.85),
+                                        ],
+                                        stops: const [0.55, 1.0],
+                                      ),
+                                    ),
+                                  ),
+                                ),
+                                Positioned(
+                                  bottom: 8,
+                                  left: 8,
+                                  right: 8,
+                                  child: Column(
+                                    crossAxisAlignment: CrossAxisAlignment.start,
+                                    mainAxisSize: MainAxisSize.min,
+                                    children: [
+                                      Text(
+                                        s.titleFr,
+                                        maxLines: 1,
+                                        overflow: TextOverflow.ellipsis,
+                                        style: const TextStyle(
+                                          color: Colors.white,
+                                          fontSize: 12.5,
+                                          fontWeight: FontWeight.bold,
+                                        ),
+                                      ),
+                                      Text(
+                                        '${s.seasonsCount} saison(s) · ${s.episodesCount} ép.',
+                                        style: const TextStyle(
+                                          color: Colors.white60,
+                                          fontSize: 10,
+                                        ),
+                                      ),
                                     ],
                                   ),
                                 ),

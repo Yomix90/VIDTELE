@@ -6,7 +6,7 @@ from typing import Optional
 from fastapi import APIRouter, Depends, HTTPException, Request
 from fastapi.responses import HTMLResponse, RedirectResponse
 from fastapi.templating import Jinja2Templates
-from sqlalchemy import desc, func, select
+from sqlalchemy import desc, func, select, or_
 from sqlalchemy.ext.asyncio import AsyncSession
 from sqlalchemy.orm import selectinload
 
@@ -306,14 +306,59 @@ async def admin_movies_page(
 @router.get("/admin/raw-videos", response_class=HTMLResponse)
 async def admin_raw_videos_page(
     request: Request,
+    filter: Optional[str] = None,
+    q: Optional[str] = None,
     db: AsyncSession = Depends(get_db),
 ):
-    """Sert la bibliothèque brute des vidéos Telegram."""
+    """Sert la bibliothèque brute des vidéos Telegram avec filtrage des vidéos non classées."""
     admin_user = await get_web_admin(request, db)
     if not admin_user:
         return RedirectResponse(url=f"/admin/login?next={request.url.path}", status_code=303)
 
-    raw_videos = (await db.execute(select(Video).order_by(desc(Video.telegram_date)).limit(100))).scalars().all()
+    # Récupérer les IDs des vidéos déjà associées à un épisode ou un film
+    assigned_subq_ep = select(Episode.telegram_video_id).where(Episode.telegram_video_id.isnot(None))
+    assigned_subq_mov = select(Movie.telegram_video_id).where(Movie.telegram_video_id.isnot(None))
+
+    assigned_ep_ids = set((await db.execute(assigned_subq_ep)).scalars().all())
+    assigned_mov_ids = set((await db.execute(assigned_subq_mov)).scalars().all())
+    all_assigned_ids = assigned_ep_ids | assigned_mov_ids
+
+    # Compteurs totaux
+    total_count = (await db.execute(select(func.count(Video.id)))).scalar_one() or 0
+    assigned_count = len(all_assigned_ids)
+    unassigned_count = max(0, total_count - assigned_count)
+
+    active_filter = filter if filter in ("unassigned", "assigned", "all") else "all"
+
+    stmt = select(Video)
+    if active_filter == "unassigned":
+        if all_assigned_ids:
+            stmt = stmt.where(Video.id.not_in(all_assigned_ids))
+    elif active_filter == "assigned":
+        if all_assigned_ids:
+            stmt = stmt.where(Video.id.in_(all_assigned_ids))
+        else:
+            stmt = stmt.where(Video.id == -1)
+
+    if q:
+        search_pattern = f"%{q.strip()}%"
+        stmt = stmt.where(
+            or_(
+                Video.title.ilike(search_pattern),
+                Video.file_name.ilike(search_pattern),
+            )
+        )
+
+    stmt = stmt.order_by(desc(Video.telegram_date)).limit(300)
+    raw_videos = (await db.execute(stmt)).scalars().all()
+
+    # Liste de toutes les séries existantes avec leurs saisons pour l'attribution par lots
+    series_stmt = (
+        select(Series)
+        .options(selectinload(Series.seasons))
+        .order_by(Series.title_fr)
+    )
+    existing_series = (await db.execute(series_stmt)).scalars().all()
 
     return templates.TemplateResponse(
         request=request,
@@ -321,6 +366,13 @@ async def admin_raw_videos_page(
         context={
             "active_page": "raw_videos",
             "raw_videos": raw_videos,
+            "assigned_ids": all_assigned_ids,
+            "total_count": total_count,
+            "unassigned_count": unassigned_count,
+            "assigned_count": assigned_count,
+            "active_filter": active_filter,
+            "search_query": q or "",
+            "existing_series": existing_series,
             "current_user": admin_user,
         },
     )

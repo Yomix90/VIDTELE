@@ -20,6 +20,7 @@ from app.schemas import (
     AdminStatsResponse,
     BatchDeleteVideosRequest,
     BatchSeriesCreate,
+    BatchAddToExistingSeries,
     CacheStats,
     EpisodeAssignRequest,
     EpisodeCreate,
@@ -2213,6 +2214,151 @@ async def create_series_from_batch(
         "seasons_count": len(seasons_cache),
         "episodes_count": episodes_created,
         "message": f"Série '{new_series.title_fr}' créée avec succès avec {len(seasons_cache)} saison(s) et {episodes_created} épisode(s) liés !",
+    }
+
+
+@router.post("/series/batch-add-videos")
+async def add_videos_to_existing_series(
+    data: BatchAddToExistingSeries,
+    current_admin: User = Depends(get_current_admin),
+    db: AsyncSession = Depends(get_db),
+):
+    """
+    Associe un lot de vidéos brutes à une série existante,
+    avec détection automatique ou manuelle de la saison et des numéros d'épisodes.
+    """
+    if not data.video_ids:
+        raise HTTPException(status_code=400, detail="Veuillez sélectionner au moins une vidéo.")
+
+    series = (await db.execute(select(Series).where(Series.id == data.series_id))).scalar_one_or_none()
+    if not series:
+        raise HTTPException(status_code=404, detail="Série introuvable.")
+
+    # Récupérer les saisons existantes de la série
+    seasons_res = (await db.execute(select(Season).where(Season.series_id == series.id))).scalars().all()
+    seasons_cache: Dict[int, Season] = {s.number: s for s in seasons_res}
+
+    # Si une saison spécifique a été choisie
+    forced_season = None
+    if data.season_id:
+        forced_season = next((s for s in seasons_res if s.id == data.season_id), None)
+        if not forced_season:
+            raise HTTPException(status_code=404, detail="Saison sélectionnée introuvable dans cette série.")
+
+    # Charger les vidéos
+    videos = (await db.execute(select(Video).where(Video.id.in_(data.video_ids)))).scalars().all()
+    if not videos:
+        raise HTTPException(status_code=404, detail="Aucune vidéo valide trouvée pour cette sélection.")
+
+    # Trouver le numéro d'épisode le plus élevé par saison
+    episodes_res = (await db.execute(
+        select(Episode)
+        .join(Season, Episode.season_id == Season.id)
+        .where(Season.series_id == series.id)
+    )).scalars().all()
+
+    # Dictionnaire (season_number, episode_number) -> Episode
+    existing_episodes_map: Dict[tuple, Episode] = {}
+    max_ep_per_season: Dict[int, int] = {}
+    for ep in episodes_res:
+        s_obj = next((s for s in seasons_res if s.id == ep.season_id), None)
+        if s_obj:
+            existing_episodes_map[(s_obj.number, ep.number)] = ep
+            max_ep_per_season[s_obj.number] = max(max_ep_per_season.get(s_obj.number, 0), ep.number)
+
+    # Analyser les vidéos
+    parsed_items = []
+    for idx, v in enumerate(videos):
+        text = v.file_name or v.title or v.caption or f"Episode {idx+1}"
+        parsed = parser_service.parse_video_title(text) if data.auto_detect else {
+            "season": forced_season.number if forced_season else 1,
+            "episode": None,
+            "clean_title": f"Épisode {idx + 1}",
+        }
+
+        s_num = forced_season.number if forced_season else (parsed.get("season") or 1)
+        ep_num = parsed.get("episode")
+        clean_title = parsed.get("clean_title") or (f"Épisode {ep_num}" if ep_num else f"Épisode {idx + 1}")
+
+        parsed_items.append({
+            "video": v,
+            "season_num": s_num,
+            "episode_num": ep_num,
+            "clean_title": clean_title,
+        })
+
+    # Trier par saison puis par numéro d'épisode
+    parsed_items.sort(key=lambda x: (x["season_num"], x["episode_num"] or 0, x["video"].file_name or x["video"].title))
+
+    episodes_assigned = 0
+    for item in parsed_items:
+        s_num = item["season_num"]
+
+        # S'assurer que la saison existe
+        if s_num not in seasons_cache:
+            new_season = Season(
+                series_id=series.id,
+                number=s_num,
+                title_fr=f"Saison {s_num}",
+                title_ar=f"الموسم {s_num}",
+                order_index=s_num,
+            )
+            db.add(new_season)
+            await db.flush()
+            seasons_cache[s_num] = new_season
+            target_season = new_season
+        else:
+            target_season = seasons_cache[s_num]
+
+        # Déterminer le numéro d'épisode
+        ep_num = item["episode_num"]
+        if ep_num is None:
+            ep_num = max_ep_per_season.get(s_num, 0) + 1
+
+        max_ep_per_season[s_num] = max(max_ep_per_season.get(s_num, 0), ep_num)
+
+        v = item["video"]
+        v.is_published = data.publish
+        v.season_number = s_num
+        v.episode_number = ep_num
+        v.title = f"{series.title_fr} - S{s_num:02d}E{ep_num:02d}"
+
+        # Vérifier si cet épisode existe déjà dans cette saison
+        existing_ep = existing_episodes_map.get((s_num, ep_num))
+        if existing_ep:
+            existing_ep.telegram_video_id = v.id
+            if v.duration_seconds and not existing_ep.duration_sec:
+                existing_ep.duration_sec = v.duration_seconds
+            if not existing_ep.thumbnail_path:
+                existing_ep.thumbnail_path = v.thumbnail_path or series.poster_path
+        else:
+            new_ep = Episode(
+                season_id=target_season.id,
+                number=ep_num,
+                title_fr=item["clean_title"],
+                title_ar=f"الحلقة {ep_num}",
+                duration_sec=v.duration_seconds,
+                thumbnail_path=v.thumbnail_path or series.poster_path,
+                telegram_video_id=v.id,
+                order_index=ep_num,
+            )
+            db.add(new_ep)
+            existing_episodes_map[(s_num, ep_num)] = new_ep
+
+        episodes_assigned += 1
+
+    if data.publish and series.visibility == "draft":
+        series.visibility = "published"
+
+    await db.commit()
+    await db.refresh(series)
+
+    return {
+        "success": True,
+        "series_id": series.id,
+        "title": series.title_fr,
+        "added_count": episodes_assigned,
+        "message": f"{episodes_assigned} vidéo(s) ajoutée(s) avec succès à la série '{series.title_fr}' !",
     }
 
 

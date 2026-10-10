@@ -36,6 +36,12 @@ class VideoParserService:
         re.compile(r"\b(?:saison|season)[\s_.-]?(?P<season>\d{1,2})[\s_.-]+(?:episode|ep)[\s_.-]?(?P<episode>\d{1,3})\b", re.IGNORECASE),
         # Episode 02 / Ep 02 / Ep. 02 / الحلقة 02
         re.compile(r"\b(?:episode|ep|épisode|الحلقة)[\s_.-]?(?P<episode>\d{1,3})\b", re.IGNORECASE),
+        # E02 / E2 / e01
+        re.compile(r"(?:^|[\._\s-])[eE](?P<episode>\d{1,3})(?:[\._\s-]|$)", re.IGNORECASE),
+        # Part 1 / Partie 2
+        re.compile(r"\b(?:part|partie)[\s_.-]?(?P<episode>\d{1,3})\b", re.IGNORECASE),
+        # Fin de chaîne se terminant par un numéro (ex: Breaking Bad 01, Series - 12)
+        re.compile(r"[\s_.-](?:#)?(?P<episode>\d{1,3})$", re.IGNORECASE),
     ]
 
     # Motif pour détecter une année (1950 - 2030)

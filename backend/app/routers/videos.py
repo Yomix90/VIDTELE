@@ -26,6 +26,7 @@ async def get_videos(
     limit: int = Query(20, ge=1, le=100, description="Nombre d'éléments par page"),
     q: Optional[str] = Query(None, description="Recherche textuelle dans le titre et la légende"),
     category: Optional[str] = Query(None, description="Filtrer par catégorie"),
+    exclude_episodes: bool = Query(True, description="Exclure les épisodes de séries pour afficher seulement les films et vidéos autonomes"),
     sort: str = Query("date_desc", pattern="^(date_desc|date_asc|views_desc|duration_desc)$"),
     current_user: User = Depends(get_current_active_user),
     db: AsyncSession = Depends(get_db),
@@ -35,6 +36,11 @@ async def get_videos(
     Inclut l'état de favori et la progression de lecture de l'utilisateur connecté.
     """
     query = select(Video).where(Video.is_published == True)
+
+    # Exclure les épisodes rattachés à des séries pour ne pas afficher chaque épisode séparément
+    if exclude_episodes and not q:
+        ep_subq = select(Episode.telegram_video_id).where(Episode.telegram_video_id.isnot(None))
+        query = query.where(Video.id.not_in(ep_subq))
 
     # Filtrage par mot-clé (insensible à la casse)
     if q:
@@ -456,3 +462,194 @@ async def get_latest_series_slider(
             "first_video_id": first_video_id,
         })
     return out
+
+
+@router.get("/series")
+async def list_public_series(
+    page: int = Query(1, ge=1),
+    limit: int = Query(30, ge=1, le=100),
+    q: Optional[str] = Query(None),
+    current_user: User = Depends(get_current_active_user),
+    db: AsyncSession = Depends(get_db),
+):
+    """
+    Retourne la liste des séries publiées pour le catalogue mobile (sans afficher les épisodes séparément).
+    """
+    stmt = select(Series).where(Series.visibility == "published")
+    if q:
+        search_pattern = f"%{q.strip()}%"
+        stmt = stmt.where(
+            or_(
+                Series.title_fr.ilike(search_pattern),
+                Series.title_ar.ilike(search_pattern),
+                Series.title_en.ilike(search_pattern),
+                Series.synopsis_fr.ilike(search_pattern),
+            )
+        )
+    stmt = stmt.order_by(desc(Series.created_at)).offset((page - 1) * limit).limit(limit)
+    series_list = (await db.execute(stmt)).scalars().all()
+
+    out = []
+    for s in series_list:
+        seasons = (await db.execute(select(Season).where(Season.series_id == s.id))).scalars().all()
+        season_ids = [sn.id for sn in seasons]
+        episodes_count = 0
+        if season_ids:
+            episodes_count = (await db.execute(
+                select(func.count(Episode.id)).where(Episode.season_id.in_(season_ids))
+            )).scalar_one() or 0
+
+        out.append({
+            "id": s.id,
+            "slug": s.slug,
+            "title_fr": s.title_fr,
+            "title_ar": s.title_ar,
+            "title_en": s.title_en,
+            "synopsis_fr": s.synopsis_fr,
+            "synopsis_ar": s.synopsis_ar,
+            "synopsis_en": s.synopsis_en,
+            "year_start": s.year_start,
+            "rating": s.rating,
+            "status": s.status,
+            "poster_path": s.poster_path,
+            "banner_path": s.banner_path or s.poster_path,
+            "seasons_count": len(seasons),
+            "episodes_count": episodes_count,
+            "created_at": s.created_at,
+        })
+    return out
+
+
+@router.get("/series/{series_id}")
+async def get_public_series_detail(
+    series_id: int,
+    current_user: User = Depends(get_current_active_user),
+    db: AsyncSession = Depends(get_db),
+):
+    """
+    Récupère le détail complet d'une série avec sa table des saisons et épisodes
+    strictement ordonnés par numéro d'épisode croissant (E01, E02...) et progression utilisateur.
+    """
+    series = (await db.execute(select(Series).where(Series.id == series_id))).scalar_one_or_none()
+    if not series:
+        raise HTTPException(status_code=404, detail="Série introuvable.")
+
+    seasons = (await db.execute(
+        select(Season)
+        .where(Season.series_id == series.id)
+        .order_by(Season.number.asc(), Season.order_index.asc())
+    )).scalars().all()
+
+    season_ids = [s.id for s in seasons]
+    episodes = []
+    if season_ids:
+        episodes = (await db.execute(
+            select(Episode)
+            .where(Episode.season_id.in_(season_ids))
+            .order_by(Episode.number.asc(), Episode.order_index.asc())
+        )).scalars().all()
+
+    video_ids = [ep.telegram_video_id for ep in episodes if ep.telegram_video_id]
+    user_history_map = {}
+    if video_ids:
+        hist_stmt = select(WatchHistory).where(
+            WatchHistory.user_id == current_user.id,
+            WatchHistory.video_id.in_(video_ids),
+        )
+        for h in (await db.execute(hist_stmt)).scalars().all():
+            user_history_map[h.video_id] = (h.position_seconds, h.completed, h.last_watched_at)
+
+    video_map = {}
+    if video_ids:
+        v_res = await db.execute(select(Video).where(Video.id.in_(video_ids)))
+        for v in v_res.scalars().all():
+            video_map[v.id] = v
+
+    seasons_out = []
+    last_watched_ep = None
+    latest_watched_time = None
+
+    for s in seasons:
+        s_eps = [ep for ep in episodes if ep.season_id == s.id]
+        # Ordre croissant absolu par numéro d'épisode
+        s_eps.sort(key=lambda x: (x.number, x.order_index))
+
+        eps_out = []
+        for ep in s_eps:
+            vid = video_map.get(ep.telegram_video_id) if ep.telegram_video_id else None
+            pos, completed, last_time = user_history_map.get(ep.telegram_video_id, (0.0, False, None))
+
+            if last_time and (latest_watched_time is None or last_time > latest_watched_time):
+                latest_watched_time = last_time
+                last_watched_ep = ep.id
+
+            effective_thumb = ep.thumbnail_path or (vid.thumbnail_path if vid else None) or series.poster_path
+            effective_duration = ep.duration_sec or (vid.duration_seconds if vid else 0)
+
+            eps_out.append({
+                "id": ep.id,
+                "season_id": ep.season_id,
+                "season_number": s.number,
+                "number": ep.number,
+                "title_fr": ep.title_fr or f"Épisode {ep.number}",
+                "title_ar": ep.title_ar,
+                "title_en": ep.title_en,
+                "synopsis_fr": ep.synopsis_fr,
+                "synopsis_ar": ep.synopsis_ar,
+                "synopsis_en": ep.synopsis_en,
+                "duration_sec": effective_duration,
+                "thumbnail_path": effective_thumb,
+                "telegram_video_id": ep.telegram_video_id,
+                "video": {
+                    "id": vid.id if vid else ep.telegram_video_id or 0,
+                    "telegram_message_id": vid.telegram_message_id if vid else 0,
+                    "title": f"{series.title_fr} - S{s.number:02d}E{ep.number:02d}" + (f" : {ep.title_fr}" if ep.title_fr else ""),
+                    "category": "Série",
+                    "duration_seconds": effective_duration,
+                    "file_size_bytes": vid.file_size_bytes if vid else 0,
+                    "mime_type": vid.mime_type if vid else "video/mp4",
+                    "thumbnail_path": effective_thumb,
+                    "file_name": vid.file_name if vid else None,
+                    "views_count": vid.views_count if vid else 0,
+                    "telegram_date": vid.telegram_date if vid else series.created_at,
+                    "is_published": True,
+                    "season_number": s.number,
+                    "episode_number": ep.number,
+                    "episode_title": ep.title_fr,
+                    "is_favorite": False,
+                    "watch_progress_seconds": pos,
+                    "is_completed": completed,
+                } if vid else None,
+                "watch_progress_seconds": pos,
+                "is_completed": completed,
+            })
+
+        seasons_out.append({
+            "id": s.id,
+            "number": s.number,
+            "title_fr": s.title_fr or f"Saison {s.number}",
+            "title_ar": s.title_ar,
+            "poster_path": s.poster_path,
+            "episode_count": len(eps_out),
+            "episodes": eps_out,
+        })
+
+    return {
+        "id": series.id,
+        "slug": series.slug,
+        "title_fr": series.title_fr,
+        "title_ar": series.title_ar,
+        "title_en": series.title_en,
+        "synopsis_fr": series.synopsis_fr,
+        "synopsis_ar": series.synopsis_ar,
+        "synopsis_en": series.synopsis_en,
+        "year_start": series.year_start,
+        "rating": series.rating,
+        "status": series.status,
+        "poster_path": series.poster_path,
+        "banner_path": series.banner_path or series.poster_path,
+        "seasons_count": len(seasons_out),
+        "episodes_count": len(episodes),
+        "last_watched_episode_id": last_watched_ep,
+        "seasons": seasons_out,
+    }
