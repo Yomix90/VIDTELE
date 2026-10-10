@@ -3,6 +3,7 @@ Point d'entrée principal de l'application VidTele (FastAPI).
 """
 import asyncio
 import logging
+import secrets
 from contextlib import asynccontextmanager
 from datetime import datetime, timezone
 from typing import Optional
@@ -12,12 +13,18 @@ from sqlalchemy import select
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from typing import List, Optional
-from app.config import settings
+from app.config import (
+    PUBLIC_DEFAULT_ADMIN_PASSWORDS,
+    SECRET_KEY_SOURCE,
+    get_data_dir,
+    settings,
+    write_private_file,
+)
 from app.database import AsyncSessionLocal, get_db, init_db
 from app.models import InviteCode, User
 from app.routers import admin, admin_web, ads, auth, library, videos
 from app.schemas import FeedResponse, HomeScreenResponse, TopSeriesItem
-from app.security import get_current_active_user, hash_password
+from app.security import get_current_active_user, hash_password, verify_password
 from app.services.sync_service import sync_service
 from app.telegram_client import telegram_manager
 
@@ -37,11 +44,25 @@ async def bootstrap_admin_and_invites():
         result_admin = await db.execute(stmt_admin)
         admin = result_admin.scalar_one_or_none()
 
+        env_password = (settings.ADMIN_DEFAULT_PASSWORD or "").strip()
+        env_password_is_public = env_password in PUBLIC_DEFAULT_ADMIN_PASSWORDS
+
         if not admin:
-            logger.info("Aucun compte administrateur trouvé. Création de l'administrateur par défaut...")
+            logger.info("Aucun compte administrateur trouvé. Création de l'administrateur initial...")
+            if env_password_is_public:
+                # Jamais de mot de passe public : on en génère un, écrit dans un fichier privé (pas dans les logs)
+                initial_password = secrets.token_urlsafe(18)
+                password_file = get_data_dir() / "admin_initial_password.txt"
+                write_private_file(password_file, initial_password + "\n")
+                logger.warning(
+                    f"ADMIN_DEFAULT_PASSWORD absent ou public : mot de passe généré dans {password_file} "
+                    "(à changer puis supprimer le fichier)."
+                )
+            else:
+                initial_password = env_password
             admin = User(
                 username=settings.ADMIN_DEFAULT_USERNAME,
-                hashed_password=hash_password(settings.ADMIN_DEFAULT_PASSWORD),
+                hashed_password=hash_password(initial_password),
                 role="admin",
                 is_active=True,
                 max_concurrent_streams=5,
@@ -49,10 +70,27 @@ async def bootstrap_admin_and_invites():
             db.add(admin)
             await db.flush()
             logger.info(f"==> Administrateur créé: '{settings.ADMIN_DEFAULT_USERNAME}'")
-        else:
-            admin.hashed_password = hash_password(settings.ADMIN_DEFAULT_PASSWORD)
-            admin.is_active = True
-            logger.info(f"==> Mot de passe administrateur synchronisé pour '{admin.username}'")
+        elif settings.ADMIN_RESET_PASSWORD:
+            # Procédure de secours explicite : réinitialisation depuis la variable d'environnement
+            if env_password_is_public:
+                logger.error("ADMIN_RESET_PASSWORD=true ignoré : ADMIN_DEFAULT_PASSWORD est vide ou public.")
+            else:
+                admin.hashed_password = hash_password(env_password)
+                admin.is_active = True
+                logger.warning(
+                    f"==> Mot de passe de '{admin.username}' réinitialisé (ADMIN_RESET_PASSWORD=true). "
+                    "Retirez cette variable puis redémarrez."
+                )
+        # Sinon : le mot de passe en base est conservé (les changements faits depuis l'admin persistent)
+
+        # Alerte si un compte admin utilise encore un mot de passe publié dans le dépôt
+        res_admins = await db.execute(select(User).where(User.role == "admin"))
+        for adm in res_admins.scalars().all():
+            if any(verify_password(p, adm.hashed_password) for p in PUBLIC_DEFAULT_ADMIN_PASSWORDS if p):
+                logger.critical(
+                    f"Le compte admin '{adm.username}' utilise un mot de passe PUBLIC (présent dans le dépôt). "
+                    "Changez-le immédiatement."
+                )
 
 
         # 2. Vérifier si le code de bienvenue existe déjà (qu'il soit utilisé ou non)
@@ -77,6 +115,8 @@ async def bootstrap_admin_and_invites():
 async def lifespan(app: FastAPI):
     """Cycle de vie de l'application FastAPI."""
     logger.info("Démarrage de l'application VidTele...")
+    if SECRET_KEY_SOURCE == "generated":
+        logger.critical("SECRET_KEY non définie (ou publique) : clé générée et stockée dans le dossier de données.")
     # Initialisation de la base SQLite
     await init_db()
     # Amorçage admin et invitations
