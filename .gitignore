@@ -9,6 +9,7 @@ backend/.venv/
 backend/cache/
 backend/thumbnails/
 backend/data/
+backend/app/static/uploads/apk/
 data/
 *.db
 *.db-*

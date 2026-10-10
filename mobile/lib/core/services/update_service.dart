@@ -3,6 +3,7 @@ import 'package:url_launcher/url_launcher.dart';
 import '../api/api_client.dart';
 import '../constants/api_constants.dart';
 import '../localization/app_localizations.dart';
+import '../storage/storage_service.dart';
 import '../theme/app_theme.dart';
 
 /// Service gérant la détection et l'affichage des mises à jour de l'application Atlas Play.
@@ -134,7 +135,12 @@ class UpdateService {
             ElevatedButton(
               onPressed: () async {
                 if (downloadUrl != null && downloadUrl.isNotEmpty) {
-                  final uri = Uri.tryParse(downloadUrl);
+                  String fullUrl = downloadUrl;
+                  if (!fullUrl.startsWith('http://') && !fullUrl.startsWith('https://')) {
+                    final baseUrl = await storageService.getServerUrl();
+                    fullUrl = '$baseUrl${fullUrl.startsWith('/') ? '' : '/'}$fullUrl';
+                  }
+                  final uri = Uri.tryParse(fullUrl);
                   if (uri != null && await canLaunchUrl(uri)) {
                     await launchUrl(uri, mode: LaunchMode.externalApplication);
                   }
