@@ -81,9 +81,16 @@
           </div>
           <div class="col-12 col-md-4">
             <label class="form-label small">Lien de téléchargement (APK Direct)</label>
-            <input type="url" id="upDownloadUrl" class="form-control" placeholder="https://digitlab.dev/atlas-play.apk" value="{{ app_update.download_url }}">
-            <div class="text-muted" style="font-size: 0.75rem;">URL directe de téléchargement ou lien de mise à jour.</div>
+            <div class="input-group">
+              <input type="text" id="upDownloadUrl" class="form-control" placeholder="/static/uploads/apk/atlas-play.apk" value="{{ app_update.download_url }}">
+              <label class="btn btn-outline-warning" for="uploadApkFileInput" title="Téléverser un nouveau fichier APK sur le VPS">
+                <i class="bi bi-cloud-arrow-up-fill me-1"></i>Uploader APK
+              </label>
+              <input type="file" id="uploadApkFileInput" class="d-none" accept=".apk" onchange="uploadApkToServer()">
+            </div>
+            <div class="text-muted" style="font-size: 0.75rem;">URL ou fichier APK hébergé directement sur le serveur VPS.</div>
           </div>
+
           <div class="col-12 col-md-8">
             <label class="form-label small">Titre de la mise à jour</label>
             <input type="text" id="upTitle" class="form-control" placeholder="ex: Atlas Play 1.1.0 - Performances & Nouvelles Séries" value="{{ app_update.title }}">
@@ -256,6 +263,38 @@ async function saveAppUpdate(e) {
     showToast('Erreur serveur', 'error');
   }
 }
+
+async function uploadApkToServer() {
+  const fileInput = document.getElementById('uploadApkFileInput');
+  if (!fileInput.files || !fileInput.files[0]) return;
+  const file = fileInput.files[0];
+
+  if (!file.name.toLowerCase().endsWith('.apk')) {
+    showToast('Veuillez sélectionner un fichier se terminant par .apk', 'warning');
+    return;
+  }
+
+  const formData = new FormData();
+  formData.append('file', file);
+
+  showToast(`Téléversement du fichier APK (${(file.size / 1024 / 1024).toFixed(1)} Mo) sur le serveur VPS...`, 'info');
+  try {
+    const res = await fetch('/api/admin/upload-apk', {
+      method: 'POST',
+      body: formData,
+    });
+    const data = await res.json();
+    if (res.ok && data.success) {
+      document.getElementById('upDownloadUrl').value = data.download_url;
+      showToast(data.message || 'Fichier APK téléversé avec succès sur le VPS !', 'success');
+    } else {
+      showToast(data.detail || 'Erreur lors du téléversement de l\'APK', 'error');
+    }
+  } catch (e) {
+    showToast('Erreur réseau lors du téléversement de l\'APK', 'error');
+  }
+}
 </script>
+
 {% endblock %}
 

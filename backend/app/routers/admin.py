@@ -1687,6 +1687,53 @@ async def upload_image_to_vps(
 
 
 # =============================================================
+# 12 bis. Téléversement d'APK Mobile Atlas Play sur le Serveur VPS
+# =============================================================
+
+@router.post("/upload-apk")
+async def upload_apk_to_vps(
+    file: UploadFile = File(...),
+    current_admin: User = Depends(get_current_admin),
+):
+    """
+    Sauvegarde un fichier d'application Android (.apk) sur le serveur VPS dans /static/uploads/apk/.
+    Renvoie l'URL publique directe de téléchargement.
+    """
+    ext = os.path.splitext(file.filename)[1].lower() if file.filename else ".apk"
+    if ext != ".apk":
+        raise HTTPException(
+            status_code=400,
+            detail="Seuls les fichiers avec l'extension .apk sont autorisés.",
+        )
+
+    upload_dir = Path("app/static/uploads/apk")
+    upload_dir.mkdir(parents=True, exist_ok=True)
+
+    safe_original_name = os.path.basename(file.filename) if file.filename else "atlas-play.apk"
+    base_name = os.path.splitext(safe_original_name)[0]
+    filename = f"{base_name}_{uuid.uuid4().hex[:6]}.apk"
+    dest_path = upload_dir / filename
+
+    try:
+        with open(dest_path, "wb") as buffer:
+            shutil.copyfileobj(file.file, buffer)
+    except Exception as e:
+        raise HTTPException(status_code=500, detail=f"Erreur lors de l'enregistrement de l'APK : {str(e)}")
+
+    download_url = f"/static/uploads/apk/{filename}"
+    size_mb = round(os.path.getsize(dest_path) / (1024 * 1024), 2)
+
+    return {
+        "success": True,
+        "download_url": download_url,
+        "filename": filename,
+        "size_mb": size_mb,
+        "message": f"Fichier APK '{safe_original_name}' ({size_mb} Mo) téléversé avec succès sur le serveur !",
+    }
+
+
+
+# =============================================================
 # 13. Téléversement Direct de Vidéo vers Telegram avec Streaming MTProto
 # =============================================================
 
