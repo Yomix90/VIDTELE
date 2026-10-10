@@ -28,8 +28,8 @@ class Settings(BaseSettings):
     THUMBNAILS_DIR: str = "./thumbnails"
     MAX_CACHE_GB: float = 20.0
 
-    # Limites et Concurrence
-    MAX_CONCURRENT_STREAMS_PER_USER: int = 2
+    # Limites et Concurrence (autorise le pool de 3 vidéos + marge)
+    MAX_CONCURRENT_STREAMS_PER_USER: int = 4
     MAX_CONCURRENT_STREAMS_GLOBAL: int = 30
 
     # Tâches périodiques
