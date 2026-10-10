@@ -157,55 +157,88 @@
   </div>
 </div>
 
-<!-- Modale : Téléversement Direct de Vidéo vers Telegram -->
+<!-- Modale : Téléversement Direct de Vidéos vers Telegram (Simultané & Accéléré) -->
 <div class="modal fade" id="modalDirectUploadVideo" tabindex="-1">
   <div class="modal-dialog modal-lg">
     <div class="modal-content bg-dark text-white border-secondary">
       <div class="modal-header border-secondary">
         <h5 class="modal-title d-flex align-items-center gap-2">
           <i class="bi bi-cloud-arrow-up-fill text-danger"></i>
-          <span>Téléverser une Vidéo vers Telegram (Streaming MTProto)</span>
+          <span>Téléverser des Vidéos vers Telegram (Accéléré MTProto)</span>
         </h5>
         <button type="button" class="btn-close btn-close-white" data-bs-dismiss="modal"></button>
       </div>
       <div class="modal-body">
         <form id="formDirectVideoUpload" onsubmit="submitDirectVideoUpload(event)">
-          <div class="mb-3">
-            <label class="form-label small fw-semibold">Fichiers Vidéo (MP4, MKV, TS, M2TS, WebM, AVI) *</label>
-            <input type="file" id="directVideoFile" class="form-control" accept="video/*,.ts,.m2ts,.mkv,.mp4,.webm" multiple required onchange="handleMultipleVideosSelected(this)">
-            <div class="text-muted mt-1" style="font-size: 0.75rem;">
-              <i class="bi bi-info-circle me-1"></i>Vous pouvez sélectionner <strong>une ou plusieurs vidéos</strong> à la fois. Elles seront envoyées consécutivement vers votre canal Telegram privé.
+          
+          <!-- Badge d'accélération MTProto -->
+          <div class="p-2 px-3 rounded mb-3 d-flex align-items-center gap-2" style="background: rgba(229, 9, 20, 0.12); border: 1px solid rgba(229, 9, 20, 0.3);">
+            <i class="bi bi-lightning-charge-fill text-warning fs-5"></i>
+            <div class="small">
+              <strong class="text-white">Moteur Turbo MTProto actif :</strong> Découpage en blocs de 512 Ko transférés en parallèle pour démultiplier la vitesse d'envoi.
             </div>
-            <!-- Liste récapitulative des fichiers sélectionnés -->
-            <div id="selectedFilesSummary" class="d-none mt-2 p-2 rounded bg-dark border border-secondary" style="max-height: 140px; overflow-y: auto; font-size: 0.8rem;">
-              <div class="fw-bold text-info mb-1" id="selectedFilesCount">0 vidéo(s) sélectionnée(s)</div>
-              <ul class="list-unstyled mb-0 text-white-50" id="selectedFilesList"></ul>
-            </div>
-          </div>
-          <div class="mb-3" id="singleTitleGroup">
-            <label class="form-label small">Titre personnalisé (si une seule vidéo)</label>
-            <input type="text" id="directVideoTitle" class="form-control" placeholder="ex: Breaking Bad S01E01 ou Nom du Film">
-          </div>
-          <div class="mb-3">
-            <label class="form-label small">Légende Telegram commune (optionnel)</label>
-            <input type="text" id="directVideoCaption" class="form-control" placeholder="Description affichée sur le canal Telegram">
           </div>
 
-          <!-- Zone de Progression -->
-          <div id="uploadProgressBarContainer" class="d-none mb-3">
-            <label class="form-label small text-info d-flex justify-content-between">
-              <span>Téléversement vers le serveur & Telegram en cours...</span>
-              <span id="uploadProgressPercent">0%</span>
-            </label>
-            <div class="progress" style="height: 10px;">
-              <div id="uploadProgressBar" class="progress-bar progress-bar-striped progress-bar-animated bg-danger" role="progressbar" style="width: 0%"></div>
+          <div class="mb-3">
+            <label class="form-label small fw-semibold">Fichiers Vidéo (MP4, MKV, TS, M2TS, WebM, AVI) *</label>
+            <input type="file" id="directVideoFile" class="form-control bg-black text-white border-secondary" accept="video/*,.ts,.m2ts,.mkv,.mp4,.webm" multiple required onchange="handleMultipleVideosSelected(this)">
+            <div class="text-muted mt-1" style="font-size: 0.75rem;">
+              <i class="bi bi-info-circle me-1"></i>Sélectionnez <strong>une ou plusieurs vidéos</strong> à la fois. Vous pouvez régler ci-dessous le nombre d'envois simultanés.
             </div>
-            <div class="small text-muted mt-1">Veuillez ne pas fermer cette page pendant le transfert.</div>
+          </div>
+
+          <!-- Options de Simultanéité / Vitesse -->
+          <div class="row g-2 mb-3">
+            <div class="col-md-6">
+              <label class="form-label small fw-semibold d-flex align-items-center gap-1">
+                <i class="bi bi-speedometer2 text-danger"></i>
+                <span>Envois simultanés en parallèle</span>
+              </label>
+              <select id="directVideoConcurrency" class="form-select bg-black text-white border-secondary form-select-sm">
+                <option value="1">1 vidéo à la fois (Séquentiel standard)</option>
+                <option value="2">2 vidéos simultanées</option>
+                <option value="3" selected>3 vidéos simultanées (Recommandé - Très rapide)</option>
+                <option value="4">4 vidéos simultanées (Ultra-rapide)</option>
+              </select>
+            </div>
+            <div class="col-md-6" id="singleTitleGroup">
+              <label class="form-label small">Titre personnalisé (si 1 seule vidéo)</label>
+              <input type="text" id="directVideoTitle" class="form-control bg-black text-white border-secondary form-select-sm" placeholder="ex: Nom du Film ou Épisode">
+            </div>
+          </div>
+
+          <div class="mb-3">
+            <label class="form-label small">Légende Telegram commune (optionnel)</label>
+            <input type="text" id="directVideoCaption" class="form-control bg-black text-white border-secondary form-select-sm" placeholder="Description affichée sous la vidéo sur le canal Telegram">
+          </div>
+
+          <!-- File d'Attente et Progression Détaillée -->
+          <div id="uploadQueueContainer" class="d-none mb-3">
+            <!-- Jauge Globale -->
+            <div class="p-3 rounded bg-black border border-secondary mb-3">
+              <div class="d-flex justify-content-between align-items-center mb-1 small">
+                <span class="fw-bold text-white" id="uploadGlobalStatus">Téléversement en cours...</span>
+                <span class="badge bg-danger" id="uploadGlobalPercent">0%</span>
+              </div>
+              <div class="progress mb-2" style="height: 10px;">
+                <div id="uploadGlobalProgressBar" class="progress-bar progress-bar-striped progress-bar-animated bg-danger" role="progressbar" style="width: 0%"></div>
+              </div>
+              <div class="d-flex justify-content-between text-muted" style="font-size: 0.75rem;">
+                <span id="uploadGlobalSpeed"><i class="bi bi-speedometer me-1"></i>0.0 Mo/s</span>
+                <span id="uploadGlobalCount">0 / 0 vidéos terminées</span>
+              </div>
+            </div>
+
+            <!-- Liste des Vidéos avec Progression par Fichier -->
+            <label class="form-label small text-muted mb-1">Détail des transferts :</label>
+            <div id="uploadFileList" class="p-2 rounded bg-black border border-secondary" style="max-height: 220px; overflow-y: auto;">
+              <!-- Rempli dynamiquement en JS -->
+            </div>
           </div>
 
           <div class="d-flex justify-content-end gap-2">
             <button type="button" class="btn btn-secondary" data-bs-dismiss="modal" id="btnCancelVideoUpload">Fermer</button>
-            <button type="submit" class="btn btn-danger px-4" id="btnSubmitVideoUpload">
+            <button type="submit" class="btn btn-danger px-4 fw-semibold" id="btnSubmitVideoUpload">
               <i class="bi bi-send-fill me-1"></i>Lancer le téléversement
             </button>
           </div>
@@ -677,40 +710,56 @@ async function submitBatchAddToSeries(e) {
   }
 }
 
-// 4. Gestion de la sélection multiple et affichage
+// 4. Gestion de la sélection multiple et affichage dynamique
 function handleMultipleVideosSelected(input) {
-  const summaryBox = document.getElementById('selectedFilesSummary');
-  const countSpan = document.getElementById('selectedFilesCount');
-  const listEl = document.getElementById('selectedFilesList');
+  const queueContainer = document.getElementById('uploadQueueContainer');
+  const fileListEl = document.getElementById('uploadFileList');
   const titleGroup = document.getElementById('singleTitleGroup');
 
   if (!input.files || input.files.length === 0) {
-    summaryBox.classList.add('d-none');
-    titleGroup.classList.remove('d-none');
+    if (queueContainer) queueContainer.classList.add('d-none');
+    if (titleGroup) titleGroup.classList.remove('d-none');
     return;
   }
 
   const files = Array.from(input.files);
-  summaryBox.classList.remove('d-none');
-  countSpan.textContent = `${files.length} vidéo(s) prête(s) à être téléversée(s)`;
-
-  if (files.length > 1) {
-    titleGroup.classList.add('d-none'); // Titre masqué car le nom original de chaque fichier sera utilisé
-  } else {
+  if (files.length > 1 && titleGroup) {
+    titleGroup.classList.add('d-none');
+  } else if (titleGroup) {
     titleGroup.classList.remove('d-none');
   }
 
-  listEl.innerHTML = files.map((f, i) => {
+  queueContainer.classList.remove('d-none');
+  document.getElementById('uploadGlobalStatus').textContent = `${files.length} vidéo(s) sélectionnée(s) - Prêtes pour le transfert`;
+  document.getElementById('uploadGlobalPercent').textContent = '0%';
+  document.getElementById('uploadGlobalProgressBar').style.width = '0%';
+  document.getElementById('uploadGlobalCount').textContent = `0 / ${files.length} vidéos terminées`;
+  document.getElementById('uploadGlobalSpeed').innerHTML = '<i class="bi bi-speedometer me-1"></i>En attente...';
+
+  // Rendu de chaque fichier dans la liste
+  fileListEl.innerHTML = files.map((f, i) => {
     const sizeMb = (f.size / (1024 * 1024)).toFixed(1);
-    return `<li class="d-flex justify-content-between py-1 border-bottom border-dark">
-      <span class="text-truncate me-2"><i class="bi bi-file-earmark-play text-danger me-1"></i>${f.name}</span>
-      <span class="badge bg-secondary">${sizeMb} Mo</span>
-    </li>`;
+    return `
+      <div class="py-2 px-2 border-bottom border-dark border-opacity-50" id="fileRow_${i}">
+        <div class="d-flex justify-content-between align-items-center mb-1">
+          <span class="text-truncate small text-white fw-semibold" style="max-width: 65%;" title="${f.name}">
+            <i class="bi bi-film text-danger me-1"></i>${f.name}
+          </span>
+          <div class="d-flex align-items-center gap-2">
+            <span class="text-muted small" style="font-size: 0.75rem;">${sizeMb} Mo</span>
+            <span class="badge bg-secondary p-1 px-2" id="fileBadge_${i}" style="font-size: 0.7rem;">En attente</span>
+          </div>
+        </div>
+        <div class="progress" style="height: 5px; background-color: rgba(255,255,255,0.08);">
+          <div class="progress-bar bg-danger progress-bar-striped" id="fileBar_${i}" role="progressbar" style="width: 0%"></div>
+        </div>
+      </div>
+    `;
   }).join('');
 }
 
-// Téléversement Direct d'une vidéo individuelle avec Promise
-function uploadSingleVideoFile(file, customTitle, caption, onProgress) {
+// Téléversement Direct d'une vidéo individuelle avec Promise et suivi précis en octets
+function uploadSingleVideoFile(file, customTitle, caption, onProgressBytes) {
   return new Promise((resolve, reject) => {
     const formData = new FormData();
     formData.append('file', file);
@@ -721,9 +770,8 @@ function uploadSingleVideoFile(file, customTitle, caption, onProgress) {
     xhr.open('POST', '/api/admin/videos/upload', true);
 
     xhr.upload.onprogress = function(event) {
-      if (event.lengthComputable && onProgress) {
-        const percent = Math.round((event.loaded / event.total) * 95);
-        onProgress(percent);
+      if (event.lengthComputable && onProgressBytes) {
+        onProgressBytes(event.loaded, event.total);
       }
     };
 
@@ -746,14 +794,14 @@ function uploadSingleVideoFile(file, customTitle, caption, onProgress) {
     };
 
     xhr.onerror = function() {
-      reject(new Error('Erreur réseau'));
+      reject(new Error('Erreur réseau de transfert'));
     };
 
     xhr.send(formData);
   });
 }
 
-// 4. bis. Lancement du Téléversement par Lots de toutes les vidéos sélectionnées
+// 4. bis. Téléversement Multi-Vidéos SIMULTANÉ avec File d'Attente Parallèle (Queue Engine)
 async function submitDirectVideoUpload(e) {
   e.preventDefault();
   const fileInput = document.getElementById('directVideoFile');
@@ -763,47 +811,131 @@ async function submitDirectVideoUpload(e) {
   }
 
   const files = Array.from(fileInput.files);
+  const concurrency = parseInt(document.getElementById('directVideoConcurrency').value, 10) || 3;
   const singleTitle = document.getElementById('directVideoTitle').value.trim();
   const caption = document.getElementById('directVideoCaption').value.trim();
 
-  const progressContainer = document.getElementById('uploadProgressBarContainer');
-  const progressBar = document.getElementById('uploadProgressBar');
-  const progressPercent = document.getElementById('uploadProgressPercent');
+  const queueContainer = document.getElementById('uploadQueueContainer');
+  const globalStatus = document.getElementById('uploadGlobalStatus');
+  const globalPercent = document.getElementById('uploadGlobalPercent');
+  const globalProgressBar = document.getElementById('uploadGlobalProgressBar');
+  const globalCount = document.getElementById('uploadGlobalCount');
+  const globalSpeed = document.getElementById('uploadGlobalSpeed');
   const btnSubmit = document.getElementById('btnSubmitVideoUpload');
   const btnCancel = document.getElementById('btnCancelVideoUpload');
 
-  progressContainer.classList.remove('d-none');
+  queueContainer.classList.remove('d-none');
   btnSubmit.disabled = true;
   btnCancel.disabled = true;
+  btnSubmit.innerHTML = '<span class="spinner-border spinner-border-sm me-1"></span> Téléversement en cours...';
 
+  // Calcul de la taille totale cumulée
+  const totalBytesOverall = files.reduce((acc, f) => acc + f.size, 0);
+  const loadedBytesPerFile = new Array(files.length).fill(0);
+  let completedCount = 0;
   let successCount = 0;
   let errorCount = 0;
 
-  for (let i = 0; i < files.length; i++) {
-    const file = files[i];
-    const fileTitle = (files.length === 1 && singleTitle) ? singleTitle : '';
-    const currentIndex = i + 1;
+  // Calcul du débit (Vitesse Mo/s)
+  let lastBytes = 0;
+  let lastTime = Date.now();
+  const speedInterval = setInterval(() => {
+    const now = Date.now();
+    const timeDelta = (now - lastTime) / 1000;
+    if (timeDelta > 0) {
+      const currentBytes = loadedBytesPerFile.reduce((a, b) => a + b, 0);
+      const speedBytesPerSec = (currentBytes - lastBytes) / timeDelta;
+      const speedMbPerSec = (speedBytesPerSec / (1024 * 1024)).toFixed(1);
+      if (globalSpeed) {
+        globalSpeed.innerHTML = `<i class="bi bi-speedometer2 text-warning me-1"></i>${speedMbPerSec} Mo/s`;
+      }
+      lastBytes = currentBytes;
+      lastTime = now;
+    }
+  }, 1000);
 
-    progressPercent.textContent = `Vidéo ${currentIndex}/${files.length} : "${file.name}" (Transfert...)`;
-    progressBar.style.width = '5%';
+  function updateGlobalProgress() {
+    const currentTotalLoaded = loadedBytesPerFile.reduce((a, b) => a + b, 0);
+    const pct = totalBytesOverall > 0 ? Math.min(100, Math.round((currentTotalLoaded / totalBytesOverall) * 100)) : 0;
+    globalPercent.textContent = pct + '%';
+    globalProgressBar.style.width = pct + '%';
+    globalCount.textContent = `${completedCount} / ${files.length} vidéos terminées`;
+    globalStatus.textContent = `Téléversement en cours (${concurrency} simultanés) - ${pct}%`;
+  }
 
-    try {
-      await uploadSingleVideoFile(file, fileTitle, caption, (pct) => {
-        progressBar.style.width = pct + '%';
-        progressPercent.textContent = `Vidéo ${currentIndex}/${files.length} : ${pct}% (Transfert VPS/Telegram)`;
-      });
-      successCount++;
-      progressBar.style.width = '100%';
-    } catch (err) {
-      errorCount++;
-      showToast(`Erreur sur "${file.name}": ${err.message}`, 'error');
+  // Queue de distribution parallèle
+  let nextQueueIndex = 0;
+
+  async function worker(workerId) {
+    while (nextQueueIndex < files.length) {
+      const fileIndex = nextQueueIndex++;
+      const file = files[fileIndex];
+      const fileTitle = (files.length === 1 && singleTitle) ? singleTitle : '';
+
+      const badge = document.getElementById(`fileBadge_${fileIndex}`);
+      const bar = document.getElementById(`fileBar_${fileIndex}`);
+
+      if (badge) {
+        badge.className = 'badge bg-primary text-white p-1 px-2';
+        badge.innerHTML = '<span class="spinner-border spinner-border-sm me-1" style="width: 0.6rem; height: 0.6rem;"></span>En cours';
+      }
+      if (bar) bar.classList.add('progress-bar-animated');
+
+      try {
+        await uploadSingleVideoFile(file, fileTitle, caption, (loaded, total) => {
+          loadedBytesPerFile[fileIndex] = loaded;
+          const filePct = total > 0 ? Math.min(99, Math.round((loaded / total) * 100)) : 0;
+          if (bar) bar.style.width = filePct + '%';
+          if (badge) badge.textContent = `${filePct}%`;
+          updateGlobalProgress();
+        });
+
+        loadedBytesPerFile[fileIndex] = file.size;
+        successCount++;
+        if (badge) {
+          badge.className = 'badge bg-success text-white p-1 px-2';
+          badge.innerHTML = '<i class="bi bi-check-lg me-1"></i>Terminé';
+        }
+        if (bar) {
+          bar.style.width = '100%';
+          bar.classList.remove('progress-bar-animated');
+          bar.classList.add('bg-success');
+        }
+      } catch (err) {
+        errorCount++;
+        loadedBytesPerFile[fileIndex] = file.size; // Compte pour ne pas bloquer la jauge globale
+        if (badge) {
+          badge.className = 'badge bg-danger text-white p-1 px-2';
+          badge.innerHTML = '<i class="bi bi-x-lg me-1"></i>Erreur';
+        }
+        if (bar) {
+          bar.classList.remove('progress-bar-animated');
+          bar.classList.add('bg-danger');
+        }
+        showToast(`Erreur sur "${file.name}": ${err.message}`, 'error');
+      } finally {
+        completedCount++;
+        updateGlobalProgress();
+      }
     }
   }
 
-  progressBar.style.width = '100%';
-  progressPercent.textContent = `Terminé : ${successCount} vidéo(s) envoyée(s) sur Telegram !`;
-  showToast(`Transfert terminé : ${successCount} vidéo(s) téléversée(s) avec succès !`, 'success');
+  // Lancement des workers simultanés en parallèle
+  const activeWorkersCount = Math.min(concurrency, files.length);
+  const workerPromises = [];
+  for (let w = 0; w < activeWorkersCount; w++) {
+    workerPromises.push(worker(w));
+  }
 
+  await Promise.all(workerPromises);
+  clearInterval(speedInterval);
+
+  globalProgressBar.style.width = '100%';
+  globalPercent.textContent = '100%';
+  globalStatus.textContent = `Téléversement terminé avec succès (${successCount}/${files.length} vidéos envoyées)`;
+  btnSubmit.innerHTML = '<i class="bi bi-check-circle me-1"></i>Terminé !';
+
+  showToast(`Transfert terminé : ${successCount} vidéo(s) téléversée(s) vers Telegram !`, 'success');
   setTimeout(() => location.reload(), 1500);
 }
 
