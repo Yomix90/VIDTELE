@@ -5,6 +5,8 @@ import 'package:flutter/services.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:video_player/video_player.dart';
 
+import '../../core/ads/rewarded_ad_service.dart';
+import '../../core/ads/watch_gate_controller.dart';
 import '../../core/api/api_client.dart';
 import '../../core/constants/api_constants.dart';
 import '../../core/localization/app_localizations.dart';
@@ -14,9 +16,12 @@ import '../../core/theme/app_theme.dart';
 import '../../core/utils/image_utils.dart';
 import '../../models/feed_model.dart';
 import '../../models/video_model.dart';
+import '../../providers/auth_provider.dart';
 import '../../providers/feed_provider.dart';
 import '../../providers/library_provider.dart';
 import '../../providers/video_provider.dart';
+import '../../widgets/ad_gate_locked_overlay.dart';
+import '../../widgets/ad_gate_prompt_sheet.dart';
 import '../../widgets/empty_state.dart';
 import '../../widgets/error_state.dart';
 import '../../widgets/touchable_scale.dart';
@@ -64,6 +69,10 @@ class _ReelsScreenState extends ConsumerState<ReelsScreen> with WidgetsBindingOb
   // Animation cœur double-tap
   bool _showHeartAnimation = false;
   Offset _heartPosition = Offset.zero;
+
+  // Contrôle de quota AdGate
+  bool _showingAdGatePrompt = false;
+  bool _isGateLockedLocally = false;
 
   VideoPlayerManager? _videoPlayerManager;
 
@@ -139,6 +148,169 @@ class _ReelsScreenState extends ConsumerState<ReelsScreen> with WidgetsBindingOb
         : ref.read(feedNotifierProvider);
   }
 
+  /// Vérifie si la progression de la vidéo déclenche le verrou de publicité récompensée
+  void _checkAdGate(String videoId, Duration position, Duration duration, {bool completed = false}) {
+    if (_showingAdGatePrompt || !mounted) return;
+    final user = ref.read(authProvider).user;
+    final watchGate = ref.read(watchGateProvider);
+
+    if (watchGate.isGateLocked && !watchGate.isUserExempt(user)) {
+      _triggerAdGate();
+      return;
+    }
+
+    final isLocked = watchGate.recordVideoProgress(
+      videoId: videoId,
+      position: position,
+      duration: duration,
+      completed: completed,
+      user: user,
+    );
+
+    if (isLocked) {
+      _triggerAdGate();
+    }
+  }
+
+  /// Met en pause et présente la demande de consentement à la pub récompensée
+  void _triggerAdGate() {
+    if (_showingAdGatePrompt || !mounted) return;
+    _showingAdGatePrompt = true;
+
+    // Coupure immédiate du lecteur vertical
+    final ctrl = _controllerPool[_focusedIndex];
+    ctrl?.pause();
+    _videoPlayerManager?.pauseAll();
+
+    setState(() {
+      _isGateLockedLocally = true;
+    });
+
+    final watchGate = ref.read(watchGateProvider);
+    final count = watchGate.currentCycleThreshold;
+
+    AdGatePromptSheet.show(
+      context,
+      videosToUnlock: count,
+      onWatchAd: _launchRewardedAd,
+      onLater: () {
+        if (!mounted) return;
+        setState(() {
+          _showingAdGatePrompt = false;
+          _isGateLockedLocally = true;
+        });
+      },
+    ).then((_) {
+      if (mounted) {
+        setState(() => _showingAdGatePrompt = false);
+      }
+    });
+  }
+
+  /// Déclenche l'affichage plein écran de l'annonce avec récompense AdMob
+  Future<void> _launchRewardedAd() async {
+    final adService = ref.read(rewardedAdServiceProvider);
+    final watchGate = ref.read(watchGateProvider);
+    final l10n = context.l10n;
+
+    bool rewardEarned = false;
+
+    final success = await adService.showRewardedAd(
+      onUserEarnedReward: (reward) {
+        rewardEarned = true;
+      },
+      onAdClosed: () async {
+        if (rewardEarned) {
+          await watchGate.unlockNewCycle();
+          if (mounted) {
+            setState(() {
+              _isGateLockedLocally = false;
+              _showingAdGatePrompt = false;
+            });
+            ScaffoldMessenger.of(context).showSnackBar(
+              SnackBar(
+                content: Row(
+                  children: [
+                    const Icon(Icons.check_circle, color: Colors.greenAccent),
+                    const SizedBox(width: 8),
+                    Text('${watchGate.currentCycleThreshold} nouvelles vidéos débloquées !'),
+                  ],
+                ),
+                backgroundColor: AppTheme.darkSurface,
+                duration: const Duration(seconds: 3),
+              ),
+            );
+            // Reprendre la vidéo visible
+            final feedState = _getFeedState();
+            if (_focusedIndex < feedState.items.length) {
+              final vidId = feedState.items[_focusedIndex].id;
+              _videoPlayerManager?.play('feed_$vidId');
+            }
+          }
+        } else {
+          if (mounted) {
+            setState(() {
+              _isGateLockedLocally = true;
+              _showingAdGatePrompt = false;
+            });
+            ScaffoldMessenger.of(context).showSnackBar(
+              SnackBar(
+                content: Text(l10n.adNotCompletedWarning),
+                backgroundColor: AppTheme.netflixRed,
+                duration: const Duration(seconds: 3),
+              ),
+            );
+          }
+        }
+      },
+      onAdFailed: (error) {
+        if (mounted) {
+          ScaffoldMessenger.of(context).showSnackBar(
+            SnackBar(
+              content: Text(l10n.adUnavailableMessage),
+              backgroundColor: AppTheme.darkSurface,
+              action: SnackBarAction(
+                label: 'Continuer',
+                onPressed: () {
+                  watchGate.grantEmergencyBypass();
+                  setState(() => _isGateLockedLocally = false);
+                  final feedState = _getFeedState();
+                  if (_focusedIndex < feedState.items.length) {
+                    final vidId = feedState.items[_focusedIndex].id;
+                    _videoPlayerManager?.play('feed_$vidId');
+                  }
+                },
+              ),
+            ),
+          );
+        }
+      },
+    );
+
+    if (!success) {
+      if (mounted) {
+        ScaffoldMessenger.of(context).showSnackBar(
+          SnackBar(
+            content: Text(l10n.adUnavailableMessage),
+            backgroundColor: AppTheme.darkSurface,
+            action: SnackBarAction(
+              label: 'Continuer',
+              onPressed: () {
+                watchGate.grantEmergencyBypass();
+                setState(() => _isGateLockedLocally = false);
+                final feedState = _getFeedState();
+                if (_focusedIndex < feedState.items.length) {
+                  final vidId = feedState.items[_focusedIndex].id;
+                  _videoPlayerManager?.play('feed_$vidId');
+                }
+              },
+            ),
+          ),
+        );
+      }
+    }
+  }
+
   void _startProgressSyncTimer() {
     _progressSyncTimer?.cancel();
     if (!widget.isActive || !_isAppActive) return;
@@ -151,6 +323,8 @@ class _ReelsScreenState extends ConsumerState<ReelsScreen> with WidgetsBindingOb
           final pos = ctrl.value.position.inSeconds.toDouble();
           final durationSec = ctrl.value.duration.inSeconds;
           final completed = (durationSec > 0) && (pos >= durationSec - 3);
+
+          _checkAdGate(item.id.toString(), ctrl.value.position, ctrl.value.duration, completed: completed);
 
           try {
             apiClient.dio.put(
@@ -301,6 +475,13 @@ class _ReelsScreenState extends ConsumerState<ReelsScreen> with WidgetsBindingOb
   }
 
   void _onVideoEnded() {
+    final user = ref.read(authProvider).user;
+    final watchGate = ref.read(watchGateProvider);
+    if ((watchGate.isGateLocked || _isGateLockedLocally) && !watchGate.isUserExempt(user)) {
+      _triggerAdGate();
+      return;
+    }
+
     final feedState = _getFeedState();
     if (_focusedIndex < feedState.items.length - 1) {
       // Binge automatique : passage à l'épisode suivant !
@@ -317,6 +498,13 @@ class _ReelsScreenState extends ConsumerState<ReelsScreen> with WidgetsBindingOb
   }
 
   void _skipToNextEpisode() {
+    final user = ref.read(authProvider).user;
+    final watchGate = ref.read(watchGateProvider);
+    if ((watchGate.isGateLocked || _isGateLockedLocally) && !watchGate.isUserExempt(user)) {
+      _triggerAdGate();
+      return;
+    }
+
     final feedState = _getFeedState();
     if (_focusedIndex < feedState.items.length - 1) {
       _pageController.nextPage(
@@ -334,6 +522,13 @@ class _ReelsScreenState extends ConsumerState<ReelsScreen> with WidgetsBindingOb
   }
 
   void _togglePlayPause() {
+    final user = ref.read(authProvider).user;
+    final watchGate = ref.read(watchGateProvider);
+    if ((watchGate.isGateLocked || _isGateLockedLocally) && !watchGate.isUserExempt(user)) {
+      _triggerAdGate();
+      return;
+    }
+
     final ctrl = _controllerPool[_focusedIndex];
     if (ctrl == null || !ctrl.value.isInitialized) return;
 
@@ -695,6 +890,9 @@ class _ReelsScreenState extends ConsumerState<ReelsScreen> with WidgetsBindingOb
         ? ref.watch(seriesFeedNotifierProvider(widget.seriesId!))
         : ref.watch(feedNotifierProvider);
     final l10n = context.l10n;
+    final user = ref.watch(authProvider).user;
+    final watchGate = ref.watch(watchGateProvider);
+    final isGateLocked = (watchGate.isGateLocked || _isGateLockedLocally) && !watchGate.isUserExempt(user);
 
     if (feedState.isLoading) {
       return const Scaffold(
@@ -752,12 +950,18 @@ class _ReelsScreenState extends ConsumerState<ReelsScreen> with WidgetsBindingOb
           return PageView.builder(
             controller: _pageController,
             scrollDirection: Axis.vertical,
-            physics: const PageScrollPhysics(parent: BouncingScrollPhysics()),
+            physics: isGateLocked
+                ? const NeverScrollableScrollPhysics()
+                : const PageScrollPhysics(parent: BouncingScrollPhysics()),
             itemCount: feedState.items.length,
             onPageChanged: (newIndex) {
               setState(() {
                 _focusedIndex = newIndex;
               });
+              if (isGateLocked) {
+                _triggerAdGate();
+                return;
+              }
               _reconcileControllers(newIndex, feedState.items);
 
               // Pagination par curseur quand on approche de la fin du flux
@@ -1201,6 +1405,14 @@ class _ReelsScreenState extends ConsumerState<ReelsScreen> with WidgetsBindingOb
                             bufferedColor: Colors.white24,
                             backgroundColor: Colors.transparent,
                           ),
+                        ),
+                      ),
+
+                    // 9. Overlay de verrouillage AdGate si quota atteint et non exempté
+                    if (isCurrent && isGateLocked && !_showingAdGatePrompt)
+                      Positioned.fill(
+                        child: AdGateLockedOverlay(
+                          onWatchAd: _launchRewardedAd,
                         ),
                       ),
                   ],

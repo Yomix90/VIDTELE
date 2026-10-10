@@ -6,6 +6,8 @@ import 'package:video_player/video_player.dart';
 import 'package:chewie/chewie.dart';
 import 'package:dio/dio.dart';
 
+import '../../core/ads/rewarded_ad_service.dart';
+import '../../core/ads/watch_gate_controller.dart';
 import '../../core/api/api_client.dart';
 import '../../core/constants/api_constants.dart';
 import '../../core/localization/app_localizations.dart';
@@ -14,7 +16,10 @@ import '../../core/services/video_player_manager.dart';
 import '../../core/storage/storage_service.dart';
 import '../../core/theme/app_theme.dart';
 import '../../models/video_model.dart';
+import '../../providers/auth_provider.dart';
 import '../../providers/library_provider.dart';
+import '../../widgets/ad_gate_locked_overlay.dart';
+import '../../widgets/ad_gate_prompt_sheet.dart';
 
 /// Lecteur vidéo immersif Netflix-style avec streaming HTTP 206 partiel,
 /// reprise automatique de lecture, synchronisation de l'historique,
@@ -53,10 +58,13 @@ class _VideoPlayerScreenState extends ConsumerState<VideoPlayerScreen>
 
   String get _playerId => 'player_${_currentVideo.id}';
 
-  // Enchaînement automatique des épisodes
   Timer? _autoNextTimer;
   int _countdownSeconds = 5;
   bool _showingNextPrompt = false;
+
+  // Contrôle de quota AdGate
+  bool _showingAdGatePrompt = false;
+  bool _isGateLockedLocally = false;
 
   @override
   void initState() {
@@ -105,6 +113,21 @@ class _VideoPlayerScreenState extends ConsumerState<VideoPlayerScreen>
   /// Initialisation du contrôleur vidéo et du streaming sécurisé
   Future<void> _initPlayer() async {
     _autoNextTimer?.cancel();
+
+    // 0. Vérification du quota AdGate avant initialisation du streaming
+    final user = ref.read(authProvider).user;
+    final watchGate = ref.read(watchGateProvider);
+    if (watchGate.isGateLocked && !watchGate.isUserExempt(user)) {
+      setState(() {
+        _isLoading = false;
+        _isGateLockedLocally = true;
+      });
+      WidgetsBinding.instance.addPostFrameCallback((_) {
+        _triggerAdGate();
+      });
+      return;
+    }
+
     setState(() {
       _isLoading = true;
       _errorCode = null;
@@ -257,12 +280,170 @@ class _VideoPlayerScreenState extends ConsumerState<VideoPlayerScreen>
     final controller = _videoPlayerController;
     if (controller == null || !controller.value.isInitialized) return;
 
-    // Détection de fin de vidéo pour auto-play next episode
     final pos = controller.value.position;
     final dur = controller.value.duration;
-    if (dur > Duration.zero && pos >= dur - const Duration(seconds: 1)) {
-      if (_hasNextVideo && !_showingNextPrompt) {
-        _startAutoNextCountdown();
+
+    if (dur > Duration.zero) {
+      final isFinished = pos >= dur - const Duration(seconds: 1);
+      _checkAdGate(pos, dur, completed: isFinished);
+
+      // Détection de fin de vidéo pour auto-play next episode
+      if (isFinished) {
+        if (_hasNextVideo && !_showingNextPrompt && !_isGateLockedLocally && !_showingAdGatePrompt) {
+          _startAutoNextCountdown();
+        }
+      }
+    }
+  }
+
+  /// Vérifie si la progression de la vidéo déclenche le verrou de publicité avec récompense
+  void _checkAdGate(Duration position, Duration duration, {bool completed = false}) {
+    if (_showingAdGatePrompt || _isDisposed) return;
+    final user = ref.read(authProvider).user;
+    final watchGate = ref.read(watchGateProvider);
+
+    // Si déjà verrouillé et non exempté
+    if (watchGate.isGateLocked && !watchGate.isUserExempt(user)) {
+      _triggerAdGate();
+      return;
+    }
+
+    final isLocked = watchGate.recordVideoProgress(
+      videoId: _currentVideo.id.toString(),
+      position: position,
+      duration: duration,
+      completed: completed,
+      user: user,
+    );
+
+    if (isLocked) {
+      _triggerAdGate();
+    }
+  }
+
+  /// Met en pause et affiche la proposition de regarder une publicité récompensée
+  void _triggerAdGate() {
+    if (_showingAdGatePrompt || !mounted) return;
+    _showingAdGatePrompt = true;
+
+    // Coupure immédiate du lecteur et du compte à rebours
+    ref.read(videoPlayerManagerProvider).pause(_playerId);
+    _videoPlayerController?.pause();
+    _autoNextTimer?.cancel();
+    setState(() {
+      _showingNextPrompt = false;
+      _isGateLockedLocally = true;
+    });
+
+    final watchGate = ref.read(watchGateProvider);
+    final videosCount = watchGate.currentCycleThreshold;
+
+    AdGatePromptSheet.show(
+      context,
+      videosToUnlock: videosCount,
+      onWatchAd: _launchRewardedAd,
+      onLater: () {
+        if (!mounted) return;
+        setState(() {
+          _showingAdGatePrompt = false;
+          _isGateLockedLocally = true;
+        });
+      },
+    ).then((_) {
+      if (mounted) {
+        setState(() => _showingAdGatePrompt = false);
+      }
+    });
+  }
+
+  /// Déclenche l'affichage plein écran de l'annonce AdMob avec récompense
+  Future<void> _launchRewardedAd() async {
+    final adService = ref.read(rewardedAdServiceProvider);
+    final watchGate = ref.read(watchGateProvider);
+    final l10n = context.l10n;
+
+    bool rewardEarned = false;
+
+    final success = await adService.showRewardedAd(
+      onUserEarnedReward: (reward) {
+        rewardEarned = true;
+      },
+      onAdClosed: () async {
+        if (rewardEarned) {
+          await watchGate.unlockNewCycle();
+          if (mounted) {
+            setState(() {
+              _isGateLockedLocally = false;
+              _showingAdGatePrompt = false;
+            });
+            ScaffoldMessenger.of(context).showSnackBar(
+              SnackBar(
+                content: Row(
+                  children: [
+                    const Icon(Icons.check_circle, color: Colors.greenAccent),
+                    const SizedBox(width: 8),
+                    Text('${watchGate.currentCycleThreshold} nouvelles vidéos débloquées !'),
+                  ],
+                ),
+                backgroundColor: AppTheme.darkSurface,
+                duration: const Duration(seconds: 3),
+              ),
+            );
+            // Reprise de la vidéo
+            ref.read(videoPlayerManagerProvider).play(_playerId);
+          }
+        } else {
+          if (mounted) {
+            setState(() {
+              _isGateLockedLocally = true;
+              _showingAdGatePrompt = false;
+            });
+            ScaffoldMessenger.of(context).showSnackBar(
+              SnackBar(
+                content: Text(l10n.adNotCompletedWarning),
+                backgroundColor: AppTheme.netflixRed,
+                duration: const Duration(seconds: 3),
+              ),
+            );
+          }
+        }
+      },
+      onAdFailed: (error) {
+        if (mounted) {
+          ScaffoldMessenger.of(context).showSnackBar(
+            SnackBar(
+              content: Text(l10n.adUnavailableMessage),
+              backgroundColor: AppTheme.darkSurface,
+              action: SnackBarAction(
+                label: 'Continuer',
+                onPressed: () {
+                  watchGate.grantEmergencyBypass();
+                  setState(() => _isGateLockedLocally = false);
+                  ref.read(videoPlayerManagerProvider).play(_playerId);
+                },
+              ),
+            ),
+          );
+        }
+      },
+    );
+
+    if (!success) {
+      if (mounted) {
+        ScaffoldMessenger.of(context).showSnackBar(
+          SnackBar(
+            content: Text(l10n.adUnavailableMessage),
+            backgroundColor: AppTheme.darkSurface,
+            action: SnackBarAction(
+              label: 'Continuer',
+              onPressed: () {
+                watchGate.grantEmergencyBypass();
+                setState(() => _isGateLockedLocally = false);
+                ref.read(videoPlayerManagerProvider).play(_playerId);
+              },
+            ),
+          ),
+        );
       }
     }
   }
@@ -293,6 +474,15 @@ class _VideoPlayerScreenState extends ConsumerState<VideoPlayerScreen>
 
   Future<void> _playNextEpisode() async {
     if (!_hasNextVideo) return;
+
+    // Vérifier si le quota est bloqué avant d'enchaîner
+    final user = ref.read(authProvider).user;
+    final watchGate = ref.read(watchGateProvider);
+    if (watchGate.isGateLocked && !watchGate.isUserExempt(user)) {
+      _triggerAdGate();
+      return;
+    }
+
     _autoNextTimer?.cancel();
     _releasePlayerSync();
     setState(() {
@@ -394,6 +584,9 @@ class _VideoPlayerScreenState extends ConsumerState<VideoPlayerScreen>
   @override
   Widget build(BuildContext context) {
     final l10n = context.l10n;
+    final user = ref.watch(authProvider).user;
+    final watchGate = ref.watch(watchGateProvider);
+    final isGateLocked = (watchGate.isGateLocked || _isGateLockedLocally) && !watchGate.isUserExempt(user);
 
     String? displayError;
     if (_errorCode == 429) {
@@ -653,6 +846,15 @@ class _VideoPlayerScreenState extends ConsumerState<VideoPlayerScreen>
                       ),
                     ],
                   ),
+                ),
+              ),
+
+            // 7. Overlay de verrouillage AdGate (si quota atteint et utilisateur non exempté)
+            if (isGateLocked && !_showingAdGatePrompt)
+              Positioned.fill(
+                child: AdGateLockedOverlay(
+                  onWatchAd: _launchRewardedAd,
+                  onBack: () => Navigator.of(context).pop(),
                 ),
               ),
           ],

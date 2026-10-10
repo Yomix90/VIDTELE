@@ -389,6 +389,47 @@ class AppLocalizations {
   String get filterInProgress => isArabic ? 'قيد المشاهدة' : (isEnglish ? 'In Progress' : 'En cours');
   String get episodesHeader => isArabic ? 'الحلقات' : (isEnglish ? 'Episodes' : 'Épisodes');
 
+  // ==================== MONETIZATION / REWARDED ADS ====================
+  String get adRewardPromptTitle => isArabic
+      ? 'فتح المزيد من مقاطع الفيديو'
+      : (isEnglish ? 'Unlock More Videos' : 'Débloquer plus de vidéos');
+
+  String adRewardPromptMessage(int count) => isArabic
+      ? 'شاهد إعلاناً قصيراً لفتح $count مقاطع فيديو جديدة مجاناً.'
+      : (isEnglish
+          ? 'Watch a short video ad to unlock $count more videos for free.'
+          : 'Regardez une courte vidéo publicitaire pour débloquer $count vidéos de plus.');
+
+  String get adWatchButton => isArabic
+      ? 'مشاهدة الإعلان'
+      : (isEnglish ? 'Watch Ad' : 'Regarder la pub');
+
+  String get adLaterButton => isArabic
+      ? 'لاحقاً'
+      : (isEnglish ? 'Later' : 'Plus tard');
+
+  String get adNotCompletedWarning => isArabic
+      ? 'يجب مشاهدة الإعلان حتى النهاية لفتح مقاطع الفيديو.'
+      : (isEnglish
+          ? 'You must watch the ad until the end to unlock videos.'
+          : 'Vous devez regarder la pub jusqu\'à la fin pour débloquer les vidéos.');
+
+  String get adGateLockedTitle => isArabic
+      ? 'تم الوصول إلى حد المشاهدة'
+      : (isEnglish ? 'Watch Limit Reached' : 'Limite de visionnage atteinte');
+
+  String get adGateLockedMessage => isArabic
+      ? 'لقد شاهدت حصتك من مقاطع الفيديو. شاهد إعلاناً قصيراً لمتابعة المشاهدة.'
+      : (isEnglish
+          ? 'You reached your free watch limit. Watch a short ad to continue.'
+          : 'Vous avez atteint votre quota de vidéos. Regardez une courte pub pour continuer.');
+
+  String get adUnavailableMessage => isArabic
+      ? 'لا يوجد إعلان متاح حالياً. يرجى المحاولة بعد قليل.'
+      : (isEnglish
+          ? 'No ad available right now. Please try again in a moment.'
+          : 'Aucune annonce disponible actuellement. Veuillez réessayer dans un instant.');
+
   // ==================== FORMATTERS ====================
   String formatDuration(int seconds) {
     if (seconds <= 0) {
