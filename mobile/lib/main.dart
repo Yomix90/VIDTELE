@@ -42,7 +42,7 @@ class VidTeleApp extends ConsumerWidget {
     return MaterialApp(
       title: 'Atlas Play',
       debugShowCheckedModeBanner: false,
-      theme: AppTheme.darkTheme,
+      theme: AppTheme.getDarkTheme(currentLocale),
       locale: currentLocale,
       navigatorObservers: [appRouteObserver],
       localizationsDelegates: const [

@@ -3,6 +3,9 @@ import 'package:flutter_riverpod/flutter_riverpod.dart';
 import '../../core/localization/app_localizations.dart';
 import '../../core/theme/app_theme.dart';
 import '../../providers/library_provider.dart';
+import '../../widgets/empty_state.dart';
+import '../../widgets/error_state.dart';
+import '../../widgets/shimmer_placeholder.dart';
 import '../../widgets/video_card.dart';
 import '../player/video_player_screen.dart';
 
@@ -29,69 +32,28 @@ class FavoritesScreen extends ConsumerWidget {
         ],
       ),
       body: favoritesAsync.when(
-        loading: () => const Center(
-          child: CircularProgressIndicator(color: AppTheme.netflixRed),
-        ),
-        error: (err, _) => Center(
-          child: Padding(
-            padding: const EdgeInsets.all(24.0),
-            child: Column(
-              mainAxisSize: MainAxisSize.min,
-              children: [
-                const Icon(Icons.error_outline, color: Colors.redAccent, size: 48),
-                const SizedBox(height: 12),
-                Text(
-                  '${l10n.favoritesLoadError} : $err',
-                  textAlign: TextAlign.center,
-                  style: const TextStyle(color: Colors.white70),
-                ),
-                const SizedBox(height: 16),
-                ElevatedButton(
-                  onPressed: () => ref.read(favoritesProvider.notifier).fetchFavorites(),
-                  child: Text(l10n.retry),
-                ),
-              ],
-            ),
+        loading: () => GridView.builder(
+          padding: const EdgeInsets.all(16),
+          gridDelegate: const SliverGridDelegateWithFixedCrossAxisCount(
+            crossAxisCount: 3,
+            childAspectRatio: 0.65,
+            crossAxisSpacing: 10,
+            mainAxisSpacing: 12,
           ),
+          itemCount: 9,
+          itemBuilder: (_, __) => const ShimmerBox(borderRadius: 8),
+        ),
+        error: (err, _) => ErrorStateView(
+          message: '${l10n.favoritesLoadError} : $err',
+          retryLabel: l10n.retry,
+          onRetry: () => ref.read(favoritesProvider.notifier).fetchFavorites(),
         ),
         data: (favorites) {
           if (favorites.isEmpty) {
-            return Center(
-              child: Padding(
-                padding: const EdgeInsets.symmetric(horizontal: 32.0),
-                child: Column(
-                  mainAxisSize: MainAxisSize.min,
-                  children: [
-                    Container(
-                      padding: const EdgeInsets.all(24),
-                      decoration: const BoxDecoration(
-                        color: AppTheme.netflixCard,
-                        shape: BoxShape.circle,
-                      ),
-                      child: const Icon(
-                        Icons.bookmark_border_rounded,
-                        size: 64,
-                        color: Colors.white38,
-                      ),
-                    ),
-                    const SizedBox(height: 24),
-                    Text(
-                      l10n.myListEmptyTitle,
-                      style: const TextStyle(
-                        color: Colors.white,
-                        fontSize: 20,
-                        fontWeight: FontWeight.bold,
-                      ),
-                    ),
-                    const SizedBox(height: 12),
-                    Text(
-                      l10n.myListEmptySubtitle,
-                      textAlign: TextAlign.center,
-                      style: const TextStyle(color: Colors.white54, fontSize: 14),
-                    ),
-                  ],
-                ),
-              ),
+            return EmptyStateView(
+              icon: Icons.bookmark_border_rounded,
+              title: l10n.myListEmptyTitle,
+              subtitle: l10n.myListEmptySubtitle,
             );
           }
 

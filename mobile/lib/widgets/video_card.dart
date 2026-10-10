@@ -5,6 +5,7 @@ import '../core/storage/storage_service.dart';
 import '../core/theme/app_theme.dart';
 import '../core/utils/image_utils.dart';
 import '../models/video_model.dart';
+import 'touchable_scale.dart';
 
 /// Carte vidéo moderne inspirée des vignettes Netflix.
 class VideoCard extends StatelessWidget {
@@ -13,6 +14,7 @@ class VideoCard extends StatelessWidget {
   final double width;
   final double height;
   final bool showProgress;
+  final String? heroTag;
 
   const VideoCard({
     super.key,
@@ -21,6 +23,7 @@ class VideoCard extends StatelessWidget {
     this.width = 150,
     this.height = 210,
     this.showProgress = false,
+    this.heroTag,
   });
 
   @override
@@ -31,7 +34,7 @@ class VideoCard extends StatelessWidget {
         final baseUrl = snapshot.data ?? ApiConstants.defaultBaseUrl;
         final thumbUrl = ImageUtils.resolveUrl(video.thumbnailPath, baseUrl);
 
-        return GestureDetector(
+        return TouchableScale(
           onTap: onTap,
           child: Container(
             width: width,
@@ -39,23 +42,26 @@ class VideoCard extends StatelessWidget {
             margin: const EdgeInsets.only(right: 12),
             decoration: BoxDecoration(
               color: AppTheme.netflixCard,
-              borderRadius: BorderRadius.circular(6),
+              borderRadius: BorderRadius.circular(8),
+              border: Border.all(color: Colors.white.withValues(alpha: 0.08)),
               boxShadow: [
                 BoxShadow(
-                  color: Colors.black.withValues(alpha: 0.4),
-                  blurRadius: 6,
-                  offset: const Offset(0, 3),
+                  color: Colors.black.withValues(alpha: 0.45),
+                  blurRadius: 8,
+                  offset: const Offset(0, 4),
                 ),
               ],
             ),
             child: ClipRRect(
-              borderRadius: BorderRadius.circular(6),
+              borderRadius: BorderRadius.circular(8),
               child: Stack(
                 fit: StackFit.expand,
                 children: [
-                  // 1. Miniature vidéo mise en cache
-                  thumbUrl != null
-                      ? CachedNetworkImage(
+                  // 1. Miniature vidéo mise en cache avec Hero optionnel
+                  Hero(
+                    tag: heroTag ?? 'video_poster_${video.id}',
+                    child: thumbUrl != null
+                        ? CachedNetworkImage(
                           imageUrl: thumbUrl,
                           fit: BoxFit.cover,
                           placeholder: (context, url) => Container(
@@ -84,6 +90,7 @@ class VideoCard extends StatelessWidget {
                             child: Icon(Icons.play_circle_fill, size: 48, color: Colors.white30),
                           ),
                         ),
+                  ),
 
                   // 2. Dégradé sombre en bas pour la lisibilité
                   Positioned.fill(

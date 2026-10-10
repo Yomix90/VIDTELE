@@ -90,8 +90,11 @@ class AppLocalizations {
 
   // ==================== NAVIGATION BAR ====================
   String get navHome => isArabic ? 'الرئيسية' : (isEnglish ? 'Home' : 'Accueil');
-  String get navReels => isArabic ? 'ريلز' : (isEnglish ? 'Shorts' : 'Zapping');
+  String get navDiscover => isArabic ? 'اكتشف' : (isEnglish ? 'Discover' : 'Découvrir');
+  String get navSearch => isArabic ? 'بحث' : (isEnglish ? 'Search' : 'Recherche');
   String get navMyList => isArabic ? 'قائمتي' : (isEnglish ? 'My List' : 'Ma Liste');
+  String get navProfile => isArabic ? 'حسابي' : (isEnglish ? 'Profile' : 'Profil');
+  String get navReels => navDiscover;
   String get navHistory => isArabic ? 'السجل' : (isEnglish ? 'History' : 'Historique');
   String get navSettings => isArabic ? 'الإعدادات' : (isEnglish ? 'Settings' : 'Paramètres');
   String get latestSeriesTitle => isArabic ? 'أحدث المسلسلات المضافة' : (isEnglish ? 'Latest Added Series' : 'Dernières Séries Ajoutées');

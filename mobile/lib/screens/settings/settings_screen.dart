@@ -7,6 +7,7 @@ import '../../providers/auth_provider.dart';
 import '../../providers/locale_provider.dart';
 import '../admin/admin_screen.dart';
 import '../auth/login_screen.dart';
+import '../library/history_screen.dart';
 import '../../core/services/update_service.dart';
 
 /// Écran des Paramètres et Profil avec support trilingue FR / EN / AR (RTL)
@@ -23,7 +24,7 @@ class SettingsScreen extends ConsumerWidget {
     return Scaffold(
       backgroundColor: AppTheme.netflixBlack,
       appBar: AppBar(
-        title: Text(l10n.settingsTitle),
+        title: Text(l10n.navProfile),
         backgroundColor: Colors.black.withValues(alpha: 0.8),
       ),
       body: ListView(
@@ -114,6 +115,29 @@ class SettingsScreen extends ConsumerWidget {
           ),
           const SizedBox(height: 10),
 
+          // Historique de visionnage
+          ListTile(
+            tileColor: AppTheme.netflixCard,
+            shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(8)),
+            leading: const Icon(Icons.history_rounded, color: Colors.white),
+            title: Text(
+              l10n.navHistory,
+              style: const TextStyle(color: Colors.white, fontWeight: FontWeight.w600),
+            ),
+            subtitle: const Text(
+              'Reprenez vos lectures et épisodes en cours',
+              style: TextStyle(color: Colors.white54, fontSize: 12),
+            ),
+            trailing: const Icon(Icons.chevron_right, color: Colors.white38),
+            onTap: () {
+              Navigator.push(
+                context,
+                MaterialPageRoute(builder: (_) => const HistoryScreen()),
+              );
+            },
+          ),
+          const SizedBox(height: 10),
+
           // Sélecteur de langue trilingue (Français 🇫🇷 / English 🇬🇧 / العربية 🇲🇦)
           ListTile(
             tileColor: AppTheme.netflixCard,
@@ -145,7 +169,7 @@ class SettingsScreen extends ConsumerWidget {
               },
             ),
           ),
-          const SizedBox(height: 12),
+          const SizedBox(height: 10),
 
           // Configuration URL Serveur
           ListTile(
