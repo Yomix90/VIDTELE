@@ -95,6 +95,26 @@ async def lifespan(app: FastAPI):
             except ValueError:
                 pass
 
+        # Restauration des limites de streaming dynamiques
+        res_global = await db.execute(select(SystemSetting).where(SystemSetting.key == "MAX_CONCURRENT_STREAMS_GLOBAL"))
+        setting_global = res_global.scalar_one_or_none()
+        if setting_global and setting_global.value:
+            try:
+                settings.MAX_CONCURRENT_STREAMS_GLOBAL = int(setting_global.value)
+                logger.info(f"Limite globale de flux simultanés restaurée : {settings.MAX_CONCURRENT_STREAMS_GLOBAL}")
+            except ValueError:
+                pass
+
+        res_user = await db.execute(select(SystemSetting).where(SystemSetting.key == "MAX_CONCURRENT_STREAMS_PER_USER"))
+        setting_user = res_user.scalar_one_or_none()
+        if setting_user and setting_user.value:
+            try:
+                settings.MAX_CONCURRENT_STREAMS_PER_USER = int(setting_user.value)
+                logger.info(f"Limite de flux par utilisateur restaurée : {settings.MAX_CONCURRENT_STREAMS_PER_USER}")
+            except ValueError:
+                pass
+
+
         # Vérifier si un compte Telegram actif est enregistré dans la table telegram_accounts
         res_acc = await db.execute(select(TelegramAccount).where(TelegramAccount.is_active == True))
         active_acc = res_acc.scalar_one_or_none()

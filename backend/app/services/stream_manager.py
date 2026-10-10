@@ -64,16 +64,18 @@ class StreamManager:
                 detail="Serveur saturé : nombre maximal de lectures simultanées atteint. Réessayez dans quelques minutes.",
             )
 
-        # 4. Vérifier le quota par utilisateur
-        count_user_stmt = select(func.count(ActiveStream.id)).where(ActiveStream.user_id == user.id)
-        user_active = (await db.execute(count_user_stmt)).scalar_one()
+        # 4. Vérifier le quota par utilisateur (les administrateurs sont exemptés pour tests/supervision)
+        if user.role != "admin":
+            count_user_stmt = select(func.count(ActiveStream.id)).where(ActiveStream.user_id == user.id)
+            user_active = (await db.execute(count_user_stmt)).scalar_one()
 
-        max_allowed = user.max_concurrent_streams or settings.MAX_CONCURRENT_STREAMS_PER_USER
-        if user_active >= max_allowed:
-            raise HTTPException(
-                status_code=status.HTTP_429_TOO_MANY_REQUESTS,
-                detail=f"Limite de lectures simultanées atteinte pour votre compte (max: {max_allowed}).",
-            )
+            max_allowed = user.max_concurrent_streams or settings.MAX_CONCURRENT_STREAMS_PER_USER
+            if user_active >= max_allowed:
+                raise HTTPException(
+                    status_code=status.HTTP_429_TOO_MANY_REQUESTS,
+                    detail=f"Limite de lectures simultanées atteinte pour votre compte (max: {max_allowed}).",
+                )
+
 
         # 5. Créer la nouvelle session active
         new_stream = ActiveStream(

@@ -326,6 +326,19 @@ class StreamStats(BaseModel):
     max_per_user: int
 
 
+class StreamingSettingsUpdate(BaseModel):
+    max_concurrent_global: int = Field(..., ge=1, le=1000, description="Limite globale de flux simultanés")
+    max_concurrent_per_user: int = Field(..., ge=1, le=20, description="Limite par utilisateur")
+
+
+class BenchmarkRunRequest(BaseModel):
+    concurrency: int = Field(default=20, ge=1, le=300, description="Nombre de flux simultanés à simuler")
+    duration_seconds: float = Field(default=5.0, ge=1.0, le=60.0, description="Durée du test en secondes")
+    mode: str = Field(default="burst", description="burst ou playback")
+    video_id: Optional[int] = Field(default=None, description="ID spécifique de la vidéo (optionnel)")
+
+
+
 class AdminStatsResponse(BaseModel):
     total_videos: int
     total_views: int

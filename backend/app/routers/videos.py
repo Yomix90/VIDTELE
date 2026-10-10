@@ -385,9 +385,14 @@ async def stream_video(
 
     # 3. Contrôle et enregistrement des quotas de flux simultanés (anti-abus)
     client_ip = get_client_ip(request)
-    # On utilise un identifiant de session dérivé du token
-    session_id = raw_token[-32:] if len(raw_token) >= 32 else raw_token
+    # On utilise un identifiant de session dérivé du token ou personnalisé pour le suivi précis de chaque lecteur
+    custom_session = request.headers.get("X-Session-ID") or request.query_params.get("session_id")
+    if custom_session:
+        session_id = custom_session[:64]
+    else:
+        session_id = raw_token[-32:] if len(raw_token) >= 32 else raw_token
     await stream_manager.register_stream_access(user, video.id, session_id, client_ip, db)
+
 
     # 4. Incrémentation des vues si la lecture démarre au début (start == 0)
     range_header = request.headers.get("Range")
