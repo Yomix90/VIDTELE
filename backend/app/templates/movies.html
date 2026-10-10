@@ -9,7 +9,7 @@
       <i class="bi bi-film text-danger"></i>
       <span>Catalogue des Films</span>
     </h1>
-    <div class="text-muted small">Gérez les longs-métrages et associez-les directement aux fichiers vidéo de vos canaux Telegram.</div>
+    <div class="text-muted small">Gérez vos longs-métrages, modifiez leurs métadonnées trilingues et prévisualisez le flux vidéo en streaming direct.</div>
   </div>
   <button class="btn btn-danger btn-sm d-flex align-items-center gap-1 shadow-sm" data-bs-toggle="modal" data-bs-target="#modalCreateMovie">
     <i class="bi bi-plus-lg"></i>
@@ -21,7 +21,7 @@
 <div class="row g-4">
   {% for m in movies_list %}
   <div class="col-12 col-sm-6 col-md-4 col-xl-3">
-    <div class="media-poster-card">
+    <div class="media-poster-card position-relative">
       <div class="media-poster-wrapper">
         {% if m.poster_path %}
           <img src="{{ m.poster_path }}" alt="{{ m.title_fr }}" class="media-poster-img">
@@ -41,6 +41,16 @@
             <span class="badge badge-atlas-amber shadow-sm">Brouillon</span>
           {% endif %}
         </div>
+
+        {% if m.telegram_video_id %}
+        <!-- Bouton Play Aperçu Streaming au centre de l'affiche -->
+        <button class="btn btn-danger rounded-circle position-absolute top-50 start-50 translate-middle shadow-lg p-3 d-flex align-items-center justify-content-center"
+                style="z-index: 5; width: 54px; height: 54px;" 
+                title="Aperçu vidéo en streaming"
+                onclick="playAdminVideo({{ m.telegram_video_id }}, '{{ m.title_fr|replace('\'', '\\\'') }}')">
+          <i class="bi bi-play-fill fs-3"></i>
+        </button>
+        {% endif %}
       </div>
 
       <div class="media-poster-content">
@@ -58,7 +68,15 @@
             <i class="bi {% if m.telegram_video_id %}bi-check-circle-fill{% else %}bi-exclamation-triangle{% endif %} me-1"></i>
             {% if m.telegram_video_id %}Vidéo liée{% else %}Sans vidéo{% endif %}
           </span>
-          <span class="small text-white"><i class="bi bi-star-fill text-warning me-1"></i>{{ m.rating or '--' }}</span>
+          <div class="d-flex align-items-center gap-1">
+            <button class="btn btn-sm btn-outline-warning p-1 px-2" title="Modifier le film" 
+                    onclick='openEditMovieModal({{ m.id }}, {{ m.title_fr|tojson }}, {{ (m.title_ar or "")|tojson }}, {{ (m.title_en or "")|tojson }}, {{ m.year or "null" }}, {{ m.rating or "null" }}, {{ (m.poster_path or "")|tojson }}, {{ (m.banner_path or "")|tojson }}, {{ (m.synopsis_fr or "")|tojson }}, {{ (m.synopsis_ar or "")|tojson }}, {{ (m.synopsis_en or "")|tojson }}, {{ m.telegram_video_id or 0 }}, {{ (m.visibility or "published")|tojson }})'>
+              <i class="bi bi-pencil"></i>
+            </button>
+            <button class="btn btn-sm btn-outline-danger p-1 px-2" title="Supprimer le film" onclick="confirmDeleteMovie({{ m.id }}, '{{ m.title_fr|replace('\'', '\\\'') }}')">
+              <i class="bi bi-trash3"></i>
+            </button>
+          </div>
         </div>
       </div>
     </div>
@@ -79,7 +97,7 @@
 
 <!-- Modale : Créer un Film -->
 <div class="modal fade" id="modalCreateMovie" tabindex="-1">
-  <div class="modal-dialog">
+  <div class="modal-dialog modal-lg">
     <div class="modal-content bg-dark text-white border-secondary">
       <div class="modal-header border-secondary">
         <h5 class="modal-title">Nouveau Film</h5>
@@ -87,37 +105,70 @@
       </div>
       <div class="modal-body">
         <form id="formCreateMovie" onsubmit="submitCreateMovie(event)">
-          <div class="mb-3">
-            <label class="form-label small">Titre du film *</label>
-            <input type="text" id="movieTitle" class="form-control" placeholder="ex: Inception" required>
+          <div class="d-flex justify-content-between align-items-center mb-3 p-2 rounded bg-black bg-opacity-40 border border-secondary border-opacity-50">
+            <span class="small text-muted">Traduire automatiquement les titres et le synopsis :</span>
+            <button type="button" class="btn btn-outline-info btn-sm d-flex align-items-center gap-1" onclick="autoTranslateMovieWithGemini('create')">
+              <i class="bi bi-stars"></i>
+              <span>Traduire avec Gemini AI</span>
+            </button>
           </div>
+
           <div class="row g-2 mb-3">
-            <div class="col-6">
+            <div class="col-12 col-md-4">
+              <label class="form-label small">Titre (Français) *</label>
+              <input type="text" id="movieTitle" class="form-control" placeholder="ex: Inception" required>
+            </div>
+            <div class="col-12 col-md-4">
+              <label class="form-label small">Titre (Arabe)</label>
+              <input type="text" id="movieTitleAr" class="form-control" dir="rtl" placeholder="اختياري">
+            </div>
+            <div class="col-12 col-md-4">
+              <label class="form-label small">Titre (Anglais)</label>
+              <input type="text" id="movieTitleEn" class="form-control" placeholder="Optional">
+            </div>
+          </div>
+
+          <div class="row g-2 mb-3">
+            <div class="col-6 col-md-4">
               <label class="form-label small">Année</label>
               <input type="number" id="movieYear" class="form-control" placeholder="2010" min="1950" max="2035">
             </div>
-            <div class="col-6">
+            <div class="col-6 col-md-4">
               <label class="form-label small">Note (sur 10)</label>
               <input type="number" id="movieRating" class="form-control" placeholder="8.8" step="0.1" min="0" max="10">
             </div>
+            <div class="col-12 col-md-4">
+              <label class="form-label small">Vidéo Telegram rattachée</label>
+              <select id="movieRawVideo" class="form-select">
+                <option value="">-- Aucune (associer plus tard) --</option>
+                {% for rv in raw_videos %}
+                  <option value="{{ rv.id }}">{{ rv.title }} (Msg {{ rv.telegram_message_id }})</option>
+                {% endfor %}
+              </select>
+            </div>
+          </div>
+
+          <!-- Upload Affiche VPS -->
+          <div class="mb-3">
+            <label class="form-label small">Affiche (Poster 2:3)</label>
+            <div class="input-group mb-2">
+              <input type="text" id="moviePoster" class="form-control" placeholder="https://... ou téléverser sur VPS">
+              <label class="btn btn-outline-secondary" for="uploadMoviePosterFile">
+                <i class="bi bi-cloud-arrow-up me-1"></i>Téléverser Image
+              </label>
+              <input type="file" id="uploadMoviePosterFile" class="d-none" accept="image/*" onchange="uploadImageToServer('uploadMoviePosterFile', 'moviePoster')">
+            </div>
+          </div>
+
+          <div class="mb-3">
+            <label class="form-label small">Synopsis (Français)</label>
+            <textarea id="movieSynopsis" class="form-control" rows="2" placeholder="Résumé du film..."></textarea>
           </div>
           <div class="mb-3">
-            <label class="form-label small">Rattacher une vidéo Telegram</label>
-            <select id="movieRawVideo" class="form-select">
-              <option value="">-- Aucune (associer plus tard) --</option>
-              {% for rv in raw_videos %}
-                <option value="{{ rv.id }}">{{ rv.title }} (Msg {{ rv.telegram_message_id }})</option>
-              {% endfor %}
-            </select>
+            <label class="form-label small">Synopsis (Arabe)</label>
+            <textarea id="movieSynopsisAr" class="form-control" rows="2" dir="rtl" placeholder="ملخص الفيلم..."></textarea>
           </div>
-          <div class="mb-3">
-            <label class="form-label small">URL Affiche (Poster)</label>
-            <input type="url" id="moviePoster" class="form-control" placeholder="https://image.tmdb.org/...">
-          </div>
-          <div class="mb-3">
-            <label class="form-label small">Synopsis</label>
-            <textarea id="movieSynopsis" class="form-control" rows="3" placeholder="Résumé du film..."></textarea>
-          </div>
+
           <div class="mb-3 form-check">
             <input type="checkbox" id="moviePublish" class="form-check-input" checked>
             <label class="form-check-label small" for="moviePublish">Publier immédiatement sur l'application mobile</label>
@@ -128,28 +179,212 @@
     </div>
   </div>
 </div>
+
+<!-- Modale : Modifier un Film -->
+<div class="modal fade" id="modalEditMovie" tabindex="-1">
+  <div class="modal-dialog modal-lg">
+    <div class="modal-content bg-dark text-white border-secondary">
+      <div class="modal-header border-secondary">
+        <h5 class="modal-title d-flex align-items-center gap-2">
+          <i class="bi bi-pencil-square text-warning"></i>
+          <span>Modifier le Film</span>
+        </h5>
+        <button type="button" class="btn-close btn-close-white" data-bs-dismiss="modal"></button>
+      </div>
+      <div class="modal-body">
+        <form id="formEditMovie" onsubmit="submitUpdateMovie(event)">
+          <input type="hidden" id="editMovieId">
+          <div class="d-flex justify-content-between align-items-center mb-3 p-2 rounded bg-black bg-opacity-40 border border-secondary border-opacity-50">
+            <span class="small text-muted">Traduire automatiquement les titres et le synopsis :</span>
+            <button type="button" class="btn btn-outline-info btn-sm d-flex align-items-center gap-1" onclick="autoTranslateMovieWithGemini('edit')">
+              <i class="bi bi-stars"></i>
+              <span>Traduire avec Gemini AI</span>
+            </button>
+          </div>
+
+          <div class="row g-2 mb-3">
+            <div class="col-12 col-md-4">
+              <label class="form-label small">Titre (Français) *</label>
+              <input type="text" id="editMovieTitleFr" class="form-control" required>
+            </div>
+            <div class="col-12 col-md-4">
+              <label class="form-label small">Titre (Arabe)</label>
+              <input type="text" id="editMovieTitleAr" class="form-control" dir="rtl">
+            </div>
+            <div class="col-12 col-md-4">
+              <label class="form-label small">Titre (Anglais)</label>
+              <input type="text" id="editMovieTitleEn" class="form-control">
+            </div>
+          </div>
+
+          <div class="row g-2 mb-3">
+            <div class="col-6 col-md-3">
+              <label class="form-label small">Année</label>
+              <input type="number" id="editMovieYear" class="form-control" min="1950" max="2035">
+            </div>
+            <div class="col-6 col-md-3">
+              <label class="form-label small">Note (sur 10)</label>
+              <input type="number" id="editMovieRating" class="form-control" step="0.1" min="0" max="10">
+            </div>
+            <div class="col-12 col-md-3">
+              <label class="form-label small">Vidéo Telegram</label>
+              <select id="editMovieVideoSelect" class="form-select">
+                <option value="0">-- Aucune vidéo (Détacher) --</option>
+                {% for rv in raw_videos %}
+                  <option value="{{ rv.id }}">{{ rv.title }} (Msg {{ rv.telegram_message_id }})</option>
+                {% endfor %}
+              </select>
+            </div>
+            <div class="col-12 col-md-3">
+              <label class="form-label small">Visibilité</label>
+              <select id="editMovieVisibility" class="form-select">
+                <option value="published">Publié sur Mobile</option>
+                <option value="draft">Brouillon (Masqué)</option>
+              </select>
+            </div>
+          </div>
+
+          <!-- Upload Affiche VPS -->
+          <div class="mb-3">
+            <label class="form-label small">Affiche (Poster 2:3)</label>
+            <div class="input-group mb-2">
+              <input type="text" id="editMoviePoster" class="form-control" placeholder="https://... ou téléverser sur VPS">
+              <label class="btn btn-outline-secondary" for="uploadEditMoviePosterFile">
+                <i class="bi bi-cloud-arrow-up me-1"></i>Téléverser Image
+              </label>
+              <input type="file" id="uploadEditMoviePosterFile" class="d-none" accept="image/*" onchange="uploadImageToServer('uploadEditMoviePosterFile', 'editMoviePoster')">
+            </div>
+          </div>
+
+          <!-- Upload Bannière VPS -->
+          <div class="mb-3">
+            <label class="form-label small">Bannière (Backdrop 16:9)</label>
+            <div class="input-group mb-2">
+              <input type="text" id="editMovieBanner" class="form-control" placeholder="https://... ou téléverser sur VPS">
+              <label class="btn btn-outline-secondary" for="uploadEditMovieBannerFile">
+                <i class="bi bi-cloud-arrow-up me-1"></i>Téléverser Image
+              </label>
+              <input type="file" id="uploadEditMovieBannerFile" class="d-none" accept="image/*" onchange="uploadImageToServer('uploadEditMovieBannerFile', 'editMovieBanner')">
+            </div>
+          </div>
+
+          <div class="mb-3">
+            <label class="form-label small">Synopsis (Français)</label>
+            <textarea id="editMovieSynopsisFr" class="form-control" rows="2"></textarea>
+          </div>
+          <div class="mb-3">
+            <label class="form-label small">Synopsis (Arabe)</label>
+            <textarea id="editMovieSynopsisAr" class="form-control" rows="2" dir="rtl"></textarea>
+          </div>
+          <div class="mb-3">
+            <label class="form-label small">Synopsis (Anglais)</label>
+            <textarea id="editMovieSynopsisEn" class="form-control" rows="2"></textarea>
+          </div>
+
+          <div class="d-flex justify-content-end gap-2">
+            <button type="button" class="btn btn-secondary" data-bs-dismiss="modal">Annuler</button>
+            <button type="submit" class="btn btn-danger px-4">Enregistrer les modifications</button>
+          </div>
+        </form>
+      </div>
+    </div>
+  </div>
+</div>
 {% endblock %}
 
 {% block extra_scripts %}
 <script>
+async function uploadImageToServer(fileInputId, targetInputId) {
+  const fileInput = document.getElementById(fileInputId);
+  if (!fileInput.files || !fileInput.files[0]) return;
+  const file = fileInput.files[0];
+
+  const formData = new FormData();
+  formData.append('file', file);
+
+  showToast('Téléversement de l\'image sur le serveur VPS...', 'info');
+  try {
+    const res = await fetch('/api/admin/upload-image', {
+      method: 'POST',
+      body: formData,
+    });
+    const data = await res.json();
+    if (res.ok && data.success) {
+      document.getElementById(targetInputId).value = data.url;
+      showToast('Image enregistrée sur le VPS avec succès !', 'success');
+    } else {
+      showToast(data.detail || 'Erreur lors de l\'enregistrement', 'error');
+    }
+  } catch (e) {
+    showToast('Erreur d\'upload image', 'error');
+  }
+}
+
+async function autoTranslateMovieWithGemini(mode) {
+  const isEdit = mode === 'edit';
+  const titleField = isEdit ? 'editMovieTitleFr' : 'movieTitle';
+  const synField = isEdit ? 'editMovieSynopsisFr' : 'movieSynopsis';
+  const title = document.getElementById(titleField).value.trim();
+  const synopsis = document.getElementById(synField).value.trim();
+
+  if (!title) {
+    showToast('Veuillez renseigner au moins un titre français.', 'warning');
+    return;
+  }
+
+  showToast('Traduction et enrichissement avec Gemini AI...', 'info');
+  try {
+    const res = await fetch('/api/admin/ai/translate', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ title: title, synopsis: synopsis, content_type: 'movie' })
+    });
+    const data = await res.json();
+    if (res.ok) {
+      if (isEdit) {
+        if (data.title_ar) document.getElementById('editMovieTitleAr').value = data.title_ar;
+        if (data.title_en) document.getElementById('editMovieTitleEn').value = data.title_en;
+        if (data.synopsis_fr && !synopsis) document.getElementById('editMovieSynopsisFr').value = data.synopsis_fr;
+        if (data.synopsis_ar) document.getElementById('editMovieSynopsisAr').value = data.synopsis_ar;
+        if (data.synopsis_en) document.getElementById('editMovieSynopsisEn').value = data.synopsis_en;
+        if (data.year && !document.getElementById('editMovieYear').value) {
+          document.getElementById('editMovieYear').value = data.year;
+        }
+      } else {
+        if (data.title_ar) document.getElementById('movieTitleAr').value = data.title_ar;
+        if (data.title_en) document.getElementById('movieTitleEn').value = data.title_en;
+        if (data.synopsis_fr && !synopsis) document.getElementById('movieSynopsis').value = data.synopsis_fr;
+        if (data.synopsis_ar) document.getElementById('movieSynopsisAr').value = data.synopsis_ar;
+        if (data.year && !document.getElementById('movieYear').value) {
+          document.getElementById('movieYear').value = data.year;
+        }
+      }
+      if (data.warning) {
+        showToast(data.warning, 'warning');
+      } else {
+        showToast('Métadonnées multilingues générées par Gemini AI !', 'success');
+      }
+    } else {
+      showToast(data.detail || 'Erreur IA', 'error');
+    }
+  } catch (e) {
+    showToast('Erreur de requête Gemini', 'error');
+  }
+}
+
 async function submitCreateMovie(e) {
   e.preventDefault();
-  const title = document.getElementById('movieTitle').value.trim();
-  const year = document.getElementById('movieYear').value ? parseInt(document.getElementById('movieYear').value) : null;
-  const rating = document.getElementById('movieRating').value ? parseFloat(document.getElementById('movieRating').value) : null;
-  const rawVid = document.getElementById('movieRawVideo').value ? parseInt(document.getElementById('movieRawVideo').value) : null;
-  const poster = document.getElementById('moviePoster').value.trim();
-  const synopsis = document.getElementById('movieSynopsis').value.trim();
-  const isPub = document.getElementById('moviePublish').checked;
-
   const payload = {
-    title_fr: title,
-    year: year,
-    rating: rating,
-    telegram_video_id: rawVid,
-    poster_path: poster || null,
-    synopsis_fr: synopsis || null,
-    visibility: isPub ? 'published' : 'draft',
+    title_fr: document.getElementById('movieTitle').value.trim(),
+    title_ar: document.getElementById('movieTitleAr').value.trim() || null,
+    title_en: document.getElementById('movieTitleEn').value.trim() || null,
+    year: document.getElementById('movieYear').value ? parseInt(document.getElementById('movieYear').value) : null,
+    rating: document.getElementById('movieRating').value ? parseFloat(document.getElementById('movieRating').value) : null,
+    telegram_video_id: document.getElementById('movieRawVideo').value ? parseInt(document.getElementById('movieRawVideo').value) : null,
+    poster_path: document.getElementById('moviePoster').value.trim() || null,
+    synopsis_fr: document.getElementById('movieSynopsis').value.trim() || null,
+    synopsis_ar: document.getElementById('movieSynopsisAr').value.trim() || null,
+    visibility: document.getElementById('moviePublish').checked ? 'published' : 'draft',
   };
 
   try {
@@ -169,5 +404,80 @@ async function submitCreateMovie(e) {
     showToast('Erreur serveur', 'error');
   }
 }
+
+function openEditMovieModal(id, titleFr, titleAr, titleEn, year, rating, poster, banner, synFr, synAr, synEn, vidId, visibility) {
+  document.getElementById('editMovieId').value = id;
+  document.getElementById('editMovieTitleFr').value = titleFr || '';
+  document.getElementById('editMovieTitleAr').value = titleAr || '';
+  document.getElementById('editMovieTitleEn').value = titleEn || '';
+  document.getElementById('editMovieYear').value = year || '';
+  document.getElementById('editMovieRating').value = rating || '';
+  document.getElementById('editMoviePoster').value = poster || '';
+  document.getElementById('editMovieBanner').value = banner || '';
+  document.getElementById('editMovieSynopsisFr').value = synFr || '';
+  document.getElementById('editMovieSynopsisAr').value = synAr || '';
+  document.getElementById('editMovieSynopsisEn').value = synEn || '';
+  document.getElementById('editMovieVideoSelect').value = vidId || 0;
+  document.getElementById('editMovieVisibility').value = visibility || 'published';
+
+  const modal = bootstrap.Modal.getOrCreateInstance(document.getElementById('modalEditMovie'));
+  modal.show();
+}
+
+async function submitUpdateMovie(e) {
+  e.preventDefault();
+  const movieId = document.getElementById('editMovieId').value;
+  const payload = {
+    title_fr: document.getElementById('editMovieTitleFr').value.trim(),
+    title_ar: document.getElementById('editMovieTitleAr').value.trim() || null,
+    title_en: document.getElementById('editMovieTitleEn').value.trim() || null,
+    year: document.getElementById('editMovieYear').value ? parseInt(document.getElementById('editMovieYear').value) : null,
+    rating: document.getElementById('editMovieRating').value ? parseFloat(document.getElementById('editMovieRating').value) : null,
+    telegram_video_id: parseInt(document.getElementById('editMovieVideoSelect').value),
+    poster_path: document.getElementById('editMoviePoster').value.trim() || null,
+    banner_path: document.getElementById('editMovieBanner').value.trim() || null,
+    synopsis_fr: document.getElementById('editMovieSynopsisFr').value.trim() || null,
+    synopsis_ar: document.getElementById('editMovieSynopsisAr').value.trim() || null,
+    synopsis_en: document.getElementById('editMovieSynopsisEn').value.trim() || null,
+    visibility: document.getElementById('editMovieVisibility').value,
+  };
+
+  try {
+    const res = await fetch(`/api/admin/movies/${movieId}`, {
+      method: 'PATCH',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify(payload)
+    });
+    if (res.ok) {
+      showToast('Film mis à jour avec succès !', 'success');
+      setTimeout(() => location.reload(), 800);
+    } else {
+      const err = await res.json();
+      showToast(err.detail || 'Erreur lors de la modification', 'error');
+    }
+  } catch (e) {
+    showToast('Erreur serveur', 'error');
+  }
+}
+
+async function confirmDeleteMovie(id, title) {
+  if (!confirm(`Êtes-vous sûr de vouloir supprimer définitivement le film "${title}" ?\n\n(La vidéo Telegram sera détachée et conservée en vidéo brute).`)) {
+    return;
+  }
+
+  try {
+    const res = await fetch(`/api/admin/movies/${id}`, { method: 'DELETE' });
+    const data = await res.json();
+    if (res.ok) {
+      showToast(data.message || 'Film supprimé !', 'success');
+      setTimeout(() => location.reload(), 800);
+    } else {
+      showToast(data.detail || 'Erreur lors de la suppression', 'error');
+    }
+  } catch (e) {
+    showToast('Erreur de suppression', 'error');
+  }
+}
 </script>
 {% endblock %}
+

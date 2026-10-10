@@ -89,6 +89,18 @@ async def init_db() -> None:
         except Exception:
             pass
 
+        # Migrations douces pour 'series', 'movies', 'episodes' (titres et synopsis en anglais)
+        for tbl in ["series", "movies", "episodes"]:
+            try:
+                res_t = await conn.execute(text(f"PRAGMA table_info({tbl})"))
+                ex_cols = {row[1] for row in res_t.fetchall()}
+                for c_name, c_def in [("title_en", "VARCHAR(255)"), ("synopsis_en", "TEXT")]:
+                    if c_name not in ex_cols:
+                        await conn.execute(text(f"ALTER TABLE {tbl} ADD COLUMN {c_name} {c_def}"))
+            except Exception:
+                pass
+
+
         # Amorçage automatique des genres de référence si vide
         try:
             res_g = await conn.execute(text("SELECT count(*) FROM genres"))

@@ -285,18 +285,21 @@ async def stream_video(
     Endpoint de streaming vidéo avec support complet des requêtes HTTP Range (206 Partial Content).
     Gère l'authentification par paramètre ?token= ou par en-tête Authorization: Bearer.
     """
-    # 1. Vérification de l'authentification (Query param ou Header Authorization)
+    # 1. Vérification de l'authentification (Query param, Header Authorization ou Cookie session admin)
     raw_token = token
     if not raw_token:
         auth_header = request.headers.get("Authorization")
         if auth_header and auth_header.startswith("Bearer "):
             raw_token = auth_header.replace("Bearer ", "").strip()
+        elif request.cookies.get("admin_token") or request.cookies.get("access_token"):
+            raw_token = request.cookies.get("admin_token") or request.cookies.get("access_token")
 
     if not raw_token:
         raise HTTPException(
             status_code=status.HTTP_401_UNAUTHORIZED,
-            detail="Jeton d'authentification requis pour le streaming (header ou ?token=)",
+            detail="Jeton d'authentification requis pour le streaming (header, cookie ou ?token=)",
         )
+
 
     # Décodage et validation du token (supporte les tokens 'access' et 'stream')
     try:

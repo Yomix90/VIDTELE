@@ -41,9 +41,13 @@
       </p>
 
       <div class="d-flex flex-wrap gap-2">
-        <button class="btn btn-danger btn-sm d-flex align-items-center gap-1" onclick="togglePublishSeries({{ series.id }})">
+        <button class="btn btn-danger btn-sm d-flex align-items-center gap-1 shadow-sm" onclick="togglePublishSeries({{ series.id }})">
           <i class="bi bi-broadcast"></i>
           <span>{% if series.visibility == 'published' %}Passer en Brouillon{% else %}Publier sur Mobile{% endif %}</span>
+        </button>
+        <button class="btn btn-outline-warning btn-sm d-flex align-items-center gap-1" onclick="openEditSeriesModal()">
+          <i class="bi bi-pencil-square"></i>
+          <span>Modifier la Série</span>
         </button>
         <button class="btn btn-outline-light btn-sm d-flex align-items-center gap-1" data-bs-toggle="modal" data-bs-target="#modalAddSeason">
           <i class="bi bi-folder-plus"></i>
@@ -53,11 +57,16 @@
           <i class="bi bi-plus-circle"></i>
           <span>Ajouter un épisode</span>
         </button>
+        <button class="btn btn-outline-danger btn-sm d-flex align-items-center gap-1 ms-auto" onclick="confirmDeleteSeries({{ series.id }}, '{{ series.title_fr|replace('\'', '\\\'') }}')">
+          <i class="bi bi-trash3"></i>
+          <span>Supprimer la Série</span>
+        </button>
       </div>
 
       <div class="d-flex flex-wrap gap-3 text-muted small mt-4">
         <span><i class="bi bi-calendar3 me-1"></i>{{ series.year_start or 'N/A' }}</span>
         <span><i class="bi bi-star-fill text-warning me-1"></i>{{ series.rating or 'N/A' }} / 10</span>
+
         <span><i class="bi bi-collection me-1"></i>{{ series.seasons|length }} saison(s)</span>
       </div>
     </div>
@@ -156,9 +165,22 @@
                 {% endif %}
               </td>
               <td class="text-end">
-                <button class="btn btn-sm btn-outline-light" onclick="openAssignModal({{ ep.id }}, {{ ep.number }})">
-                  <i class="bi bi-link-45deg me-1"></i>Lier vidéo Telegram
-                </button>
+                <div class="d-inline-flex align-items-center gap-1">
+                  {% if ep.telegram_video_id %}
+                  <button class="btn btn-sm btn-outline-info" title="Aperçu vidéo" onclick="playAdminVideo({{ ep.telegram_video_id }}, '{{ (ep.title_fr or 'Épisode '~ep.number)|replace('\'', '\\\'') }}')">
+                    <i class="bi bi-play-circle-fill"></i>
+                  </button>
+                  {% endif %}
+                  <button class="btn btn-sm btn-outline-light" title="Lier vidéo Telegram" onclick="openAssignModal({{ ep.id }}, {{ ep.number }})">
+                    <i class="bi bi-link-45deg"></i>
+                  </button>
+                  <button class="btn btn-sm btn-outline-warning" title="Modifier l'épisode" onclick="openEditEpisodeModal({{ ep.id }}, {{ ep.number }}, '{{ (ep.title_fr or '')|replace('\'', '\\\'') }}', '{{ (ep.title_ar or '')|replace('\'', '\\\'') }}', '{{ (ep.synopsis_fr or '')|replace('\'', '\\\'')|replace('\n', ' ') }}', {{ ep.telegram_video_id or 0 }})">
+                    <i class="bi bi-pencil"></i>
+                  </button>
+                  <button class="btn btn-sm btn-outline-danger" title="Supprimer l'épisode" onclick="confirmDeleteEpisode({{ ep.id }}, {{ ep.number }})">
+                    <i class="bi bi-trash3"></i>
+                  </button>
+                </div>
               </td>
             </tr>
             {% else %}
@@ -270,13 +292,340 @@
         <button type="button" class="btn btn-danger w-100" onclick="submitAssignVideo()">Valider l'association</button>
       </div>
     </div>
+<!-- Modale : Modifier la Série (Multilingue + Gemini AI + Upload VPS) -->
+<div class="modal fade" id="modalEditSeries" tabindex="-1">
+  <div class="modal-dialog modal-lg">
+    <div class="modal-content bg-dark text-white border-secondary">
+      <div class="modal-header border-secondary">
+        <h5 class="modal-title d-flex align-items-center gap-2">
+          <i class="bi bi-pencil-square text-warning"></i>
+          <span>Modifier la Série</span>
+        </h5>
+        <button type="button" class="btn-close btn-close-white" data-bs-dismiss="modal"></button>
+      </div>
+      <div class="modal-body">
+        <form id="formEditSeries" onsubmit="submitUpdateSeries(event)">
+          <div class="d-flex justify-content-between align-items-center mb-3 p-2 rounded bg-black bg-opacity-40 border border-secondary border-opacity-50">
+            <span class="small text-muted">Traduire automatiquement les titres et le synopsis :</span>
+            <button type="button" class="btn btn-outline-info btn-sm d-flex align-items-center gap-1" onclick="autoTranslateSeriesWithGemini()">
+              <i class="bi bi-stars"></i>
+              <span>Traduire avec Gemini AI</span>
+            </button>
+          </div>
+
+          <div class="row g-3 mb-3">
+            <div class="col-12 col-md-4">
+              <label class="form-label small">Titre (Français) *</label>
+              <input type="text" id="editSeriesTitleFr" class="form-control" value="{{ series.title_fr }}" required>
+            </div>
+            <div class="col-12 col-md-4">
+              <label class="form-label small">Titre (Arabe)</label>
+              <input type="text" id="editSeriesTitleAr" class="form-control" dir="rtl" value="{{ series.title_ar or '' }}">
+            </div>
+            <div class="col-12 col-md-4">
+              <label class="form-label small">Titre (Anglais)</label>
+              <input type="text" id="editSeriesTitleEn" class="form-control" value="{{ series.title_en or '' }}">
+            </div>
+          </div>
+
+          <div class="row g-3 mb-3">
+            <div class="col-6 col-md-4">
+              <label class="form-label small">Année</label>
+              <input type="number" id="editSeriesYear" class="form-control" value="{{ series.year_start or '' }}" min="1950" max="2035">
+            </div>
+            <div class="col-6 col-md-4">
+              <label class="form-label small">Note (0 à 10)</label>
+              <input type="number" id="editSeriesRating" class="form-control" value="{{ series.rating or '' }}" step="0.1" min="0" max="10">
+            </div>
+            <div class="col-12 col-md-4">
+              <label class="form-label small">Statut</label>
+              <select id="editSeriesStatus" class="form-select">
+                <option value="ongoing" {% if series.status == 'ongoing' %}selected{% endif %}>En cours</option>
+                <option value="completed" {% if series.status == 'completed' %}selected{% endif %}>Terminé</option>
+                <option value="upcoming" {% if series.status == 'upcoming' %}selected{% endif %}>À venir</option>
+              </select>
+            </div>
+          </div>
+
+          <!-- Upload Affiche VPS -->
+          <div class="mb-3">
+            <label class="form-label small">Affiche (Poster 2:3)</label>
+            <div class="input-group mb-2">
+              <input type="text" id="editSeriesPoster" class="form-control" value="{{ series.poster_path or '' }}" placeholder="https://... ou fichier VPS">
+              <label class="btn btn-outline-secondary" for="uploadPosterFile">
+                <i class="bi bi-cloud-arrow-up me-1"></i>Téléverser Image
+              </label>
+              <input type="file" id="uploadPosterFile" class="d-none" accept="image/*" onchange="uploadImageToServer('uploadPosterFile', 'editSeriesPoster')">
+            </div>
+          </div>
+
+          <!-- Upload Bannière VPS -->
+          <div class="mb-3">
+            <label class="form-label small">Bannière (Backdrop 16:9)</label>
+            <div class="input-group mb-2">
+              <input type="text" id="editSeriesBanner" class="form-control" value="{{ series.banner_path or '' }}" placeholder="https://... ou fichier VPS">
+              <label class="btn btn-outline-secondary" for="uploadBannerFile">
+                <i class="bi bi-cloud-arrow-up me-1"></i>Téléverser Image
+              </label>
+              <input type="file" id="uploadBannerFile" class="d-none" accept="image/*" onchange="uploadImageToServer('uploadBannerFile', 'editSeriesBanner')">
+            </div>
+          </div>
+
+          <div class="mb-3">
+            <label class="form-label small">Synopsis (Français)</label>
+            <textarea id="editSeriesSynopsisFr" class="form-control" rows="2">{{ series.synopsis_fr or '' }}</textarea>
+          </div>
+          <div class="mb-3">
+            <label class="form-label small">Synopsis (Arabe)</label>
+            <textarea id="editSeriesSynopsisAr" class="form-control" rows="2" dir="rtl">{{ series.synopsis_ar or '' }}</textarea>
+          </div>
+          <div class="mb-3">
+            <label class="form-label small">Synopsis (Anglais)</label>
+            <textarea id="editSeriesSynopsisEn" class="form-control" rows="2">{{ series.synopsis_en or '' }}</textarea>
+          </div>
+
+          <div class="d-flex justify-content-end gap-2">
+            <button type="button" class="btn btn-secondary" data-bs-dismiss="modal">Annuler</button>
+            <button type="submit" class="btn btn-danger px-4">Enregistrer les modifications</button>
+          </div>
+        </form>
+      </div>
+    </div>
+  </div>
+</div>
+
+<!-- Modale : Modifier un Épisode -->
+<div class="modal fade" id="modalEditEpisode" tabindex="-1">
+  <div class="modal-dialog">
+    <div class="modal-content bg-dark text-white border-secondary">
+      <div class="modal-header border-secondary">
+        <h5 class="modal-title">Modifier l'Épisode</h5>
+        <button type="button" class="btn-close btn-close-white" data-bs-dismiss="modal"></button>
+      </div>
+      <div class="modal-body">
+        <form id="formEditEpisode" onsubmit="submitUpdateEpisode(event)">
+          <input type="hidden" id="editEpId">
+          <div class="row g-2 mb-3">
+            <div class="col-4">
+              <label class="form-label small">Numéro *</label>
+              <input type="number" id="editEpNumber" class="form-control" min="0" required>
+            </div>
+            <div class="col-8">
+              <label class="form-label small">Titre (Français)</label>
+              <input type="text" id="editEpTitleFr" class="form-control">
+            </div>
+          </div>
+          <div class="mb-3">
+            <label class="form-label small">Titre (Arabe)</label>
+            <input type="text" id="editEpTitleAr" class="form-control" dir="rtl">
+          </div>
+          <div class="mb-3">
+            <label class="form-label small">Synopsis</label>
+            <textarea id="editEpSynopsis" class="form-control" rows="2"></textarea>
+          </div>
+          <div class="mb-3">
+            <label class="form-label small">Vidéo Telegram rattachée</label>
+            <select id="editEpVideoSelect" class="form-select">
+              <option value="0">-- Aucune vidéo (Détacher) --</option>
+              {% for rv in raw_videos %}
+                <option value="{{ rv.id }}">{{ rv.title }} (Msg {{ rv.telegram_message_id }})</option>
+              {% endfor %}
+            </select>
+          </div>
+          <button type="submit" class="btn btn-danger w-100">Enregistrer l'épisode</button>
+        </form>
+      </div>
+    </div>
   </div>
 </div>
 {% endblock %}
 
+
 {% block extra_scripts %}
 <script>
 const seriesId = {{ series.id }};
+
+function openEditSeriesModal() {
+  const modal = bootstrap.Modal.getOrCreateInstance(document.getElementById('modalEditSeries'));
+  modal.show();
+}
+
+async function uploadImageToServer(fileInputId, targetInputId) {
+  const fileInput = document.getElementById(fileInputId);
+  if (!fileInput.files || !fileInput.files[0]) return;
+  const file = fileInput.files[0];
+
+  const formData = new FormData();
+  formData.append('file', file);
+
+  showToast('Téléversement de l\'image sur le serveur VPS...', 'info');
+  try {
+    const res = await fetch('/api/admin/upload-image', {
+      method: 'POST',
+      body: formData,
+    });
+    const data = await res.json();
+    if (res.ok && data.success) {
+      document.getElementById(targetInputId).value = data.url;
+      showToast('Image enregistrée sur le VPS avec succès !', 'success');
+    } else {
+      showToast(data.detail || 'Erreur lors de l\'enregistrement', 'error');
+    }
+  } catch (e) {
+    showToast('Erreur d\'upload image', 'error');
+  }
+}
+
+async function autoTranslateSeriesWithGemini() {
+  const title = document.getElementById('editSeriesTitleFr').value.trim();
+  const synopsis = document.getElementById('editSeriesSynopsisFr').value.trim();
+  if (!title) {
+    showToast('Veuillez renseigner au moins un titre français.', 'warning');
+    return;
+  }
+
+  showToast('Traduction et enrichissement avec Gemini AI...', 'info');
+  try {
+    const res = await fetch('/api/admin/ai/translate', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ title: title, synopsis: synopsis, content_type: 'series' })
+    });
+    const data = await res.json();
+    if (res.ok) {
+      if (data.title_ar) document.getElementById('editSeriesTitleAr').value = data.title_ar;
+      if (data.title_en) document.getElementById('editSeriesTitleEn').value = data.title_en;
+      if (data.synopsis_fr && !synopsis) document.getElementById('editSeriesSynopsisFr').value = data.synopsis_fr;
+      if (data.synopsis_ar) document.getElementById('editSeriesSynopsisAr').value = data.synopsis_ar;
+      if (data.synopsis_en) document.getElementById('editSeriesSynopsisEn').value = data.synopsis_en;
+      if (data.year && !document.getElementById('editSeriesYear').value) {
+        document.getElementById('editSeriesYear').value = data.year;
+      }
+      if (data.warning) {
+        showToast(data.warning, 'warning');
+      } else {
+        showToast('Métadonnées multilingues générées par Gemini AI !', 'success');
+      }
+    } else {
+      showToast(data.detail || 'Erreur IA', 'error');
+    }
+  } catch (e) {
+    showToast('Erreur de requête Gemini', 'error');
+  }
+}
+
+async function submitUpdateSeries(e) {
+  e.preventDefault();
+  const payload = {
+    title_fr: document.getElementById('editSeriesTitleFr').value.trim(),
+    title_ar: document.getElementById('editSeriesTitleAr').value.trim() || null,
+    title_en: document.getElementById('editSeriesTitleEn').value.trim() || null,
+    year_start: document.getElementById('editSeriesYear').value ? parseInt(document.getElementById('editSeriesYear').value) : null,
+    rating: document.getElementById('editSeriesRating').value ? parseFloat(document.getElementById('editSeriesRating').value) : null,
+    status: document.getElementById('editSeriesStatus').value,
+    poster_path: document.getElementById('editSeriesPoster').value.trim() || null,
+    banner_path: document.getElementById('editSeriesBanner').value.trim() || null,
+    synopsis_fr: document.getElementById('editSeriesSynopsisFr').value.trim() || null,
+    synopsis_ar: document.getElementById('editSeriesSynopsisAr').value.trim() || null,
+    synopsis_en: document.getElementById('editSeriesSynopsisEn').value.trim() || null,
+  };
+
+  try {
+    const res = await fetch(`/api/admin/series/${seriesId}`, {
+      method: 'PATCH',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify(payload)
+    });
+    if (res.ok) {
+      showToast('Série mise à jour avec succès !', 'success');
+      setTimeout(() => location.reload(), 800);
+    } else {
+      const err = await res.json();
+      showToast(err.detail || 'Erreur', 'error');
+    }
+  } catch (err) {
+    showToast('Erreur serveur', 'error');
+  }
+}
+
+async function confirmDeleteSeries(id, title) {
+  if (!confirm(`Êtes-vous sûr de vouloir supprimer définitivement la série "${title}" ?\n\n(Toutes les vidéos Telegram associées seront conservées et détachées).`)) {
+    return;
+  }
+
+  try {
+    const res = await fetch(`/api/admin/series/${id}`, { method: 'DELETE' });
+    const data = await res.json();
+    if (res.ok) {
+      showToast(data.message || 'Série supprimée !', 'success');
+      setTimeout(() => location.href = '/admin/series', 800);
+    } else {
+      showToast(data.detail || 'Erreur', 'error');
+    }
+  } catch (e) {
+    showToast('Erreur de suppression', 'error');
+  }
+}
+
+function openEditEpisodeModal(id, num, titleFr, titleAr, synopsis, vidId) {
+  document.getElementById('editEpId').value = id;
+  document.getElementById('editEpNumber').value = num;
+  document.getElementById('editEpTitleFr').value = titleFr;
+  document.getElementById('editEpTitleAr').value = titleAr;
+  document.getElementById('editEpSynopsis').value = synopsis;
+  document.getElementById('editEpVideoSelect').value = vidId || 0;
+
+  const modal = bootstrap.Modal.getOrCreateInstance(document.getElementById('modalEditEpisode'));
+  modal.show();
+}
+
+async function submitUpdateEpisode(e) {
+  e.preventDefault();
+  const epId = document.getElementById('editEpId').value;
+  const payload = {
+    number: parseInt(document.getElementById('editEpNumber').value),
+    title_fr: document.getElementById('editEpTitleFr').value.trim() || null,
+    title_ar: document.getElementById('editEpTitleAr').value.trim() || null,
+    synopsis_fr: document.getElementById('editEpSynopsis').value.trim() || null,
+    telegram_video_id: parseInt(document.getElementById('editEpVideoSelect').value),
+  };
+
+  try {
+    const res = await fetch(`/api/admin/episodes/${epId}`, {
+      method: 'PATCH',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify(payload)
+    });
+    if (res.ok) {
+      showToast('Épisode mis à jour avec succès !', 'success');
+      setTimeout(() => location.reload(), 800);
+    } else {
+      const err = await res.json();
+      showToast(err.detail || 'Erreur', 'error');
+    }
+  } catch (err) {
+    showToast('Erreur serveur', 'error');
+  }
+}
+
+async function confirmDeleteEpisode(epId, num) {
+  if (!confirm(`Supprimer l'épisode ${num} ? La vidéo Telegram sera détachée.`)) {
+    return;
+  }
+
+  try {
+    const res = await fetch(`/api/admin/episodes/${epId}`, { method: 'DELETE' });
+    const data = await res.json();
+    if (res.ok) {
+      showToast(data.message || 'Épisode supprimé', 'success');
+      setTimeout(() => location.reload(), 800);
+    } else {
+      showToast(data.detail || 'Erreur', 'error');
+    }
+  } catch (e) {
+    showToast('Erreur lors de la suppression', 'error');
+  }
+}
 
 async function togglePublishSeries(id) {
   try {
@@ -290,6 +639,7 @@ async function togglePublishSeries(id) {
     showToast('Erreur serveur', 'error');
   }
 }
+
 
 async function submitAddSeason(e) {
   e.preventDefault();

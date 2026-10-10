@@ -533,3 +533,75 @@ class TelegramConfigUpdateRequest(BaseModel):
     api_hash: Optional[str] = None
     channel_id: Optional[str] = None
 
+
+# -------------------------------------------------------------
+# Schémas Modifications Séries, Films, Épisodes & Lots
+# -------------------------------------------------------------
+
+class SeriesUpdate(BaseModel):
+    title_fr: Optional[str] = None
+    title_ar: Optional[str] = None
+    title_en: Optional[str] = None
+    synopsis_fr: Optional[str] = None
+    synopsis_ar: Optional[str] = None
+    synopsis_en: Optional[str] = None
+    year_start: Optional[int] = None
+    rating: Optional[float] = None
+    poster_path: Optional[str] = None
+    banner_path: Optional[str] = None
+    status: Optional[str] = None
+    visibility: Optional[str] = None
+
+
+class MovieUpdate(BaseModel):
+    title_fr: Optional[str] = None
+    title_ar: Optional[str] = None
+    title_en: Optional[str] = None
+    synopsis_fr: Optional[str] = None
+    synopsis_ar: Optional[str] = None
+    synopsis_en: Optional[str] = None
+    year: Optional[int] = None
+    duration_sec: Optional[int] = None
+    rating: Optional[float] = None
+    poster_path: Optional[str] = None
+    banner_path: Optional[str] = None
+    telegram_video_id: Optional[int] = None
+    visibility: Optional[str] = None
+
+
+class EpisodeUpdate(BaseModel):
+    number: Optional[int] = None
+    title_fr: Optional[str] = None
+    title_ar: Optional[str] = None
+    title_en: Optional[str] = None
+    synopsis_fr: Optional[str] = None
+    synopsis_ar: Optional[str] = None
+    synopsis_en: Optional[str] = None
+    duration_sec: Optional[int] = None
+    season_id: Optional[int] = None
+    telegram_video_id: Optional[int] = None
+
+
+class BatchSeriesCreate(BaseModel):
+    title_fr: str
+    title_ar: Optional[str] = None
+    title_en: Optional[str] = None
+    synopsis_fr: Optional[str] = None
+    poster_path: Optional[str] = None
+    banner_path: Optional[str] = None
+    video_ids: List[int]
+    auto_detect: bool = True
+    visibility: str = "published"
+
+
+class GeminiTranslateRequest(BaseModel):
+    title: str
+    synopsis: Optional[str] = None
+    content_type: str = "series"
+
+
+class GeminiConfigRequest(BaseModel):
+    api_key: Optional[str] = None
+    model: Optional[str] = None
+
+

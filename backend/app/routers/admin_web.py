@@ -447,6 +447,8 @@ async def admin_settings_page(
         "app_update_title",
         "app_update_notes",
         "app_update_force",
+        "GEMINI_API_KEY",
+        "GEMINI_MODEL",
     ]
     res = await db.execute(select(SystemSetting).where(SystemSetting.key.in_(settings_keys)))
     settings_dict = {row.key: row.value for row in res.scalars().all()}
@@ -460,6 +462,12 @@ async def admin_settings_page(
         "force_update": settings_dict.get("app_update_force", "false").lower() == "true",
     }
 
+    gemini_conf = {
+        "api_key": settings_dict.get("GEMINI_API_KEY", ""),
+        "model": settings_dict.get("GEMINI_MODEL", "gemini-1.5-flash"),
+        "configured": bool(settings_dict.get("GEMINI_API_KEY")),
+    }
+
     return templates.TemplateResponse(
         request=request,
         name="settings.html",
@@ -467,5 +475,7 @@ async def admin_settings_page(
             "active_page": "settings",
             "current_user": admin_user,
             "app_update": app_update,
+            "gemini": gemini_conf,
         },
     )
+

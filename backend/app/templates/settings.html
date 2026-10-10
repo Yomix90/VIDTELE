@@ -107,11 +107,118 @@
       </form>
     </div>
   </div>
+
+  <!-- Configuration de Google Gemini AI (Traduction & Enrichissement de Métadonnées) -->
+  <div class="col-12">
+    <div class="card-dark p-4 border border-secondary border-opacity-25">
+      <div class="d-flex align-items-center justify-content-between mb-3">
+        <div class="d-flex align-items-center gap-2">
+          <i class="bi bi-stars text-info fs-5"></i>
+          <div>
+            <h2 class="h6 fw-bold text-white mb-0">Google Gemini AI (Traduction & Enrichissement Cinématographique)</h2>
+            <div class="text-muted small">Traduction automatique des titres et synopsis (FR / AR / EN) et génération de résumés professionnels.</div>
+          </div>
+        </div>
+        <span class="badge {% if gemini.configured %}bg-success bg-opacity-20 text-success border border-success border-opacity-25{% else %}bg-secondary bg-opacity-20 text-warning border border-warning border-opacity-25{% endif %} px-2 py-1">
+          {% if gemini.configured %}IA Configurée & Active{% else %}Non configurée (Optionnelle){% endif %}
+        </span>
+      </div>
+
+      <form id="geminiConfigForm" onsubmit="saveGeminiConfig(event)">
+        <div class="row g-3">
+          <div class="col-12 col-md-8">
+            <label class="form-label small fw-semibold">Clé API Google Gemini (Google AI Studio)</label>
+            <div class="input-group">
+              <span class="input-group-text bg-dark border-secondary text-info"><i class="bi bi-key-fill"></i></span>
+              <input type="password" id="geminiApiKey" class="form-control" placeholder="AIzaSy..." value="{{ gemini.api_key }}">
+              <button class="btn btn-outline-secondary" type="button" onclick="togglePasswordVisibility('geminiApiKey')">
+                <i class="bi bi-eye"></i>
+              </button>
+            </div>
+            <div class="text-muted" style="font-size: 0.75rem;">Obtenez une clé gratuite sur <a href="https://aistudio.google.com/app/apikey" target="_blank" class="text-info text-decoration-none">Google AI Studio</a>.</div>
+          </div>
+          <div class="col-12 col-md-4">
+            <label class="form-label small fw-semibold">Modèle Gemini</label>
+            <select id="geminiModel" class="form-select">
+              <option value="gemini-1.5-flash" {% if gemini.model == 'gemini-1.5-flash' %}selected{% endif %}>gemini-1.5-flash (Ultra Rapide & Recommandé)</option>
+              <option value="gemini-1.5-pro" {% if gemini.model == 'gemini-1.5-pro' %}selected{% endif %}>gemini-1.5-pro (Raisonnement Avancé)</option>
+              <option value="gemini-2.0-flash-exp" {% if gemini.model == 'gemini-2.0-flash-exp' %}selected{% endif %}>gemini-2.0-flash (Nouvelle Génération)</option>
+            </select>
+          </div>
+          <div class="col-12 d-flex flex-wrap align-items-center justify-content-between gap-2 pt-2">
+            <button type="button" class="btn btn-outline-info btn-sm" onclick="testGeminiKey()">
+              <i class="bi bi-lightning-charge me-1"></i>Tester la clé API
+            </button>
+            <button type="submit" class="btn btn-danger px-4">
+              <i class="bi bi-save me-1"></i>Enregistrer la configuration Gemini
+            </button>
+          </div>
+        </div>
+      </form>
+    </div>
+  </div>
 </div>
 {% endblock %}
 
 {% block extra_scripts %}
 <script>
+function togglePasswordVisibility(id) {
+  const el = document.getElementById(id);
+  if (el.type === 'password') {
+    el.type = 'text';
+  } else {
+    el.type = 'password';
+  }
+}
+
+async function saveGeminiConfig(e) {
+  e.preventDefault();
+  const apiKey = document.getElementById('geminiApiKey').value.trim();
+  const model = document.getElementById('geminiModel').value;
+
+  try {
+    const res = await fetch('/api/admin/ai/config', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ api_key: apiKey, model: model })
+    });
+    const data = await res.json();
+    if (res.ok) {
+      showToast(data.message || 'Configuration Gemini enregistrée !', 'success');
+    } else {
+      showToast(data.detail || 'Erreur lors de l\'enregistrement', 'error');
+    }
+  } catch (err) {
+    showToast('Erreur serveur', 'error');
+  }
+}
+
+async function testGeminiKey() {
+  const apiKey = document.getElementById('geminiApiKey').value.trim();
+  const model = document.getElementById('geminiModel').value;
+  if (!apiKey) {
+    showToast('Veuillez renseigner une clé API avant de tester.', 'warning');
+    return;
+  }
+
+  showToast('Test de la clé en cours auprès de Google...', 'info');
+  try {
+    const res = await fetch('/api/admin/ai/test-key', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ api_key: apiKey, model: model })
+    });
+    const data = await res.json();
+    if (data.success) {
+      showToast(data.message || 'Clé API Gemini validée avec succès !', 'success');
+    } else {
+      showToast(data.error || 'Clé API invalide ou refusée.', 'error');
+    }
+  } catch (err) {
+    showToast('Erreur lors du test de connexion', 'error');
+  }
+}
+
 async function saveAppUpdate(e) {
   e.preventDefault();
   const payload = {
@@ -141,3 +248,4 @@ async function saveAppUpdate(e) {
 }
 </script>
 {% endblock %}
+

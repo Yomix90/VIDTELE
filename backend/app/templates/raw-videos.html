@@ -9,19 +9,49 @@
       <i class="bi bi-inbox text-warning"></i>
       <span>Bibliothèque Brute Telegram</span>
     </h1>
-    <div class="text-muted small">Toutes les vidéos synchronisées depuis votre canal privé Telegram en attente d'organisation ou de publication.</div>
+    <div class="text-muted small">Téléversez directement vos vidéos vers Telegram, sélectionnez par lots et créez des séries avec détection intelligente des épisodes.</div>
   </div>
-  <button class="btn btn-outline-light btn-sm d-flex align-items-center gap-2 shadow-sm" onclick="triggerSync()">
-    <i class="bi bi-arrow-repeat text-info" id="syncIcon"></i>
-    <span data-i18n="sync_btn">Synchroniser Telegram</span>
-  </button>
+  <div class="d-flex align-items-center gap-2">
+    <button class="btn btn-danger btn-sm d-flex align-items-center gap-1 shadow-sm" data-bs-toggle="modal" data-bs-target="#modalDirectUploadVideo">
+      <i class="bi bi-cloud-arrow-up-fill"></i>
+      <span>Uploader Vidéo vers Telegram</span>
+    </button>
+    <button class="btn btn-outline-light btn-sm d-flex align-items-center gap-2 shadow-sm" onclick="triggerSync()">
+      <i class="bi bi-arrow-repeat text-info" id="syncIcon"></i>
+      <span data-i18n="sync_btn">Synchroniser Telegram</span>
+    </button>
+  </div>
+</div>
+
+<!-- Barre d'action flottante pour sélection par lots (Affichée dès qu'au moins 1 vidéo est cochée) -->
+<div id="batchActionBar" class="card-dark border border-danger border-opacity-50 p-3 mb-4 shadow-lg d-none align-items-center justify-content-between">
+  <div class="d-flex align-items-center gap-3">
+    <div class="badge bg-danger fs-6 px-3 py-2"><span id="batchSelectedCount">0</span> vidéo(s) sélectionnée(s)</div>
+    <div class="text-muted small d-none d-md-block">Créez automatiquement une série complète avec ordonnancement automatique des épisodes (S01E01, S01E02...).</div>
+  </div>
+  <div class="d-flex align-items-center gap-2">
+    <button class="btn btn-outline-secondary btn-sm" onclick="deselectAllBatch()">Tout désélectionner</button>
+    <button class="btn btn-danger btn-sm d-flex align-items-center gap-1 shadow-sm" onclick="openBatchSeriesModal()">
+      <i class="bi bi-magic"></i>
+      <span>Créer une Série par Lots</span>
+    </button>
+  </div>
 </div>
 
 <div class="card-dark p-3 p-lg-4 shadow-sm">
+  <div class="d-flex justify-content-between align-items-center mb-3">
+    <div class="form-check">
+      <input class="form-check-input" type="checkbox" id="selectAllCheckbox" onchange="toggleSelectAll(this)">
+      <label class="form-check-label small text-muted" for="selectAllCheckbox">Tout sélectionner</label>
+    </div>
+    <div class="text-muted small">{{ raw_videos|length }} vidéo(s) trouvée(s)</div>
+  </div>
+
   <div class="table-responsive">
     <table class="table-atlas">
       <thead>
         <tr>
+          <th style="width: 40px;"></th>
           <th>Msg ID</th>
           <th>Titre / Fichier Détecté</th>
           <th>Taille</th>
@@ -34,6 +64,9 @@
       <tbody>
         {% for v in raw_videos %}
         <tr>
+          <td>
+            <input type="checkbox" class="form-check-input batch-video-checkbox" value="{{ v.id }}" data-title="{{ v.title }}" data-filename="{{ v.file_name or '' }}" onchange="updateBatchSelectionState()">
+          </td>
           <td><code class="text-info">#{{ v.telegram_message_id }}</code></td>
           <td>
             <div class="fw-bold text-white text-truncate" style="max-width: 320px;" title="{{ v.title }}">{{ v.title }}</div>
@@ -58,21 +91,159 @@
             {% endif %}
           </td>
           <td class="text-end">
-            <button class="btn btn-sm btn-outline-warning py-1 px-2" style="font-size: 0.8rem;" onclick="autoDetectVideo({{ v.id }})">
-              <i class="bi bi-magic me-1"></i>Détecter & Lier
-            </button>
+            <div class="d-inline-flex align-items-center gap-1">
+              <button class="btn btn-sm btn-outline-info py-1 px-2" title="Aperçu vidéo en streaming" onclick="playAdminVideo({{ v.id }}, '{{ v.title|replace('\'', '\\\'') }}')">
+                <i class="bi bi-play-fill"></i>
+              </button>
+              <button class="btn btn-sm btn-outline-warning py-1 px-2" title="Détecter intelligemment" onclick="autoDetectVideo({{ v.id }})">
+                <i class="bi bi-magic"></i>
+              </button>
+            </div>
           </td>
         </tr>
         {% else %}
         <tr>
-          <td colspan="7" class="text-center text-muted py-5">
+          <td colspan="8" class="text-center text-muted py-5">
             <i class="bi bi-collection-play fs-1 d-block mb-2 text-secondary"></i>
-            Aucune vidéo Telegram synchronisée. Cliquez sur "Synchroniser Telegram" pour scanner votre canal.
+            Aucune vidéo Telegram synchronisée. Cliquez sur "Uploader Vidéo" ou "Synchroniser Telegram" pour alimenter la bibliothèque.
           </td>
         </tr>
         {% endfor %}
       </tbody>
     </table>
+  </div>
+</div>
+
+<!-- Modale : Téléversement Direct de Vidéo vers Telegram -->
+<div class="modal fade" id="modalDirectUploadVideo" tabindex="-1">
+  <div class="modal-dialog modal-lg">
+    <div class="modal-content bg-dark text-white border-secondary">
+      <div class="modal-header border-secondary">
+        <h5 class="modal-title d-flex align-items-center gap-2">
+          <i class="bi bi-cloud-arrow-up-fill text-danger"></i>
+          <span>Téléverser une Vidéo vers Telegram (Streaming MTProto)</span>
+        </h5>
+        <button type="button" class="btn-close btn-close-white" data-bs-dismiss="modal"></button>
+      </div>
+      <div class="modal-body">
+        <form id="formDirectVideoUpload" onsubmit="submitDirectVideoUpload(event)">
+          <div class="mb-3">
+            <label class="form-label small fw-semibold">Fichier Vidéo (MP4, MKV, WebM, AVI) *</label>
+            <input type="file" id="directVideoFile" class="form-control" accept="video/*" required>
+            <div class="text-muted" style="font-size: 0.75rem;">Le fichier sera téléversé sur votre canal privé Telegram avec activation native du streaming vidéo.</div>
+          </div>
+          <div class="mb-3">
+            <label class="form-label small">Titre personnalisé (optionnel)</label>
+            <input type="text" id="directVideoTitle" class="form-control" placeholder="ex: Breaking Bad S01E01 ou Nom du Film">
+          </div>
+          <div class="mb-3">
+            <label class="form-label small">Légende Telegram (optionnel)</label>
+            <input type="text" id="directVideoCaption" class="form-control" placeholder="Description affichée sur le canal Telegram">
+          </div>
+
+          <!-- Zone de Progression -->
+          <div id="uploadProgressBarContainer" class="d-none mb-3">
+            <label class="form-label small text-info d-flex justify-content-between">
+              <span>Téléversement vers le serveur & Telegram en cours...</span>
+              <span id="uploadProgressPercent">0%</span>
+            </label>
+            <div class="progress" style="height: 10px;">
+              <div id="uploadProgressBar" class="progress-bar progress-bar-striped progress-bar-animated bg-danger" role="progressbar" style="width: 0%"></div>
+            </div>
+            <div class="small text-muted mt-1">Veuillez ne pas fermer cette page pendant le transfert.</div>
+          </div>
+
+          <div class="d-flex justify-content-end gap-2">
+            <button type="button" class="btn btn-secondary" data-bs-dismiss="modal" id="btnCancelVideoUpload">Fermer</button>
+            <button type="submit" class="btn btn-danger px-4" id="btnSubmitVideoUpload">
+              <i class="bi bi-send-fill me-1"></i>Lancer le téléversement
+            </button>
+          </div>
+        </form>
+      </div>
+    </div>
+  </div>
+</div>
+
+<!-- Modale : Création de Série par Lots avec Détection Intelligente -->
+<div class="modal fade" id="modalBatchSeries" tabindex="-1">
+  <div class="modal-dialog modal-lg">
+    <div class="modal-content bg-dark text-white border-secondary">
+      <div class="modal-header border-secondary">
+        <h5 class="modal-title d-flex align-items-center gap-2">
+          <i class="bi bi-magic text-warning"></i>
+          <span>Créer une Série à partir des Vidéos Sélectionnées</span>
+        </h5>
+        <button type="button" class="btn-close btn-close-white" data-bs-dismiss="modal"></button>
+      </div>
+      <div class="modal-body">
+        <form id="formBatchSeries" onsubmit="submitBatchSeriesCreation(event)">
+          <div class="d-flex justify-content-between align-items-center mb-3 p-2 rounded bg-black bg-opacity-40 border border-secondary border-opacity-50">
+            <span class="small text-muted">Traduire automatiquement les titres et le synopsis :</span>
+            <button type="button" class="btn btn-outline-info btn-sm d-flex align-items-center gap-1" onclick="autoTranslateBatchSeriesWithGemini()">
+              <i class="bi bi-stars"></i>
+              <span>Traduire avec Gemini AI</span>
+            </button>
+          </div>
+
+          <div class="row g-2 mb-3">
+            <div class="col-12 col-md-4">
+              <label class="form-label small">Titre de la Série (Français) *</label>
+              <input type="text" id="batchSeriesTitleFr" class="form-control" placeholder="ex: Game of Thrones" required>
+            </div>
+            <div class="col-12 col-md-4">
+              <label class="form-label small">Titre (Arabe)</label>
+              <input type="text" id="batchSeriesTitleAr" class="form-control" dir="rtl" placeholder="صراع العروش">
+            </div>
+            <div class="col-12 col-md-4">
+              <label class="form-label small">Titre (Anglais)</label>
+              <input type="text" id="batchSeriesTitleEn" class="form-control" placeholder="Game of Thrones">
+            </div>
+          </div>
+
+          <!-- Upload Affiche VPS -->
+          <div class="mb-3">
+            <label class="form-label small">Affiche de la Série (Poster 2:3)</label>
+            <div class="input-group mb-2">
+              <input type="text" id="batchSeriesPoster" class="form-control" placeholder="https://... ou téléverser sur VPS">
+              <label class="btn btn-outline-secondary" for="uploadBatchPosterFile">
+                <i class="bi bi-cloud-arrow-up me-1"></i>Téléverser Image
+              </label>
+              <input type="file" id="uploadBatchPosterFile" class="d-none" accept="image/*" onchange="uploadImageToServer('uploadBatchPosterFile', 'batchSeriesPoster')">
+            </div>
+          </div>
+
+          <div class="mb-3">
+            <label class="form-label small">Synopsis (Français)</label>
+            <textarea id="batchSeriesSynopsisFr" class="form-control" rows="2" placeholder="Résumé de la série..."></textarea>
+          </div>
+
+          <div class="mb-3 form-check">
+            <input type="checkbox" id="batchAutoDetect" class="form-check-input" checked>
+            <label class="form-check-label small" for="batchAutoDetect">Détecter automatiquement les saisons et numéros d'épisodes (S01E02, 1x03, الحلقة 04...)</label>
+          </div>
+
+          <div class="mb-3 form-check">
+            <input type="checkbox" id="batchPublishImmediate" class="form-check-input" checked>
+            <label class="form-check-label small" for="batchPublishImmediate">Publier immédiatement la série et ses vidéos sur l'application mobile</label>
+          </div>
+
+          <!-- Résumé des vidéos sélectionnées -->
+          <div class="mb-3">
+            <label class="form-label small fw-semibold">Vidéos sélectionnées (<span id="batchSummaryCount">0</span>) :</label>
+            <div id="batchSelectedList" class="p-2 rounded bg-black border border-secondary border-opacity-50 small text-muted" style="max-height: 160px; overflow-y: auto;">
+            </div>
+          </div>
+
+          <div class="d-flex justify-content-end gap-2">
+            <button type="button" class="btn btn-secondary" data-bs-dismiss="modal">Annuler</button>
+            <button type="submit" class="btn btn-danger px-4" id="btnSubmitBatchSeries">
+              <i class="bi bi-collection-play-fill me-1"></i>Créer la Série & Lier les Épisodes
+            </button>
+          </div>
+        </form>
+      </div>
+    </div>
   </div>
 </div>
 {% endblock %}
@@ -105,7 +276,7 @@ async function autoDetectVideo(videoId) {
     const res = await fetch(`/api/admin/raw-videos/${videoId}/auto-detect`, { method: 'POST' });
     const data = await res.json();
     if (res.ok) {
-      alert(`Détection automatique pour la vidéo #${data.video_id} :\n\n- Type : ${data.kind.toUpperCase()}\n- Titre proposé : ${data.clean_title}\n- Saison : S${data.season}\n- Épisode : E${data.episode}\n- Confiance : ${(data.confidence * 100).toFixed(0)}%\n\n${data.existing_series_id ? 'Une série existante correspondante a été trouvée !' : 'Aucune série existante. Créez-la dans Séries.'}`);
+      alert(`Détection automatique pour la vidéo #${data.video_id} :\n\n- Type : ${data.kind.toUpperCase()}\n- Titre proposé : ${data.clean_title}\n- Saison : S${data.season}\n- Épisode : E${data.episode}\n- Confiance : ${(data.confidence * 100).toFixed(0)}%\n\n${data.existing_series_id ? 'Une série existante correspondante a été trouvée !' : 'Aucune série existante. Créez-la par sélection par lots !'}`);
     } else {
       showToast(data.detail || 'Erreur', 'error');
     }
@@ -113,5 +284,245 @@ async function autoDetectVideo(videoId) {
     showToast('Erreur de requête', 'error');
   }
 }
+
+// 1. Gestion de la sélection par lots
+function updateBatchSelectionState() {
+  const checkboxes = document.querySelectorAll('.batch-video-checkbox:checked');
+  const bar = document.getElementById('batchActionBar');
+  const countEl = document.getElementById('batchSelectedCount');
+  const count = checkboxes.length;
+
+  if (countEl) countEl.textContent = count;
+  if (bar) {
+    if (count > 0) {
+      bar.classList.remove('d-none');
+      bar.classList.add('d-flex');
+    } else {
+      bar.classList.add('d-none');
+      bar.classList.remove('d-flex');
+    }
+  }
+}
+
+function toggleSelectAll(masterCheckbox) {
+  const checkboxes = document.querySelectorAll('.batch-video-checkbox');
+  checkboxes.forEach(cb => cb.checked = masterCheckbox.checked);
+  updateBatchSelectionState();
+}
+
+function deselectAllBatch() {
+  document.querySelectorAll('.batch-video-checkbox').forEach(cb => cb.checked = false);
+  const master = document.getElementById('selectAllCheckbox');
+  if (master) master.checked = false;
+  updateBatchSelectionState();
+}
+
+function openBatchSeriesModal() {
+  const selected = document.querySelectorAll('.batch-video-checkbox:checked');
+  if (selected.length === 0) {
+    showToast('Veuillez sélectionner au moins une vidéo.', 'warning');
+    return;
+  }
+
+  const listContainer = document.getElementById('batchSelectedList');
+  const countContainer = document.getElementById('batchSummaryCount');
+  countContainer.textContent = selected.length;
+  listContainer.innerHTML = '';
+
+  let suggestedTitle = '';
+  selected.forEach((cb, idx) => {
+    const title = cb.getAttribute('data-title') || cb.getAttribute('data-filename') || `Vidéo #${cb.value}`;
+    if (idx === 0) {
+      // Nettoyer grossièrement le titre pour suggestion
+      suggestedTitle = title.replace(/[sS]\d+[eE]\d+.*$/i, '').replace(/\b(ep|episode|part)\b.*$/i, '').trim();
+    }
+    const item = document.createElement('div');
+    item.className = 'py-1 border-bottom border-secondary border-opacity-25';
+    item.innerHTML = `<span class="badge bg-secondary me-2">#${cb.value}</span> <span class="text-white">${title}</span>`;
+    listContainer.appendChild(item);
+  });
+
+  const titleInput = document.getElementById('batchSeriesTitleFr');
+  if (titleInput && !titleInput.value) {
+    titleInput.value = suggestedTitle;
+  }
+
+  const modal = bootstrap.Modal.getOrCreateInstance(document.getElementById('modalBatchSeries'));
+  modal.show();
+}
+
+// 2. Traduction Gemini pour série par lot
+async function autoTranslateBatchSeriesWithGemini() {
+  const title = document.getElementById('batchSeriesTitleFr').value.trim();
+  const synopsis = document.getElementById('batchSeriesSynopsisFr').value.trim();
+  if (!title) {
+    showToast('Veuillez renseigner au moins un titre français.', 'warning');
+    return;
+  }
+
+  showToast('Traduction et enrichissement avec Gemini AI...', 'info');
+  try {
+    const res = await fetch('/api/admin/ai/translate', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ title: title, synopsis: synopsis, content_type: 'series' })
+    });
+    const data = await res.json();
+    if (res.ok) {
+      if (data.title_ar) document.getElementById('batchSeriesTitleAr').value = data.title_ar;
+      if (data.title_en) document.getElementById('batchSeriesTitleEn').value = data.title_en;
+      if (data.synopsis_fr && !synopsis) document.getElementById('batchSeriesSynopsisFr').value = data.synopsis_fr;
+      if (data.warning) {
+        showToast(data.warning, 'warning');
+      } else {
+        showToast('Métadonnées multilingues générées par Gemini AI !', 'success');
+      }
+    } else {
+      showToast(data.detail || 'Erreur IA', 'error');
+    }
+  } catch (e) {
+    showToast('Erreur de requête Gemini', 'error');
+  }
+}
+
+// 3. Soumission création série par lot
+async function submitBatchSeriesCreation(e) {
+  e.preventDefault();
+  const selected = Array.from(document.querySelectorAll('.batch-video-checkbox:checked')).map(cb => parseInt(cb.value));
+  if (selected.length === 0) {
+    showToast('Aucune vidéo sélectionnée.', 'warning');
+    return;
+  }
+
+  const btn = document.getElementById('btnSubmitBatchSeries');
+  btn.disabled = true;
+  btn.innerHTML = '<span class="spinner-border spinner-border-sm me-1"></span>Création en cours...';
+
+  const payload = {
+    title_fr: document.getElementById('batchSeriesTitleFr').value.trim(),
+    title_ar: document.getElementById('batchSeriesTitleAr').value.trim() || null,
+    title_en: document.getElementById('batchSeriesTitleEn').value.trim() || null,
+    synopsis_fr: document.getElementById('batchSeriesSynopsisFr').value.trim() || null,
+    poster_path: document.getElementById('batchSeriesPoster').value.trim() || null,
+    video_ids: selected,
+    auto_detect: document.getElementById('batchAutoDetect').checked,
+    visibility: document.getElementById('batchPublishImmediate').checked ? 'published' : 'draft',
+  };
+
+  try {
+    const res = await fetch('/api/admin/series/batch-create', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify(payload)
+    });
+    const data = await res.json();
+    if (res.ok && data.success) {
+      showToast(data.message || 'Série créée avec succès !', 'success');
+      setTimeout(() => location.href = `/admin/series/${data.series_id}`, 1200);
+    } else {
+      showToast(data.detail || 'Erreur lors de la création par lot', 'error');
+      btn.disabled = false;
+      btn.innerHTML = '<i class="bi bi-collection-play-fill me-1"></i>Créer la Série & Lier les Épisodes';
+    }
+  } catch (err) {
+    showToast('Erreur serveur', 'error');
+    btn.disabled = false;
+    btn.innerHTML = '<i class="bi bi-collection-play-fill me-1"></i>Créer la Série & Lier les Épisodes';
+  }
+}
+
+// 4. Téléversement Direct de Vidéo vers Telegram avec Barre de Progression
+function submitDirectVideoUpload(e) {
+  e.preventDefault();
+  const fileInput = document.getElementById('directVideoFile');
+  if (!fileInput.files || !fileInput.files[0]) {
+    showToast('Veuillez sélectionner un fichier vidéo.', 'warning');
+    return;
+  }
+
+  const file = fileInput.files[0];
+  const title = document.getElementById('directVideoTitle').value.trim();
+  const caption = document.getElementById('directVideoCaption').value.trim();
+
+  const formData = new FormData();
+  formData.append('file', file);
+  if (title) formData.append('title', title);
+  if (caption) formData.append('caption', caption);
+
+  const progressContainer = document.getElementById('uploadProgressBarContainer');
+  const progressBar = document.getElementById('uploadProgressBar');
+  const progressPercent = document.getElementById('uploadProgressPercent');
+  const btnSubmit = document.getElementById('btnSubmitVideoUpload');
+  const btnCancel = document.getElementById('btnCancelVideoUpload');
+
+  progressContainer.classList.remove('d-none');
+  btnSubmit.disabled = true;
+  btnCancel.disabled = true;
+
+  const xhr = new XMLHttpRequest();
+  xhr.open('POST', '/api/admin/videos/upload', true);
+
+  xhr.upload.onprogress = function(event) {
+    if (event.lengthComputable) {
+      const percent = Math.round((event.loaded / event.total) * 95); // 95% = upload vers VPS
+      progressBar.style.width = percent + '%';
+      progressPercent.textContent = percent + '% (Transfert VPS)';
+    }
+  };
+
+  xhr.onload = function() {
+    if (xhr.status === 200) {
+      progressBar.style.width = '100%';
+      progressPercent.textContent = '100% (Prêt sur Telegram !)';
+      showToast('Vidéo téléversée vers Telegram avec succès !', 'success');
+      setTimeout(() => location.reload(), 1500);
+    } else {
+      let err = 'Erreur d\'upload';
+      try {
+        const data = JSON.parse(xhr.responseText);
+        err = data.detail || err;
+      } catch (ex) {}
+      showToast(err, 'error');
+      btnSubmit.disabled = false;
+      btnCancel.disabled = false;
+    }
+  };
+
+  xhr.onerror = function() {
+    showToast('Erreur réseau lors du téléversement.', 'error');
+    btnSubmit.disabled = false;
+    btnCancel.disabled = false;
+  };
+
+  xhr.send(formData);
+}
+
+// 5. Upload Image vers VPS
+async function uploadImageToServer(fileInputId, targetInputId) {
+  const fileInput = document.getElementById(fileInputId);
+  if (!fileInput.files || !fileInput.files[0]) return;
+  const file = fileInput.files[0];
+
+  const formData = new FormData();
+  formData.append('file', file);
+
+  showToast('Téléversement de l\'image sur le serveur VPS...', 'info');
+  try {
+    const res = await fetch('/api/admin/upload-image', {
+      method: 'POST',
+      body: formData,
+    });
+    const data = await res.json();
+    if (res.ok && data.success) {
+      document.getElementById(targetInputId).value = data.url;
+      showToast('Image enregistrée sur le VPS avec succès !', 'success');
+    } else {
+      showToast(data.detail || 'Erreur lors de l\'enregistrement', 'error');
+    }
+  } catch (e) {
+    showToast('Erreur d\'upload image', 'error');
+  }
+}
 </script>
 {% endblock %}
+

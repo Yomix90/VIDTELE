@@ -182,3 +182,53 @@ function showToast(message, type = "success") {
     setTimeout(() => toastEl.remove(), 4000);
   }
 }
+
+// 4. Lecteur Vidéo Streaming Intégré (Aperçu Admin HTTP 206)
+function playAdminVideo(videoId, title = "Aperçu Vidéo") {
+  const modalEl = document.getElementById("videoPlayerModal");
+  const videoEl = document.getElementById("adminGlobalVideoElement");
+  const titleEl = document.getElementById("videoPlayerModalTitle");
+  const infoEl = document.getElementById("videoPlayerInfo");
+  const spinnerEl = document.getElementById("videoPlayerSpinner");
+
+  if (!modalEl || !videoEl) {
+    console.error("Lecteur vidéo introuvable dans le DOM.");
+    return;
+  }
+
+  if (titleEl) titleEl.textContent = title;
+  if (infoEl) infoEl.textContent = `Vidéo #${videoId} - Streaming natif Telegram`;
+  if (spinnerEl) spinnerEl.style.display = "block";
+
+  videoEl.src = `/api/videos/${videoId}/stream`;
+  
+  videoEl.onloadeddata = function() {
+    if (spinnerEl) spinnerEl.style.display = "none";
+  };
+  videoEl.onerror = function() {
+    if (spinnerEl) spinnerEl.style.display = "none";
+    showToast("Impossible de charger le flux vidéo depuis Telegram.", "danger");
+  };
+
+  const modal = bootstrap.Modal.getOrCreateInstance(modalEl);
+  modal.show();
+  videoEl.play().catch(e => console.log("Autoplay bloqué ou en attente :", e));
+}
+
+function closeAdminVideo() {
+  const videoEl = document.getElementById("adminGlobalVideoElement");
+  if (videoEl) {
+    videoEl.pause();
+    videoEl.removeAttribute("src");
+    videoEl.load();
+  }
+}
+
+document.addEventListener("DOMContentLoaded", function () {
+  const modalEl = document.getElementById("videoPlayerModal");
+  if (modalEl) {
+    modalEl.addEventListener("hidden.bs.modal", function () {
+      closeAdminVideo();
+    });
+  }
+});

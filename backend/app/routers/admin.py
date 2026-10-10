@@ -1,21 +1,34 @@
 """
 Routeur d'administration complet : Statistiques, Utilisateurs, Invitations, Cache et Synchronisation.
 """
-from datetime import datetime, timedelta, timezone
+import os
 import secrets
-from typing import List, Optional
-from fastapi import APIRouter, Depends, HTTPException, Query, status
+import shutil
+import uuid
+from datetime import datetime, timedelta, timezone
+from pathlib import Path
+from typing import Any, Dict, List, Optional
+from fastapi import APIRouter, Depends, File, Form, HTTPException, Query, UploadFile, status
 from sqlalchemy import delete, desc, func, select
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.database import get_db
-from app.models import InviteCode, MediaItem, SystemSetting, TelegramAccount, User, Video
+from app.models import Episode, Genre, HomeHeroItem, HomeRow, InviteCode, MediaItem, Movie, Season, Series, SystemSetting, TelegramAccount, User, Video
 from app.schemas import (
     AppUpdateConfig,
     AppUpdateInfo,
     AdminStatsResponse,
+    BatchSeriesCreate,
     CacheStats,
     EpisodeAssignRequest,
+    EpisodeCreate,
+    EpisodeResponse,
+    EpisodeUpdate,
+    GeminiConfigRequest,
+    GeminiTranslateRequest,
+    GenreResponse,
+    HomeRowCreate,
+    HomeRowResponse,
     InviteCodeCreate,
     InviteCodeResponse,
     MediaItemCreate,
@@ -24,7 +37,17 @@ from app.schemas import (
     MediaItemUpdate,
     MediaItemVideoResponse,
     MessageResponse,
+    MovieCreate,
+    MovieResponse,
+    MovieUpdate,
     RawVideoItemResponse,
+    SeasonCreate,
+    SeasonDetailResponse,
+    SeasonResponse,
+    SeriesCreate,
+    SeriesDetailResponse,
+    SeriesResponse,
+    SeriesUpdate,
     StreamStats,
     SyncStatusResponse,
     TelegramAccountCreate,
@@ -38,9 +61,12 @@ from app.schemas import (
 )
 from app.security import get_current_admin, hash_password
 from app.services.cache_service import cache_service
+from app.services.gemini_service import gemini_service
+from app.services.parser_service import parser_service, slugify
 from app.services.stream_manager import stream_manager
 from app.services.sync_service import sync_service
 from app.telegram_client import telegram_manager
+
 
 
 router = APIRouter(prefix="/api/admin", tags=["Administration"])
@@ -1105,31 +1131,7 @@ async def detach_episode_from_media(
 # 7. Gestion Avancée StreamAdmin : Séries, Saisons & Épisodes
 # =============================================================
 
-from app.models import (
-    Episode,
-    Genre,
-    HomeHeroItem,
-    HomeRow,
-    Movie,
-    Season,
-    Series,
-)
-from app.schemas import (
-    EpisodeCreate,
-    EpisodeResponse,
-    GenreResponse,
-    HomeRowCreate,
-    HomeRowResponse,
-    MovieCreate,
-    MovieResponse,
-    SeasonCreate,
-    SeasonDetailResponse,
-    SeasonResponse,
-    SeriesCreate,
-    SeriesDetailResponse,
-    SeriesResponse,
-)
-from app.services.parser_service import parser_service, slugify
+
 
 
 @router.get("/series", response_model=List[SeriesResponse])
@@ -1639,3 +1641,586 @@ async def update_app_update_settings(
 
     await db.commit()
     return MessageResponse(message="Configuration de mise à jour mobile enregistrée avec succès.")
+
+
+# =============================================================
+# 12. Téléversement d'Images sur le Serveur VPS (Affiches / Bannières)
+# =============================================================
+
+@router.post("/upload-image")
+async def upload_image_to_vps(
+    file: UploadFile = File(...),
+    current_admin: User = Depends(get_current_admin),
+):
+    """
+    Sauvegarde une affiche ou bannière sur le serveur VPS dans /static/uploads/.
+    Renvoie l'URL publique accessible par l'application mobile et l'interface web.
+    """
+    allowed_extensions = {".jpg", ".jpeg", ".png", ".webp", ".gif"}
+    ext = os.path.splitext(file.filename)[1].lower() if file.filename else ".jpg"
+    if ext not in allowed_extensions:
+        raise HTTPException(
+            status_code=400,
+            detail=f"Format d'image non supporté ({ext}). Formats acceptés : JPG, PNG, WEBP, GIF.",
+        )
+
+    upload_dir = Path("app/static/uploads")
+    upload_dir.mkdir(parents=True, exist_ok=True)
+
+    filename = f"{uuid.uuid4().hex[:12]}_{secrets.token_hex(4)}{ext}"
+    dest_path = upload_dir / filename
+
+    try:
+        with open(dest_path, "wb") as buffer:
+            shutil.copyfileobj(file.file, buffer)
+    except Exception as e:
+        raise HTTPException(status_code=500, detail=f"Erreur lors de l'enregistrement de l'image : {str(e)}")
+
+    url = f"/static/uploads/{filename}"
+    return {
+        "success": True,
+        "url": url,
+        "filename": filename,
+        "message": "Image enregistrée avec succès sur le serveur.",
+    }
+
+
+# =============================================================
+# 13. Téléversement Direct de Vidéo vers Telegram avec Streaming MTProto
+# =============================================================
+
+@router.post("/videos/upload")
+async def upload_video_direct_to_telegram(
+    file: UploadFile = File(...),
+    title: Optional[str] = Form(None),
+    caption: Optional[str] = Form(None),
+    current_admin: User = Depends(get_current_admin),
+    db: AsyncSession = Depends(get_db),
+):
+    """
+    Téléverse directement une vidéo depuis le panneau web vers le canal Telegram privé
+    avec activation du streaming MTProto (supports_streaming=True).
+    La vidéo est immédiatement indexée dans la base de données.
+    """
+    cache_upload_dir = Path("cache/uploads")
+    cache_upload_dir.mkdir(parents=True, exist_ok=True)
+
+    original_filename = file.filename or "video.mp4"
+    safe_temp_name = f"upload_{uuid.uuid4().hex}_{original_filename}"
+    temp_file_path = str(cache_upload_dir / safe_temp_name)
+
+    try:
+        with open(temp_file_path, "wb") as buffer:
+            shutil.copyfileobj(file.file, buffer)
+
+        upload_caption = caption or title or original_filename
+
+        res = await telegram_manager.upload_video_file(
+            file_path=temp_file_path,
+            file_name=original_filename,
+            caption=upload_caption,
+        )
+
+        if not res.get("success"):
+            raise HTTPException(
+                status_code=500,
+                detail=res.get("error", "Échec de l'envoi de la vidéo vers Telegram."),
+            )
+
+        message = res.get("message")
+        video = None
+        if message:
+            video = await sync_service._process_video_message(message, db)
+            if video and title:
+                video.title = title.strip()
+                await db.commit()
+                await db.refresh(video)
+
+        return {
+            "success": True,
+            "message": "Vidéo téléversée vers Telegram avec succès et prête pour le streaming !",
+            "video_id": video.id if video else None,
+            "title": video.title if video else original_filename,
+        }
+    except HTTPException:
+        raise
+    except Exception as e:
+        raise HTTPException(status_code=500, detail=f"Erreur d'upload vidéo : {str(e)}")
+    finally:
+        # Nettoyage du fichier temporaire du cache
+        if os.path.exists(temp_file_path):
+            try:
+                os.remove(temp_file_path)
+            except Exception:
+                pass
+
+
+# =============================================================
+# 14. Édition et Suppression Séries & Épisodes
+# =============================================================
+
+@router.patch("/series/{series_id}", response_model=SeriesResponse)
+@router.put("/series/{series_id}", response_model=SeriesResponse)
+async def update_series(
+    series_id: int,
+    data: SeriesUpdate,
+    current_admin: User = Depends(get_current_admin),
+    db: AsyncSession = Depends(get_db),
+):
+    """Met à jour les informations d'une série (titres multilingues, synopsis, affiches, statut)."""
+    series = (await db.execute(select(Series).where(Series.id == series_id))).scalar_one_or_none()
+    if not series:
+        raise HTTPException(status_code=404, detail="Série introuvable")
+
+    if data.title_fr is not None:
+        series.title_fr = data.title_fr.strip()
+    if data.title_ar is not None:
+        series.title_ar = data.title_ar.strip() if data.title_ar else None
+    if data.title_en is not None:
+        series.title_en = data.title_en.strip() if data.title_en else None
+    if data.synopsis_fr is not None:
+        series.synopsis_fr = data.synopsis_fr.strip() if data.synopsis_fr else None
+    if data.synopsis_ar is not None:
+        series.synopsis_ar = data.synopsis_ar.strip() if data.synopsis_ar else None
+    if data.synopsis_en is not None:
+        series.synopsis_en = data.synopsis_en.strip() if data.synopsis_en else None
+    if data.year_start is not None:
+        series.year_start = data.year_start
+    if data.rating is not None:
+        series.rating = data.rating
+    if data.poster_path is not None:
+        series.poster_path = data.poster_path.strip() if data.poster_path else None
+    if data.banner_path is not None:
+        series.banner_path = data.banner_path.strip() if data.banner_path else None
+    if data.status is not None:
+        series.status = data.status
+    if data.visibility is not None and data.visibility != series.visibility:
+        series.visibility = data.visibility
+        # Répercuter sur les vidéos Telegram associées
+        seasons = (await db.execute(select(Season.id).where(Season.series_id == series.id))).scalars().all()
+        if seasons:
+            episodes = (await db.execute(select(Episode).where(Episode.season_id.in_(seasons)))).scalars().all()
+            vid_ids = [ep.telegram_video_id for ep in episodes if ep.telegram_video_id]
+            if vid_ids:
+                vids = (await db.execute(select(Video).where(Video.id.in_(vid_ids)))).scalars().all()
+                for v in vids:
+                    v.is_published = (data.visibility == "published")
+
+    await db.commit()
+    await db.refresh(series)
+
+    # Récupérer les compteurs
+    seasons_res = await db.execute(select(Season.id).where(Season.series_id == series.id))
+    season_ids = [row[0] for row in seasons_res.all()]
+    ep_count = 0
+    if season_ids:
+        ep_count = (await db.execute(select(func.count(Episode.id)).where(Episode.season_id.in_(season_ids)))).scalar_one()
+
+    return SeriesResponse(
+        id=series.id,
+        slug=series.slug,
+        title_fr=series.title_fr,
+        title_ar=series.title_ar,
+        title_en=series.title_en,
+        synopsis_fr=series.synopsis_fr,
+        synopsis_ar=series.synopsis_ar,
+        synopsis_en=series.synopsis_en,
+        year_start=series.year_start,
+        rating=series.rating,
+        status=series.status,
+        poster_path=series.poster_path,
+        banner_path=series.banner_path,
+        is_featured=series.is_featured,
+        visibility=series.visibility,
+        seasons_count=len(season_ids),
+        episodes_count=ep_count,
+        created_at=series.created_at,
+    )
+
+
+@router.delete("/series/{series_id}", response_model=MessageResponse)
+async def delete_series(
+    series_id: int,
+    current_admin: User = Depends(get_current_admin),
+    db: AsyncSession = Depends(get_db),
+):
+    """
+    Supprime une série ainsi que ses saisons et épisodes.
+    Les vidéos Telegram associées NE SONT PAS supprimées : elles sont détachées
+    et redeviennent des vidéos brutes (non publiées).
+    """
+    series = (await db.execute(select(Series).where(Series.id == series_id))).scalar_one_or_none()
+    if not series:
+        raise HTTPException(status_code=404, detail="Série introuvable")
+
+    seasons = (await db.execute(select(Season).where(Season.series_id == series.id))).scalars().all()
+    season_ids = [s.id for s in seasons]
+    if season_ids:
+        episodes = (await db.execute(select(Episode).where(Episode.season_id.in_(season_ids)))).scalars().all()
+        for ep in episodes:
+            if ep.telegram_video_id:
+                v = (await db.execute(select(Video).where(Video.id == ep.telegram_video_id))).scalar_one_or_none()
+                if v:
+                    v.is_published = False
+            await db.delete(ep)
+        for s in seasons:
+            await db.delete(s)
+
+    await db.delete(series)
+    await db.commit()
+    return MessageResponse(message=f"Série '{series.title_fr}' supprimée avec succès. Les vidéos ont été détachées.")
+
+
+@router.patch("/episodes/{episode_id}", response_model=EpisodeResponse)
+@router.put("/episodes/{episode_id}", response_model=EpisodeResponse)
+async def update_episode(
+    episode_id: int,
+    data: EpisodeUpdate,
+    current_admin: User = Depends(get_current_admin),
+    db: AsyncSession = Depends(get_db),
+):
+    """Modifie le numéro, titre, synopsis ou vidéo Telegram d'un épisode."""
+    episode = (await db.execute(select(Episode).where(Episode.id == episode_id))).scalar_one_or_none()
+    if not episode:
+        raise HTTPException(status_code=404, detail="Épisode introuvable")
+
+    if data.number is not None:
+        episode.number = data.number
+        episode.order_index = data.number
+    if data.title_fr is not None:
+        episode.title_fr = data.title_fr.strip()
+    if data.title_ar is not None:
+        episode.title_ar = data.title_ar.strip() if data.title_ar else None
+    if data.title_en is not None:
+        episode.title_en = data.title_en.strip() if data.title_en else None
+    if data.synopsis_fr is not None:
+        episode.synopsis_fr = data.synopsis_fr.strip() if data.synopsis_fr else None
+    if data.duration_sec is not None:
+        episode.duration_sec = data.duration_sec
+
+    if data.telegram_video_id is not None:
+        if data.telegram_video_id == 0:
+            if episode.telegram_video_id:
+                old_v = (await db.execute(select(Video).where(Video.id == episode.telegram_video_id))).scalar_one_or_none()
+                if old_v:
+                    old_v.is_published = False
+            episode.telegram_video_id = None
+        else:
+            v = (await db.execute(select(Video).where(Video.id == data.telegram_video_id))).scalar_one_or_none()
+            if not v:
+                raise HTTPException(status_code=404, detail="Vidéo Telegram introuvable")
+            episode.telegram_video_id = v.id
+            if v.duration_seconds and not episode.duration_sec:
+                episode.duration_sec = v.duration_seconds
+
+    await db.commit()
+    await db.refresh(episode)
+    return EpisodeResponse.model_validate(episode)
+
+
+@router.delete("/episodes/{episode_id}", response_model=MessageResponse)
+async def delete_episode(
+    episode_id: int,
+    current_admin: User = Depends(get_current_admin),
+    db: AsyncSession = Depends(get_db),
+):
+    """
+    Supprime un épisode. La vidéo Telegram rattachée est détachée
+    et redevient brute sans être effacée de Telegram.
+    """
+    episode = (await db.execute(select(Episode).where(Episode.id == episode_id))).scalar_one_or_none()
+    if not episode:
+        raise HTTPException(status_code=404, detail="Épisode introuvable")
+
+    if episode.telegram_video_id:
+        v = (await db.execute(select(Video).where(Video.id == episode.telegram_video_id))).scalar_one_or_none()
+        if v:
+            v.is_published = False
+
+    await db.delete(episode)
+    await db.commit()
+    return MessageResponse(message=f"Épisode {episode.number} supprimé avec succès.")
+
+
+# =============================================================
+# 15. Édition et Suppression Films
+# =============================================================
+
+@router.patch("/movies/{movie_id}", response_model=MovieResponse)
+@router.put("/movies/{movie_id}", response_model=MovieResponse)
+async def update_movie(
+    movie_id: int,
+    data: MovieUpdate,
+    current_admin: User = Depends(get_current_admin),
+    db: AsyncSession = Depends(get_db),
+):
+    """Met à jour les informations d'un film (titres multilingues, synopsis, affiches, vidéo rattachée)."""
+    movie = (await db.execute(select(Movie).where(Movie.id == movie_id))).scalar_one_or_none()
+    if not movie:
+        raise HTTPException(status_code=404, detail="Film introuvable")
+
+    if data.title_fr is not None:
+        movie.title_fr = data.title_fr.strip()
+    if data.title_ar is not None:
+        movie.title_ar = data.title_ar.strip() if data.title_ar else None
+    if data.title_en is not None:
+        movie.title_en = data.title_en.strip() if data.title_en else None
+    if data.synopsis_fr is not None:
+        movie.synopsis_fr = data.synopsis_fr.strip() if data.synopsis_fr else None
+    if data.synopsis_ar is not None:
+        movie.synopsis_ar = data.synopsis_ar.strip() if data.synopsis_ar else None
+    if data.synopsis_en is not None:
+        movie.synopsis_en = data.synopsis_en.strip() if data.synopsis_en else None
+    if data.year is not None:
+        movie.year = data.year
+    if data.duration_sec is not None:
+        movie.duration_sec = data.duration_sec
+    if data.rating is not None:
+        movie.rating = data.rating
+    if data.poster_path is not None:
+        movie.poster_path = data.poster_path.strip() if data.poster_path else None
+    if data.banner_path is not None:
+        movie.banner_path = data.banner_path.strip() if data.banner_path else None
+    if data.visibility is not None:
+        movie.visibility = data.visibility
+        if movie.telegram_video_id:
+            v = (await db.execute(select(Video).where(Video.id == movie.telegram_video_id))).scalar_one_or_none()
+            if v:
+                v.is_published = (data.visibility == "published")
+
+    if data.telegram_video_id is not None:
+        if data.telegram_video_id == 0:
+            if movie.telegram_video_id:
+                old_v = (await db.execute(select(Video).where(Video.id == movie.telegram_video_id))).scalar_one_or_none()
+                if old_v:
+                    old_v.is_published = False
+            movie.telegram_video_id = None
+        else:
+            v = (await db.execute(select(Video).where(Video.id == data.telegram_video_id))).scalar_one_or_none()
+            if not v:
+                raise HTTPException(status_code=404, detail="Vidéo Telegram introuvable")
+            movie.telegram_video_id = v.id
+            v.is_published = (movie.visibility == "published")
+            v.title = movie.title_fr
+            if movie.poster_path and not v.thumbnail_path:
+                v.thumbnail_path = movie.poster_path
+            if v.duration_seconds and not movie.duration_sec:
+                movie.duration_sec = v.duration_seconds
+
+    await db.commit()
+    await db.refresh(movie)
+    return MovieResponse.model_validate(movie)
+
+
+@router.delete("/movies/{movie_id}", response_model=MessageResponse)
+async def delete_movie(
+    movie_id: int,
+    current_admin: User = Depends(get_current_admin),
+    db: AsyncSession = Depends(get_db),
+):
+    """
+    Supprime un film. La vidéo Telegram rattachée est détachée
+    et redevient brute (is_published = False) sans être effacée de Telegram.
+    """
+    movie = (await db.execute(select(Movie).where(Movie.id == movie_id))).scalar_one_or_none()
+    if not movie:
+        raise HTTPException(status_code=404, detail="Film introuvable")
+
+    if movie.telegram_video_id:
+        v = (await db.execute(select(Video).where(Video.id == movie.telegram_video_id))).scalar_one_or_none()
+        if v:
+            v.is_published = False
+
+    await db.delete(movie)
+    await db.commit()
+    return MessageResponse(message=f"Film '{movie.title_fr}' supprimé avec succès. La vidéo Telegram a été détachée.")
+
+
+# =============================================================
+# 16. Création de Série par Lots avec Détection Intelligente
+# =============================================================
+
+@router.post("/series/batch-create")
+async def create_series_from_batch(
+    data: BatchSeriesCreate,
+    current_admin: User = Depends(get_current_admin),
+    db: AsyncSession = Depends(get_db),
+):
+    """
+    Prend une liste d'identifiants de vidéos brutes, analyse intelligemment les numéros
+    d'épisodes et saisons (ex: S01E03, 1x04, الحلقة 05), crée la série, les saisons
+    nécessaires et lie automatiquement chaque épisode.
+    """
+    if not data.video_ids:
+        raise HTTPException(status_code=400, detail="Veuillez sélectionner au moins une vidéo.")
+
+    # Récupérer toutes les vidéos demandées
+    stmt = select(Video).where(Video.id.in_(data.video_ids))
+    videos = (await db.execute(stmt)).scalars().all()
+    if not videos:
+        raise HTTPException(status_code=404, detail="Aucune vidéo valide trouvée pour cette sélection.")
+
+    base_slug = slugify(data.title_fr)
+    existing = (await db.execute(select(Series).where(Series.slug == base_slug))).scalar_one_or_none()
+    slug = f"{base_slug}-{secrets.token_hex(2)}" if existing else base_slug
+
+    new_series = Series(
+        slug=slug,
+        title_fr=data.title_fr.strip(),
+        title_ar=data.title_ar.strip() if data.title_ar else None,
+        title_en=data.title_en.strip() if data.title_en else None,
+        synopsis_fr=data.synopsis_fr.strip() if data.synopsis_fr else None,
+        poster_path=data.poster_path.strip() if data.poster_path else None,
+        banner_path=data.banner_path.strip() if data.banner_path else None,
+        visibility=data.visibility,
+    )
+    db.add(new_series)
+    await db.flush()
+
+    # Dictionnaire des saisons créées : season_number -> Season
+    seasons_cache: Dict[int, Season] = {}
+
+    # Analyser et trier les vidéos
+    parsed_items = []
+    for idx, v in enumerate(videos):
+        text = v.file_name or v.title or v.caption or f"Episode {idx+1}"
+        parsed = parser_service.parse_video_title(text) if data.auto_detect else {
+            "season": 1,
+            "episode": idx + 1,
+            "clean_title": f"Épisode {idx + 1}",
+        }
+        season_num = parsed.get("season") or 1
+        episode_num = parsed.get("episode") or (idx + 1)
+        parsed_items.append({
+            "video": v,
+            "season_num": season_num,
+            "episode_num": episode_num,
+            "clean_title": parsed.get("clean_title") or f"Épisode {episode_num}",
+        })
+
+    # Trier par saison puis épisode
+    parsed_items.sort(key=lambda x: (x["season_num"], x["episode_num"]))
+
+    episodes_created = 0
+    for item in parsed_items:
+        s_num = item["season_num"]
+        if s_num not in seasons_cache:
+            season = Season(
+                series_id=new_series.id,
+                number=s_num,
+                title_fr=f"Saison {s_num}",
+                title_ar=f"الموسم {s_num}",
+                order_index=s_num,
+            )
+            db.add(season)
+            await db.flush()
+            seasons_cache[s_num] = season
+        else:
+            season = seasons_cache[s_num]
+
+        v = item["video"]
+        v.is_published = (data.visibility == "published")
+        v.season_number = s_num
+        v.episode_number = item["episode_num"]
+        v.title = f"{new_series.title_fr} - S{s_num:02d}E{item['episode_num']:02d}"
+
+        ep = Episode(
+            season_id=season.id,
+            number=item["episode_num"],
+            title_fr=item["clean_title"],
+            title_ar=f"الحلقة {item['episode_num']}",
+            duration_sec=v.duration_seconds,
+            thumbnail_path=v.thumbnail_path or new_series.poster_path,
+            telegram_video_id=v.id,
+            order_index=item["episode_num"],
+        )
+        db.add(ep)
+        episodes_created += 1
+
+    await db.commit()
+    await db.refresh(new_series)
+
+    return {
+        "success": True,
+        "series_id": new_series.id,
+        "title": new_series.title_fr,
+        "seasons_count": len(seasons_cache),
+        "episodes_count": episodes_created,
+        "message": f"Série '{new_series.title_fr}' créée avec succès avec {len(seasons_cache)} saison(s) et {episodes_created} épisode(s) liés !",
+    }
+
+
+# =============================================================
+# 17. Intégration Google Gemini AI (Traduction & Enrichissement)
+# =============================================================
+
+@router.get("/ai/config")
+async def get_ai_config(
+    current_admin: User = Depends(get_current_admin),
+):
+    """Récupère l'état et le modèle configuré pour l'IA Gemini."""
+    conf = await gemini_service.get_config()
+    return {
+        "configured": bool(conf.get("api_key")),
+        "model": conf.get("model", "gemini-1.5-flash"),
+        "has_key": bool(conf.get("api_key")),
+    }
+
+
+@router.post("/ai/config", response_model=MessageResponse)
+async def update_ai_config(
+    data: GeminiConfigRequest,
+    current_admin: User = Depends(get_current_admin),
+    db: AsyncSession = Depends(get_db),
+):
+    """Enregistre la clé API Gemini et le modèle sélectionné."""
+    if data.api_key is not None:
+        stmt = select(SystemSetting).where(SystemSetting.key == "GEMINI_API_KEY")
+        row = (await db.execute(stmt)).scalar_one_or_none()
+        if row:
+            row.value = data.api_key.strip()
+        else:
+            db.add(SystemSetting(key="GEMINI_API_KEY", value=data.api_key.strip()))
+
+    if data.model is not None:
+        stmt = select(SystemSetting).where(SystemSetting.key == "GEMINI_MODEL")
+        row = (await db.execute(stmt)).scalar_one_or_none()
+        if row:
+            row.value = data.model.strip()
+        else:
+            db.add(SystemSetting(key="GEMINI_MODEL", value=data.model.strip()))
+
+    await db.commit()
+    return MessageResponse(message="Configuration Gemini AI enregistrée avec succès.")
+
+
+@router.post("/ai/test-key")
+async def test_ai_key(
+    data: GeminiConfigRequest,
+    current_admin: User = Depends(get_current_admin),
+):
+    """Teste la validité d'une clé API Gemini auprès de Google."""
+    if not data.api_key:
+        raise HTTPException(status_code=400, detail="Veuillez fournir une clé API Gemini.")
+    return await gemini_service.test_key(api_key=data.api_key, model=data.model)
+
+
+@router.post("/ai/translate")
+async def translate_with_gemini(
+    data: GeminiTranslateRequest,
+    current_admin: User = Depends(get_current_admin),
+):
+    """
+    Traduit et génère automatiquement les métadonnées FR / AR / EN
+    avec synopsis cinématiques et suggestion de genres.
+    """
+    if not data.title:
+        raise HTTPException(status_code=400, detail="Veuillez fournir au moins un titre.")
+
+    res = await gemini_service.translate_and_enrich(
+        title=data.title,
+        synopsis=data.synopsis,
+        content_type=data.content_type,
+    )
+    return res
+

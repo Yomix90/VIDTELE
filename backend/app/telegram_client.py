@@ -368,12 +368,45 @@ class TelegramManager:
                 retries -= 1
             except Exception as e:
                 logger.warning(f"Échec du téléchargement de la miniature pour le message {message.id}: {e}")
-                return None
         return None
+
+    async def upload_video_file(
+        self,
+        file_path: Path,
+        file_name: str,
+        caption: Optional[str] = None,
+        progress_callback = None,
+    ):
+        """
+        Téléverse un fichier vidéo directement vers le canal privé Telegram MTProto avec support streaming natif.
+        """
+        if (not self._client or not self._client.is_connected()) and self.is_configured() and self.session_exists():
+            await self.start()
+
+        if not self._client or not self._client.is_connected():
+            raise RuntimeError("Client Telegram non connecté. Vérifiez vos sessions dans l'onglet Telegram.")
+
+        channel = await self.get_channel_entity()
+        if not channel:
+            raise RuntimeError("Canal Telegram cible introuvable ou inaccessible.")
+
+        from telethon.tl.types import DocumentAttributeFilename
+        msg = await self._client.send_file(
+            channel,
+            file=file_path,
+            caption=caption or file_name,
+            supports_streaming=True,
+            progress_callback=progress_callback,
+            attributes=[
+                DocumentAttributeFilename(file_name=file_name),
+            ],
+        )
+        return msg
 
     # -----------------------------------------------------------------
     # Gestion Multi-Comptes & Outils de Diagnostic / Authentification
     # -----------------------------------------------------------------
+
 
     async def test_session_string(
         self,
