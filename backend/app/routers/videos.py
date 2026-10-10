@@ -25,7 +25,12 @@ from app.schemas import (
     VideoListResponse,
     VideoResponse,
 )
-from app.security import create_stream_token, decode_token, get_client_ip, get_current_active_user
+from app.security import (
+    create_stream_token,
+    decode_stream_url_token,
+    get_client_ip,
+    get_current_active_user,
+)
 from app.services.stream_manager import stream_manager
 from app.services.stream_service import stream_service
 
@@ -359,18 +364,8 @@ async def stream_video(
         )
 
 
-    # Décodage et validation du token (supporte les tokens 'access' et 'stream')
-    try:
-        payload = decode_token(raw_token, expected_type="stream")
-    except HTTPException:
-        # Essayer avec le type 'access'
-        try:
-            payload = decode_token(raw_token, expected_type="access")
-        except HTTPException:
-            raise HTTPException(
-                status_code=status.HTTP_401_UNAUTHORIZED,
-                detail="Jeton de streaming invalide ou expiré",
-            )
+    # Décodage et validation du token ('stream' lié à la vidéo, ou 'access' des anciennes versions de l'app)
+    payload = decode_stream_url_token(raw_token)
 
     user_id_str = payload.get("sub")
     if not user_id_str or not user_id_str.isdigit():
@@ -391,6 +386,10 @@ async def stream_video(
 
     if not video or (not video.is_published and user.role != "admin"):
         raise HTTPException(status_code=404, detail="Vidéo introuvable ou non publiée")
+
+    # Un jeton de flux n'ouvre que la vidéo pour laquelle il a été émis
+    if payload.get("type") == "stream" and payload.get("vid") != video.id:
+        raise HTTPException(status_code=403, detail="Jeton de flux non valable pour cette vidéo")
 
     # 3. Contrôle et enregistrement des quotas de flux simultanés (anti-abus)
     client_ip = get_client_ip(request)

@@ -180,6 +180,32 @@ def decode_token(token: str, expected_type: str = "access") -> dict:
         )
 
 
+def decode_stream_url_token(token: str) -> dict:
+    """
+    Décode un jeton présenté à l'endpoint de flux (type 'stream' ou 'access').
+    La signature et le type sont toujours vérifiés ; l'expiration est tolérée pendant
+    STREAM_TOKEN_GRACE_MINUTES pour ne pas couper une lecture déjà commencée.
+    """
+    try:
+        payload = jwt.decode(
+            token,
+            settings.SECRET_KEY,
+            algorithms=[settings.ALGORITHM],
+            options={"verify_exp": False, "require": ["exp", "sub", "type"]},
+        )
+    except jwt.PyJWTError:
+        raise HTTPException(status_code=status.HTTP_401_UNAUTHORIZED, detail="Jeton de streaming invalide ou expiré")
+
+    if payload.get("type") not in ("stream", "access"):
+        raise HTTPException(status_code=status.HTTP_401_UNAUTHORIZED, detail="Jeton de streaming invalide ou expiré")
+
+    grace = timedelta(minutes=max(settings.STREAM_TOKEN_GRACE_MINUTES, 0))
+    expires_at = datetime.fromtimestamp(int(payload["exp"]), tz=timezone.utc)
+    if datetime.now(timezone.utc) > expires_at + grace:
+        raise HTTPException(status_code=status.HTTP_401_UNAUTHORIZED, detail="Jeton de streaming invalide ou expiré")
+    return payload
+
+
 # -------------------------------------------------------------
 # Dépendances FastAPI pour les Utilisateurs
 # -------------------------------------------------------------

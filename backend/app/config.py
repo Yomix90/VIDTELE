@@ -16,6 +16,10 @@ class Settings(BaseSettings):
     ACCESS_TOKEN_EXPIRE_MINUTES: int = 60
     REFRESH_TOKEN_EXPIRE_DAYS: int = 30
     STREAM_TOKEN_EXPIRE_SECONDS: int = 7200  # 2 heures de validité pour un token de flux signé
+    # Tolérance d'expiration sur l'endpoint de flux UNIQUEMENT : une lecture commencée ne doit pas
+    # s'arrêter quand le jeton de l'URL expire (le lecteur réutilise la même URL pour ses requêtes Range).
+    # Le compte doit toujours être actif. 0 = désactivé.
+    STREAM_TOKEN_GRACE_MINUTES: int = 240
 
     # Base de données
     DATABASE_URL: str = "sqlite+aiosqlite:///./vidtele.db"
