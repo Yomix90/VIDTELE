@@ -1,6 +1,7 @@
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import '../core/localization/app_localizations.dart';
+import '../core/services/video_player_manager.dart';
 import '../core/theme/app_theme.dart';
 import 'home/home_screen.dart';
 import 'library/favorites_screen.dart';
@@ -20,20 +21,22 @@ class MainNavigationScreen extends ConsumerStatefulWidget {
 class _MainNavigationScreenState extends ConsumerState<MainNavigationScreen> {
   int _currentIndex = 0;
 
-  final List<Widget> _screens = const [
-    HomeScreen(),
-    ReelsScreen(),
-    FavoritesScreen(),
-    HistoryScreen(),
-    SettingsScreen(),
-  ];
-
   @override
   void initState() {
     super.initState();
     WidgetsBinding.instance.addPostFrameCallback((_) {
       UpdateService.checkForUpdates(context);
     });
+  }
+
+  void _onTabTapped(int index) {
+    if (_currentIndex != index) {
+      // Coupure immédiate du son de toute vidéo active lors d'un changement d'onglet
+      ref.read(videoPlayerManagerProvider).pauseAll();
+      setState(() {
+        _currentIndex = index;
+      });
+    }
   }
 
   @override
@@ -44,11 +47,17 @@ class _MainNavigationScreenState extends ConsumerState<MainNavigationScreen> {
       backgroundColor: AppTheme.netflixBlack,
       body: IndexedStack(
         index: _currentIndex,
-        children: _screens,
+        children: [
+          const HomeScreen(),
+          ReelsScreen(isActive: _currentIndex == 1),
+          const FavoritesScreen(),
+          const HistoryScreen(),
+          const SettingsScreen(),
+        ],
       ),
       bottomNavigationBar: BottomNavigationBar(
         currentIndex: _currentIndex,
-        onTap: (index) => setState(() => _currentIndex = index),
+        onTap: _onTabTapped,
         backgroundColor: const Color(0xFF121212),
         selectedItemColor: Colors.white,
         unselectedItemColor: const Color(0xFF757575),

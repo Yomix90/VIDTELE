@@ -38,6 +38,8 @@ dependencies:
   # Icônes modernes
   cupertino_icons: ^1.0.8
   wakelock_plus: ^1.5.2
+  audio_session: ^0.2.4
+  google_fonts: ^9.0.0
 
 dev_dependencies:
   flutter_test:

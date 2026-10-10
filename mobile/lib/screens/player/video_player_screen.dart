@@ -5,11 +5,12 @@ import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:video_player/video_player.dart';
 import 'package:chewie/chewie.dart';
 import 'package:dio/dio.dart';
-import 'package:wakelock_plus/wakelock_plus.dart';
 
 import '../../core/api/api_client.dart';
 import '../../core/constants/api_constants.dart';
 import '../../core/localization/app_localizations.dart';
+import '../../core/navigation/app_route_observer.dart';
+import '../../core/services/video_player_manager.dart';
 import '../../core/storage/storage_service.dart';
 import '../../core/theme/app_theme.dart';
 import '../../models/video_model.dart';
@@ -35,7 +36,8 @@ class VideoPlayerScreen extends ConsumerStatefulWidget {
   ConsumerState<VideoPlayerScreen> createState() => _VideoPlayerScreenState();
 }
 
-class _VideoPlayerScreenState extends ConsumerState<VideoPlayerScreen> with WidgetsBindingObserver {
+class _VideoPlayerScreenState extends ConsumerState<VideoPlayerScreen>
+    with WidgetsBindingObserver, RouteAware {
   late VideoModel _currentVideo;
   late int _currentIndex;
   late List<VideoModel> _playlist;
@@ -48,6 +50,8 @@ class _VideoPlayerScreenState extends ConsumerState<VideoPlayerScreen> with Widg
   String? _customError;
   Timer? _progressTimer;
   bool _isDisposed = false;
+
+  String get _playerId => 'player_${_currentVideo.id}';
 
   // Enchaînement automatique des épisodes
   Timer? _autoNextTimer;
@@ -68,15 +72,29 @@ class _VideoPlayerScreenState extends ConsumerState<VideoPlayerScreen> with Widg
   }
 
   @override
+  void didChangeDependencies() {
+    super.didChangeDependencies();
+    final route = ModalRoute.of(context);
+    if (route != null) {
+      appRouteObserver.subscribe(this, route);
+    }
+  }
+
+  @override
+  void didPushNext() {
+    // Si une nouvelle route (écran, dialog, modal) est ouverte au-dessus du lecteur, pause immédiate
+    ref.read(videoPlayerManagerProvider).pause(_playerId);
+    super.didPushNext();
+  }
+
+  @override
   void didChangeAppLifecycleState(AppLifecycleState state) {
-    if (state == AppLifecycleState.paused || state == AppLifecycleState.inactive) {
-      // Coupure immédiate du son et pause quand l'application passe en arrière-plan
-      _videoPlayerController?.pause();
-      WakelockPlus.disable();
-    } else if (state == AppLifecycleState.resumed) {
-      if (_videoPlayerController?.value.isPlaying == true) {
-        WakelockPlus.enable();
-      }
+    if (state == AppLifecycleState.paused ||
+        state == AppLifecycleState.inactive ||
+        state == AppLifecycleState.hidden ||
+        state == AppLifecycleState.detached) {
+      // Coupure immédiate du son et de l'image dès que l'application quitte le premier plan
+      ref.read(videoPlayerManagerProvider).pauseAll();
     }
   }
 
@@ -200,14 +218,23 @@ class _VideoPlayerScreenState extends ConsumerState<VideoPlayerScreen> with Widg
         },
       );
 
+      // Enregistrement auprès du gestionnaire central
+      ref.read(videoPlayerManagerProvider).registerPlayer(
+        id: _playerId,
+        controller: controller,
+        onPauseRequested: () {
+          if (mounted) setState(() {});
+        },
+      );
+
       setState(() {
         _videoPlayerController = controller;
         _chewieController = chewie;
         _isLoading = false;
       });
 
-      // Maintien actif de l'écran pendant la lecture
-      WakelockPlus.enable();
+      // Démarrage via le gestionnaire central (qui coupe tout autre flux)
+      await ref.read(videoPlayerManagerProvider).play(_playerId);
 
       // 6. Démarrage du heartbeat périodique de progression (toutes les 10 secondes)
       _startProgressTimer();
@@ -229,10 +256,6 @@ class _VideoPlayerScreenState extends ConsumerState<VideoPlayerScreen> with Widg
   void _onVideoControllerUpdate() {
     final controller = _videoPlayerController;
     if (controller == null || !controller.value.isInitialized) return;
-
-    if (controller.value.isPlaying) {
-      WakelockPlus.enable();
-    }
 
     // Détection de fin de vidéo pour auto-play next episode
     final pos = controller.value.position;
@@ -271,7 +294,7 @@ class _VideoPlayerScreenState extends ConsumerState<VideoPlayerScreen> with Widg
   Future<void> _playNextEpisode() async {
     if (!_hasNextVideo) return;
     _autoNextTimer?.cancel();
-    await _cleanUpAndRelease();
+    _releasePlayerSync();
     setState(() {
       _currentIndex++;
       _currentVideo = _playlist[_currentIndex];
@@ -282,7 +305,7 @@ class _VideoPlayerScreenState extends ConsumerState<VideoPlayerScreen> with Widg
   Future<void> _playPreviousEpisode() async {
     if (!_hasPreviousVideo) return;
     _autoNextTimer?.cancel();
-    await _cleanUpAndRelease();
+    _releasePlayerSync();
     setState(() {
       _currentIndex--;
       _currentVideo = _playlist[_currentIndex];
@@ -316,31 +339,46 @@ class _VideoPlayerScreenState extends ConsumerState<VideoPlayerScreen> with Widg
         );
   }
 
-  /// Libère la session de stream sur le serveur et nettoie les contrôleurs
-  Future<void> _cleanUpAndRelease() async {
+  /// Libération synchrone et immédiate des ressources du contrôleur
+  /// (Évite tout lecteur fantôme ou son persistant en arrière-plan)
+  void _releasePlayerSync() {
     _progressTimer?.cancel();
     _autoNextTimer?.cancel();
     _sendCurrentProgress(isCompletedCheck: true);
 
+    final stopVideoId = _currentVideo.id;
+    unawaited(_notifyStopStream(stopVideoId));
+
+    ref.read(videoPlayerManagerProvider).unregisterPlayer('player_$stopVideoId');
+
+    final ctrl = _videoPlayerController;
+    final chewie = _chewieController;
+    _videoPlayerController = null;
+    _chewieController = null;
+
+    if (ctrl != null) {
+      ctrl.removeListener(_onVideoControllerUpdate);
+      ctrl.pause();
+      chewie?.dispose();
+      ctrl.dispose();
+    }
+  }
+
+  /// Notification non-bloquante au serveur de la libération du quota
+  Future<void> _notifyStopStream(int videoId) async {
     try {
-      await apiClient.dio.post(ApiConstants.videoStop(_currentVideo.id));
+      await apiClient.dio.post(ApiConstants.videoStop(videoId));
     } catch (_) {
       // Ignorer l'erreur réseau à la fermeture
     }
-
-    _videoPlayerController?.removeListener(_onVideoControllerUpdate);
-    _chewieController?.dispose();
-    _videoPlayerController?.dispose();
-    _chewieController = null;
-    _videoPlayerController = null;
   }
 
   @override
   void dispose() {
     _isDisposed = true;
+    appRouteObserver.unsubscribe(this);
     WidgetsBinding.instance.removeObserver(this);
-    WakelockPlus.disable();
-    _cleanUpAndRelease();
+    _releasePlayerSync();
 
     // Rétablir l'orientation automatique et l'UI système
     SystemChrome.setPreferredOrientations([

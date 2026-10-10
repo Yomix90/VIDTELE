@@ -1,11 +1,11 @@
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:video_player/video_player.dart';
-import 'package:wakelock_plus/wakelock_plus.dart';
 
 import '../../core/api/api_client.dart';
 import '../../core/constants/api_constants.dart';
 import '../../core/localization/app_localizations.dart';
+import '../../core/services/video_player_manager.dart';
 import '../../core/storage/storage_service.dart';
 import '../../core/theme/app_theme.dart';
 import '../../models/video_model.dart';
@@ -14,7 +14,12 @@ import '../../providers/video_provider.dart';
 
 /// Écran de défilement vertical façon TikTok / Reels avec lecture plein écran instantanée.
 class ReelsScreen extends ConsumerStatefulWidget {
-  const ReelsScreen({super.key});
+  final bool isActive;
+
+  const ReelsScreen({
+    super.key,
+    this.isActive = true,
+  });
 
   @override
   ConsumerState<ReelsScreen> createState() => _ReelsScreenState();
@@ -33,21 +38,32 @@ class _ReelsScreenState extends ConsumerState<ReelsScreen> with WidgetsBindingOb
   }
 
   @override
+  void didUpdateWidget(covariant ReelsScreen oldWidget) {
+    super.didUpdateWidget(oldWidget);
+    if (!widget.isActive && oldWidget.isActive) {
+      // Coupure immédiate si l'onglet Reels n'est plus actif
+      ref.read(videoPlayerManagerProvider).pauseAll();
+    }
+  }
+
+  @override
   void didChangeAppLifecycleState(AppLifecycleState state) {
-    if (state == AppLifecycleState.paused || state == AppLifecycleState.inactive) {
+    if (state == AppLifecycleState.paused ||
+        state == AppLifecycleState.inactive ||
+        state == AppLifecycleState.hidden ||
+        state == AppLifecycleState.detached) {
       _isAppActive = false;
-      WakelockPlus.disable();
+      ref.read(videoPlayerManagerProvider).pauseAll();
     } else if (state == AppLifecycleState.resumed) {
       _isAppActive = true;
-      WakelockPlus.enable();
     }
-    setState(() {});
+    if (mounted) setState(() {});
   }
 
   @override
   void dispose() {
     WidgetsBinding.instance.removeObserver(this);
-    WakelockPlus.disable();
+    ref.read(videoPlayerManagerProvider).pauseAll();
     _pageController.dispose();
     super.dispose();
   }
@@ -98,8 +114,9 @@ class _ReelsScreenState extends ConsumerState<ReelsScreen> with WidgetsBindingOb
               });
             },
             itemBuilder: (context, index) {
-              final isCurrent = index == _focusedIndex && _isAppActive;
+              final isCurrent = widget.isActive && _isAppActive && (index == _focusedIndex);
               return ReelPlayerItem(
+                key: ValueKey('reel_item_${videos[index].id}'),
                 video: videos[index],
                 isActive: isCurrent,
               );
@@ -133,6 +150,8 @@ class _ReelPlayerItemState extends ConsumerState<ReelPlayerItem> {
   bool _isMuted = false;
   bool _showHeartAnimation = false;
 
+  String get _playerId => 'reel_${widget.video.id}';
+
   @override
   void initState() {
     super.initState();
@@ -148,13 +167,12 @@ class _ReelPlayerItemState extends ConsumerState<ReelPlayerItem> {
       if (_controller == null) {
         _initVideo();
       } else {
-        _controller?.play();
-        setState(() => _isPlaying = true);
-        WakelockPlus.enable();
+        ref.read(videoPlayerManagerProvider).play(_playerId);
+        if (mounted) setState(() => _isPlaying = true);
       }
     } else if (!widget.isActive && oldWidget.isActive) {
-      _controller?.pause();
-      setState(() => _isPlaying = false);
+      ref.read(videoPlayerManagerProvider).pause(_playerId);
+      if (mounted) setState(() => _isPlaying = false);
     }
   }
 
@@ -192,35 +210,45 @@ class _ReelPlayerItemState extends ConsumerState<ReelPlayerItem> {
         return;
       }
 
+      // Enregistrement dans le gestionnaire central
+      ref.read(videoPlayerManagerProvider).registerPlayer(
+        id: _playerId,
+        controller: ctrl,
+        onPauseRequested: () {
+          if (mounted) setState(() => _isPlaying = false);
+        },
+      );
+
       setState(() {
         _controller = ctrl;
         _isInitialized = true;
       });
 
       if (widget.isActive) {
-        await ctrl.play();
-        setState(() => _isPlaying = true);
-        WakelockPlus.enable();
+        await ref.read(videoPlayerManagerProvider).play(_playerId);
+        if (mounted) setState(() => _isPlaying = true);
       }
     } catch (_) {}
   }
 
   @override
   void dispose() {
-    _controller?.dispose();
+    ref.read(videoPlayerManagerProvider).unregisterPlayer(_playerId);
+    final ctrl = _controller;
+    _controller = null;
+    ctrl?.pause();
+    ctrl?.dispose();
     super.dispose();
   }
 
   void _togglePlayPause() {
     if (_controller == null || !_isInitialized) return;
     if (_controller!.value.isPlaying) {
-      _controller!.pause();
+      ref.read(videoPlayerManagerProvider).pause(_playerId);
       setState(() => _isPlaying = false);
-      WakelockPlus.disable();
     } else {
-      _controller!.play();
+      ref.read(videoPlayerManagerProvider).play(_playerId);
       setState(() => _isPlaying = true);
-      WakelockPlus.enable();
     }
   }
 
