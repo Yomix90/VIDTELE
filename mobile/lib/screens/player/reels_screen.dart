@@ -109,7 +109,8 @@ class _ReelsScreenState extends ConsumerState<ReelsScreen>
       _focusedIndex = initialIdx;
       _hasJumpedToInitial = true;
       _pageController = PageController(initialPage: initialIdx);
-    } else if (widget.initialVideo != null) {
+    } else if (widget.initialVideo != null && widget.seriesId == null) {
+      // Film ou vidéo autonome unique hors série
       _customPlaylistItems = [_videoToFeedItem(widget.initialVideo!)];
       _focusedIndex = 0;
       _hasJumpedToInitial = true;
@@ -188,6 +189,27 @@ class _ReelsScreenState extends ConsumerState<ReelsScreen>
     super.dispose();
   }
 
+  FeedState _watchFeedState() {
+    if (_customPlaylistItems != null) {
+      return FeedState(
+        items: _customPlaylistItems!,
+        isLoading: false,
+        hasMore: false,
+      );
+    }
+    final rawState = widget.seriesId != null
+        ? ref.watch(seriesFeedNotifierProvider(widget.seriesId!))
+        : ref.watch(feedNotifierProvider);
+    if (rawState.items.isEmpty && widget.initialVideo != null) {
+      return FeedState(
+        items: [_videoToFeedItem(widget.initialVideo!)],
+        isLoading: rawState.isLoading,
+        hasMore: true,
+      );
+    }
+    return rawState;
+  }
+
   FeedState _getFeedState() {
     if (_customPlaylistItems != null) {
       return FeedState(
@@ -196,9 +218,17 @@ class _ReelsScreenState extends ConsumerState<ReelsScreen>
         hasMore: false,
       );
     }
-    return widget.seriesId != null
+    final rawState = widget.seriesId != null
         ? ref.read(seriesFeedNotifierProvider(widget.seriesId!))
         : ref.read(feedNotifierProvider);
+    if (rawState.items.isEmpty && widget.initialVideo != null) {
+      return FeedState(
+        items: [_videoToFeedItem(widget.initialVideo!)],
+        isLoading: rawState.isLoading,
+        hasMore: true,
+      );
+    }
+    return rawState;
   }
 
   static FeedItemModel _videoToFeedItem(VideoModel v) {
@@ -1347,13 +1377,13 @@ class _ReelsScreenState extends ConsumerState<ReelsScreen>
 
   @override
   Widget build(BuildContext context) {
-    final feedState = _getFeedState();
+    final feedState = _watchFeedState();
     final l10n = context.l10n;
     final user = ref.watch(authProvider).user;
     final watchGate = ref.watch(watchGateProvider);
     final isGateLocked = (watchGate.isGateLocked || _isGateLockedLocally) && !watchGate.isUserExempt(user);
 
-    if (feedState.isLoading) {
+    if (feedState.isLoading && feedState.items.isEmpty) {
       return const Scaffold(
         backgroundColor: Colors.black,
         body: Center(
@@ -1400,9 +1430,10 @@ class _ReelsScreenState extends ConsumerState<ReelsScreen>
     }
 
     // Saut initial vers l'épisode spécifié (pour les séries chargées par API)
-    if (!_hasJumpedToInitial && widget.initialVideoId != null && feedState.items.isNotEmpty) {
+    final targetVideoId = widget.initialVideoId ?? widget.initialVideo?.id;
+    if (!_hasJumpedToInitial && targetVideoId != null && feedState.items.isNotEmpty) {
       _hasJumpedToInitial = true;
-      final targetIdx = feedState.items.indexWhere((it) => it.id == widget.initialVideoId);
+      final targetIdx = feedState.items.indexWhere((it) => it.id == targetVideoId);
       if (targetIdx > 0) {
         _focusedIndex = targetIdx;
         WidgetsBinding.instance.addPostFrameCallback((_) {

@@ -143,6 +143,9 @@ class _FavoritesScreenState extends ConsumerState<FavoritesScreen> {
                               children: [
                                 TouchableScale(
                                   onTap: () {
+                                    final seriesPlaylist = (video.seriesId != null)
+                                        ? filteredFavorites.where((v) => v.seriesId == video.seriesId).toList()
+                                        : filteredFavorites;
                                     Navigator.push(
                                       context,
                                       MaterialPageRoute(
@@ -150,7 +153,9 @@ class _FavoritesScreenState extends ConsumerState<FavoritesScreen> {
                                           isActive: true,
                                           isStandalone: true,
                                           initialVideo: video,
-                                          playlist: filteredFavorites,
+                                          playlist: (video.seriesId != null && seriesPlaylist.length <= 1)
+                                              ? null
+                                              : seriesPlaylist,
                                           initialVideoId: video.id,
                                           seriesId: video.seriesId,
                                         ),
@@ -162,6 +167,9 @@ class _FavoritesScreenState extends ConsumerState<FavoritesScreen> {
                                     width: double.infinity,
                                     height: double.infinity,
                                     onTap: () {
+                                      final seriesPlaylist = (video.seriesId != null)
+                                          ? filteredFavorites.where((v) => v.seriesId == video.seriesId).toList()
+                                          : filteredFavorites;
                                       Navigator.push(
                                         context,
                                         MaterialPageRoute(
@@ -169,7 +177,9 @@ class _FavoritesScreenState extends ConsumerState<FavoritesScreen> {
                                             isActive: true,
                                             isStandalone: true,
                                             initialVideo: video,
-                                            playlist: filteredFavorites,
+                                            playlist: (video.seriesId != null && seriesPlaylist.length <= 1)
+                                                ? null
+                                                : seriesPlaylist,
                                             initialVideoId: video.id,
                                             seriesId: video.seriesId,
                                           ),

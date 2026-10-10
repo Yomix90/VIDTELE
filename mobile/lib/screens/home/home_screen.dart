@@ -43,6 +43,10 @@ class _HomeScreenState extends ConsumerState<HomeScreen> {
   }
 
   void _onVideoSelected(VideoModel video, [List<VideoModel>? playlist]) {
+    final seriesPlaylist = (video.seriesId != null && playlist != null)
+        ? playlist.where((v) => v.seriesId == video.seriesId).toList()
+        : playlist;
+
     Navigator.push(
       context,
       MaterialPageRoute(
@@ -50,7 +54,9 @@ class _HomeScreenState extends ConsumerState<HomeScreen> {
           isActive: true,
           isStandalone: true,
           initialVideo: video,
-          playlist: playlist,
+          playlist: (video.seriesId != null && (seriesPlaylist == null || seriesPlaylist.length <= 1))
+              ? null
+              : seriesPlaylist,
           initialVideoId: video.id,
           seriesId: video.seriesId,
         ),
