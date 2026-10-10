@@ -13,11 +13,48 @@ import '../../core/services/update_service.dart';
 import 'package:flutter/foundation.dart';
 
 /// Écran des Paramètres et Profil avec support trilingue FR / EN / AR (RTL)
-class SettingsScreen extends ConsumerWidget {
+class SettingsScreen extends ConsumerStatefulWidget {
   const SettingsScreen({super.key});
 
   @override
-  Widget build(BuildContext context, WidgetRef ref) {
+  ConsumerState<SettingsScreen> createState() => _SettingsScreenState();
+}
+
+class _SettingsScreenState extends ConsumerState<SettingsScreen> {
+  bool _autoHideControls = true;
+  int _autoHideSeconds = 3;
+  bool _isLoadingPreferences = true;
+
+  @override
+  void initState() {
+    super.initState();
+    _loadPreferences();
+  }
+
+  Future<void> _loadPreferences() async {
+    final autoHide = await storageService.getAutoHideControls();
+    final seconds = await storageService.getAutoHideSeconds();
+    if (mounted) {
+      setState(() {
+        _autoHideControls = autoHide;
+        _autoHideSeconds = seconds;
+        _isLoadingPreferences = false;
+      });
+    }
+  }
+
+  Future<void> _toggleAutoHide(bool val) async {
+    setState(() => _autoHideControls = val);
+    await storageService.setAutoHideControls(val);
+  }
+
+  Future<void> _changeAutoHideSeconds(int val) async {
+    setState(() => _autoHideSeconds = val);
+    await storageService.setAutoHideSeconds(val);
+  }
+
+  @override
+  Widget build(BuildContext context) {
     final authState = ref.watch(authProvider);
     final user = authState.user;
     final currentLocale = ref.watch(localeProvider);
@@ -193,6 +230,74 @@ class SettingsScreen extends ConsumerWidget {
             onTap: () => _editServerUrl(context, l10n),
           ),
           const SizedBox(height: 24),
+
+          // Section Préférences de Lecture
+          Text(
+            l10n.playbackPreferencesHeader,
+            style: const TextStyle(
+              color: Colors.white70,
+              fontSize: 13,
+              fontWeight: FontWeight.bold,
+              letterSpacing: 0.5,
+            ),
+          ),
+          const SizedBox(height: 10),
+
+          // Interrupteur Masquer automatiquement les boutons
+          SwitchListTile(
+            tileColor: AppTheme.netflixCard,
+            shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(8)),
+            secondary: const Icon(Icons.visibility_off_outlined, color: Colors.white),
+            title: Text(
+              l10n.autoHideControlsTitle,
+              style: const TextStyle(color: Colors.white, fontWeight: FontWeight.w600),
+            ),
+            subtitle: Text(
+              l10n.autoHideControlsDesc,
+              style: const TextStyle(color: Colors.white54, fontSize: 12),
+            ),
+            activeTrackColor: AppTheme.netflixRed,
+            value: _autoHideControls,
+            onChanged: _isLoadingPreferences ? null : _toggleAutoHide,
+          ),
+          const SizedBox(height: 8),
+
+          // Durée d'affichage (si activé)
+          if (_autoHideControls) ...[
+            ListTile(
+              tileColor: AppTheme.netflixCard,
+              shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(8)),
+              leading: const Icon(Icons.timer_outlined, color: Colors.white70),
+              title: Text(
+                l10n.autoHideDelayTitle,
+                style: const TextStyle(color: Colors.white),
+              ),
+              subtitle: Text(
+                l10n.autoHideSecondsSummary(_autoHideSeconds),
+                style: const TextStyle(color: Colors.white60, fontSize: 12),
+              ),
+              trailing: DropdownButton<int>(
+                value: _autoHideSeconds,
+                dropdownColor: AppTheme.netflixCard,
+                underline: const SizedBox.shrink(),
+                icon: const Icon(Icons.arrow_drop_down, color: Colors.white70),
+                items: [2, 3, 5, 8].map((sec) {
+                  return DropdownMenuItem<int>(
+                    value: sec,
+                    child: Text(
+                      l10n.autoHideSecondsSummary(sec),
+                      style: const TextStyle(color: Colors.white),
+                    ),
+                  );
+                }).toList(),
+                onChanged: (newSec) {
+                  if (newSec != null) _changeAutoHideSeconds(newSec);
+                },
+              ),
+            ),
+            const SizedBox(height: 10),
+          ],
+          const SizedBox(height: 14),
 
           // Section Administration & Développeur (visible si admin ou en debug)
           if (user?.isAdmin == true || kDebugMode) ...[

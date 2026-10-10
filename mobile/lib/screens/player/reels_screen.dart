@@ -90,11 +90,28 @@ class _ReelsScreenState extends ConsumerState<ReelsScreen>
 
   VideoPlayerManager? _videoPlayerManager;
 
+  // Contrôle du masquage automatique des boutons
+  bool _controlsVisible = true;
+  Timer? _hideControlsTimer;
+  bool _autoHideEnabled = true;
+  int _autoHideDurationSeconds = 3;
+  bool _isScrubbing = false;
+
+
   @override
   void initState() {
     super.initState();
     _videoPlayerManager = ref.read(videoPlayerManagerProvider);
     WidgetsBinding.instance.addObserver(this);
+
+    _loadAutoHideSettings();
+
+    // Autoriser la rotation du téléphone en mode portrait et paysage
+    SystemChrome.setPreferredOrientations([
+      DeviceOrientation.portraitUp,
+      DeviceOrientation.landscapeLeft,
+      DeviceOrientation.landscapeRight,
+    ]);
 
     // Initialisation depuis une playlist personnalisée si fournie
     if (widget.playlist != null && widget.playlist!.isNotEmpty) {
@@ -171,6 +188,12 @@ class _ReelsScreenState extends ConsumerState<ReelsScreen>
     WidgetsBinding.instance.removeObserver(this);
     _progressSyncTimer?.cancel();
     _progressSyncTimer = null;
+    _hideControlsTimer?.cancel();
+    _hideControlsTimer = null;
+
+    // Rétablir impérativement l'orientation portrait et les barres système
+    SystemChrome.setPreferredOrientations([DeviceOrientation.portraitUp]);
+    SystemChrome.setEnabledSystemUIMode(SystemUiMode.edgeToEdge);
 
     _watchdog?.dispose();
     _watchdog = null;
@@ -272,18 +295,21 @@ class _ReelsScreenState extends ConsumerState<ReelsScreen>
       final baseUrl = await storageService.getServerUrl();
       final accessToken = await storageService.getAccessToken();
 
-      String? streamToken;
-      try {
-        final tokenRes = await apiClient.dio.get(
-          ApiConstants.videoStreamToken(item.id),
-        );
-        streamToken = tokenRes.data['stream_token'];
-      } catch (_) {
-        streamToken = accessToken;
+      String? streamToken = accessToken;
+      if (streamToken == null || streamToken.isEmpty) {
+        try {
+          final tokenRes = await apiClient.dio.get(
+            ApiConstants.videoStreamToken(item.id),
+          );
+          streamToken = tokenRes.data['stream_token'];
+        } catch (_) {}
       }
 
+      final String tokenParam = (streamToken != null && streamToken.isNotEmpty)
+          ? '?token=$streamToken'
+          : '';
       final streamUri = Uri.parse(
-        '$baseUrl${ApiConstants.videoStream(item.id)}?token=$streamToken',
+        '$baseUrl${ApiConstants.videoStream(item.id)}$tokenParam',
       );
 
       final oldCtrl = _controllerPool[_focusedIndex];
@@ -646,30 +672,31 @@ class _ReelsScreenState extends ConsumerState<ReelsScreen>
 
   Future<void> _initControllerForIndex(int idx, FeedItemModel item) async {
     _initializingIndices.add(idx);
+    final stopwatch = Stopwatch()..start();
 
     try {
       final baseUrl = await storageService.getServerUrl();
       final accessToken = await storageService.getAccessToken();
 
-      // Obtention résiliente du token de flux (supporte à la fois POST et GET)
-      String? streamToken;
-      try {
-        final tokenRes = await apiClient.dio.post(
-          ApiConstants.videoStreamToken(item.id),
-        );
-        streamToken = tokenRes.data['stream_token'];
-      } catch (_) {
+      // OPTIMISATION TTFF: Si un token d'accès existe déjà, l'utiliser directement sans requête réseau additionnelle
+      String? streamToken = accessToken;
+      if (streamToken == null || streamToken.isEmpty) {
         try {
-          final tokenRes = await apiClient.dio.get(
+          final tokenRes = await apiClient.dio.post(
             ApiConstants.videoStreamToken(item.id),
           );
           streamToken = tokenRes.data['stream_token'];
         } catch (_) {
-          streamToken = accessToken;
+          try {
+            final tokenRes = await apiClient.dio.get(
+              ApiConstants.videoStreamToken(item.id),
+            );
+            streamToken = tokenRes.data['stream_token'];
+          } catch (_) {}
         }
       }
 
-      // Omission stricte du paramètre token s'il est null (ne jamais envoyer ?token=null)
+      // Omission stricte du paramètre token s'il est vide
       final String tokenParam = (streamToken != null && streamToken.isNotEmpty)
           ? '?token=$streamToken'
           : '';
@@ -687,6 +714,8 @@ class _ReelsScreenState extends ConsumerState<ReelsScreen>
       );
 
       await ctrl.initialize();
+      stopwatch.stop();
+      debugPrint('[ReelsScreen] ⚡ TTFF index $idx (vid ${item.id}): ${stopwatch.elapsedMilliseconds} ms');
       ctrl.setPlaybackSpeed(_playbackSpeed);
       ctrl.setVolume(_isMuted ? 0.0 : 1.0);
 
@@ -756,6 +785,7 @@ class _ReelsScreenState extends ConsumerState<ReelsScreen>
         await ref.read(videoPlayerManagerProvider).play(playerId);
         final feedState = _getFeedState();
         _attachWatchdog(_focusedIndex, feedState.items);
+        _resetHideControlsTimer();
         if (mounted) setState(() {});
       }
     } catch (e, stack) {
@@ -815,14 +845,87 @@ class _ReelsScreenState extends ConsumerState<ReelsScreen>
     if (ctrl.value.isPlaying) {
       ref.read(videoPlayerManagerProvider).pause(playerId);
       _watchdog?.setPlaybackDesired(false);
+      _hideControlsTimer?.cancel();
+      _controlsVisible = true;
     } else {
       ref.read(videoPlayerManagerProvider).play(playerId);
       _watchdog?.setPlaybackDesired(true);
+      _resetHideControlsTimer();
     }
     setState(() {});
   }
 
+  void _onScreenTap() {
+    if (!_controlsVisible) {
+      setState(() {
+        _controlsVisible = true;
+      });
+      _resetHideControlsTimer();
+      return;
+    }
+    _togglePlayPause();
+    _resetHideControlsTimer();
+  }
+
+  void _toggleOrientation() {
+    final isLandscape = MediaQuery.of(context).orientation == Orientation.landscape;
+    if (isLandscape) {
+      SystemChrome.setPreferredOrientations([
+        DeviceOrientation.portraitUp,
+      ]);
+      SystemChrome.setEnabledSystemUIMode(SystemUiMode.edgeToEdge);
+    } else {
+      SystemChrome.setPreferredOrientations([
+        DeviceOrientation.landscapeLeft,
+        DeviceOrientation.landscapeRight,
+      ]);
+      SystemChrome.setEnabledSystemUIMode(SystemUiMode.immersiveSticky);
+    }
+    _resetHideControlsTimer();
+  }
+
+  Future<void> _loadAutoHideSettings() async {
+    final enabled = await storageService.getAutoHideControls();
+    final seconds = await storageService.getAutoHideSeconds();
+    if (mounted) {
+      setState(() {
+        _autoHideEnabled = enabled;
+        _autoHideDurationSeconds = seconds;
+      });
+      _resetHideControlsTimer();
+    }
+  }
+
+  void _resetHideControlsTimer() {
+    _hideControlsTimer?.cancel();
+    if (!_autoHideEnabled || _isScrubbing) {
+      if (!_controlsVisible) {
+        setState(() => _controlsVisible = true);
+      }
+      return;
+    }
+
+    final ctrl = _controllerPool[_focusedIndex];
+    if (ctrl == null || !ctrl.value.isInitialized || !ctrl.value.isPlaying) {
+      if (!_controlsVisible) {
+        setState(() => _controlsVisible = true);
+      }
+      return;
+    }
+
+    _hideControlsTimer = Timer(Duration(seconds: _autoHideDurationSeconds), () {
+      if (!mounted) return;
+      final currentCtrl = _controllerPool[_focusedIndex];
+      if (currentCtrl != null && currentCtrl.value.isPlaying && !_isScrubbing) {
+        setState(() {
+          _controlsVisible = false;
+        });
+      }
+    });
+  }
+
   void _toggleMute() {
+    _resetHideControlsTimer();
     setState(() {
       _isMuted = !_isMuted;
       for (final ctrl in _controllerPool.values) {
@@ -832,6 +935,7 @@ class _ReelsScreenState extends ConsumerState<ReelsScreen>
   }
 
   void _handleDoubleTap(TapDownDetails details, FeedItemModel item) {
+    _resetHideControlsTimer();
     setState(() {
       _heartPosition = details.localPosition;
       _showHeartAnimation = true;
@@ -864,6 +968,8 @@ class _ReelsScreenState extends ConsumerState<ReelsScreen>
   }
 
   void _showSpeedPickerModal(AppLocalizations l10n) {
+    _hideControlsTimer?.cancel();
+    if (!_controlsVisible) setState(() => _controlsVisible = true);
     HapticFeedback.mediumImpact();
     final speeds = [0.75, 1.0, 1.25, 1.5, 2.0];
 
@@ -919,15 +1025,20 @@ class _ReelsScreenState extends ConsumerState<ReelsScreen>
           ),
         );
       },
-    );
+    ).then((_) {
+      _resetHideControlsTimer();
+    });
   }
 
   void _showEpisodesBottomSheet(FeedItemModel currentItem, AppLocalizations l10n) {
+    _hideControlsTimer?.cancel();
+    if (!_controlsVisible) setState(() => _controlsVisible = true);
     final effectiveSeriesId = currentItem.seriesId ?? widget.seriesId;
     if (effectiveSeriesId == null) {
       ScaffoldMessenger.of(context).showSnackBar(
         const SnackBar(content: Text('Cette vidéo est un contenu autonome.')),
       );
+      _resetHideControlsTimer();
       return;
     }
 
@@ -1095,7 +1206,9 @@ class _ReelsScreenState extends ConsumerState<ReelsScreen>
           },
         );
       },
-    );
+    ).then((_) {
+      _resetHideControlsTimer();
+    });
   }
 
   // =========================================================================
@@ -1464,7 +1577,9 @@ class _ReelsScreenState extends ConsumerState<ReelsScreen>
             onPageChanged: (newIndex) {
               setState(() {
                 _focusedIndex = newIndex;
+                _controlsVisible = true;
               });
+              _resetHideControlsTimer();
               if (isGateLocked) {
                 _triggerAdGate();
                 return;
@@ -1496,9 +1611,10 @@ class _ReelsScreenState extends ConsumerState<ReelsScreen>
               final ctrl = _controllerPool[index];
               final isCurrent = (index == _focusedIndex);
               final thumbUrl = ImageUtils.resolveUrl(item.thumbnailPath, baseUrl);
+              final isLandscape = MediaQuery.of(context).orientation == Orientation.landscape;
 
               return GestureDetector(
-                onTap: _togglePlayPause,
+                onTap: _onScreenTap,
                 onDoubleTapDown: (details) => _handleDoubleTap(details, item),
                 onLongPress: () => _showSpeedPickerModal(l10n),
                 child: Stack(
@@ -1517,7 +1633,7 @@ class _ReelsScreenState extends ConsumerState<ReelsScreen>
                           }
                           return Center(
                             child: AspectRatio(
-                              aspectRatio: val.aspectRatio > 0 ? val.aspectRatio : (9 / 16),
+                              aspectRatio: val.aspectRatio > 0 ? val.aspectRatio : (16 / 9),
                               child: VideoPlayer(ctrl),
                             ),
                           );
@@ -1537,7 +1653,7 @@ class _ReelsScreenState extends ConsumerState<ReelsScreen>
                           ),
                         ),
 
-                    // Indicateur de chargement / Buffering discret
+                    // 4. Indicateur de chargement / Buffering discret
                     if (ctrl == null || !ctrl.value.isInitialized || ctrl.value.isBuffering)
                       Center(
                         child: Container(
@@ -1553,26 +1669,30 @@ class _ReelsScreenState extends ConsumerState<ReelsScreen>
                         ),
                       ),
 
-                    // 3. Dégradé sombre cinématique (haut et bas)
-                    Positioned.fill(
-                      child: Container(
-                        decoration: const BoxDecoration(
-                          gradient: LinearGradient(
-                            colors: [
-                              Color(0x99000000),
-                              Colors.transparent,
-                              Colors.transparent,
-                              Color(0xCC000000),
-                            ],
-                            stops: [0.0, 0.22, 0.65, 1.0],
-                            begin: Alignment.topCenter,
-                            end: Alignment.bottomCenter,
+                    // 5. Dégradé sombre cinématique (haut et bas) avec masquage automatique
+                    IgnorePointer(
+                      child: AnimatedOpacity(
+                        opacity: _controlsVisible ? 1.0 : 0.0,
+                        duration: const Duration(milliseconds: 250),
+                        child: Container(
+                          decoration: const BoxDecoration(
+                            gradient: LinearGradient(
+                              colors: [
+                                Color(0x99000000),
+                                Colors.transparent,
+                                Colors.transparent,
+                                Color(0xCC000000),
+                              ],
+                              stops: [0.0, 0.22, 0.65, 1.0],
+                              begin: Alignment.topCenter,
+                              end: Alignment.bottomCenter,
+                            ),
                           ),
                         ),
                       ),
                     ),
 
-                    // 4. Icône centrale lors de la pause (réactive en temps réel)
+                    // 6. Icône centrale lors de la pause (réactive en temps réel)
                     if (ctrl != null)
                       ValueListenableBuilder<VideoPlayerValue>(
                         valueListenable: ctrl,
@@ -1598,7 +1718,7 @@ class _ReelsScreenState extends ConsumerState<ReelsScreen>
                         },
                       ),
 
-                    // 5. Cœur animé au double-tap
+                    // 7. Cœur animé au double-tap
                     if (_showHeartAnimation)
                       Positioned(
                         left: _heartPosition.dx - 45,
@@ -1613,216 +1733,264 @@ class _ReelsScreenState extends ConsumerState<ReelsScreen>
                         ),
                       ),
 
-                    // 6. Colonne d'actions verticales à droite
+                    // 8. Colonne d'actions verticales à droite (avec masquage automatique et rotation)
                     Positioned(
-                      right: 14,
-                      bottom: 84,
-                      child: Column(
-                        mainAxisSize: MainAxisSize.min,
-                        children: [
-                          // A. Favori / Ma liste
-                          TouchableScale(
-                            onTap: () {
-                              final notifier = widget.seriesId != null
-                                  ? ref.read(seriesFeedNotifierProvider(widget.seriesId!).notifier)
-                                  : ref.read(feedNotifierProvider.notifier);
-                              notifier.toggleFavorite(item.id);
-
-                              final videoModel = VideoModel(
-                                id: item.id,
-                                telegramMessageId: item.telegramMessageId,
-                                title: item.title,
-                                category: item.category,
-                                durationSeconds: item.durationSeconds,
-                                fileSizeBytes: item.fileSizeBytes,
-                                mimeType: item.mimeType,
-                                thumbnailPath: item.thumbnailPath,
-                                viewsCount: item.viewsCount,
-                                isFavorite: !item.isFavorite,
-                                watchProgressSeconds: item.watchProgressSeconds,
-                                isCompleted: item.isCompleted,
-                              );
-                              ref.read(favoritesProvider.notifier).toggleFavorite(videoModel);
-                            },
+                      right: isLandscape ? 32 : 14,
+                      bottom: isLandscape ? 36 : 84,
+                      child: IgnorePointer(
+                        ignoring: !_controlsVisible,
+                        child: AnimatedOpacity(
+                          opacity: _controlsVisible ? 1.0 : 0.0,
+                          duration: const Duration(milliseconds: 250),
+                          child: SafeArea(
+                            right: true,
+                            bottom: true,
                             child: Column(
+                              mainAxisSize: MainAxisSize.min,
                               children: [
-                                Container(
-                                  padding: const EdgeInsets.all(10),
-                                  decoration: BoxDecoration(
-                                    color: Colors.black.withValues(alpha: 0.45),
-                                    shape: BoxShape.circle,
-                                    border: Border.all(color: Colors.white12),
-                                  ),
-                                  child: Icon(
-                                    item.isFavorite ? Icons.favorite_rounded : Icons.favorite_border_rounded,
-                                    color: item.isFavorite ? AppTheme.netflixRed : Colors.white,
-                                    size: 28,
+                                // A. Favori / Ma liste
+                                TouchableScale(
+                                  onTap: () {
+                                    _resetHideControlsTimer();
+                                    final notifier = widget.seriesId != null
+                                        ? ref.read(seriesFeedNotifierProvider(widget.seriesId!).notifier)
+                                        : ref.read(feedNotifierProvider.notifier);
+                                    notifier.toggleFavorite(item.id);
+
+                                    final videoModel = VideoModel(
+                                      id: item.id,
+                                      telegramMessageId: item.telegramMessageId,
+                                      title: item.title,
+                                      category: item.category,
+                                      durationSeconds: item.durationSeconds,
+                                      fileSizeBytes: item.fileSizeBytes,
+                                      mimeType: item.mimeType,
+                                      thumbnailPath: item.thumbnailPath,
+                                      viewsCount: item.viewsCount,
+                                      isFavorite: !item.isFavorite,
+                                      watchProgressSeconds: item.watchProgressSeconds,
+                                      isCompleted: item.isCompleted,
+                                    );
+                                    ref.read(favoritesProvider.notifier).toggleFavorite(videoModel);
+                                  },
+                                  child: Column(
+                                    children: [
+                                      Container(
+                                        padding: const EdgeInsets.all(10),
+                                        decoration: BoxDecoration(
+                                          color: Colors.black.withValues(alpha: 0.45),
+                                          shape: BoxShape.circle,
+                                          border: Border.all(color: Colors.white12),
+                                        ),
+                                        child: Icon(
+                                          item.isFavorite ? Icons.favorite_rounded : Icons.favorite_border_rounded,
+                                          color: item.isFavorite ? AppTheme.netflixRed : Colors.white,
+                                          size: 28,
+                                        ),
+                                      ),
+                                      const SizedBox(height: 4),
+                                      Text(
+                                        '${item.viewsCount}',
+                                        style: const TextStyle(
+                                          color: Colors.white,
+                                          fontSize: 11,
+                                          fontWeight: FontWeight.bold,
+                                          shadows: [Shadow(color: Colors.black, blurRadius: 4)],
+                                        ),
+                                      ),
+                                    ],
                                   ),
                                 ),
-                                const SizedBox(height: 4),
-                                Text(
-                                  '${item.viewsCount}',
-                                  style: const TextStyle(
-                                    color: Colors.white,
-                                    fontSize: 11,
-                                    fontWeight: FontWeight.bold,
-                                    shadows: [Shadow(color: Colors.black, blurRadius: 4)],
+                                const SizedBox(height: 16),
+
+                                // B. Liste des épisodes
+                                TouchableScale(
+                                  onTap: () {
+                                    _resetHideControlsTimer();
+                                    _showEpisodesBottomSheet(item, l10n);
+                                  },
+                                  child: Column(
+                                    children: [
+                                      Container(
+                                        padding: const EdgeInsets.all(10),
+                                        decoration: BoxDecoration(
+                                          color: Colors.black.withValues(alpha: 0.45),
+                                          shape: BoxShape.circle,
+                                          border: Border.all(color: Colors.white12),
+                                        ),
+                                        child: const Icon(
+                                          Icons.video_library_rounded,
+                                          color: Colors.white,
+                                          size: 26,
+                                        ),
+                                      ),
+                                      const SizedBox(height: 4),
+                                      Text(
+                                        l10n.episodesList,
+                                        style: const TextStyle(
+                                          color: Colors.white70,
+                                          fontSize: 10,
+                                          fontWeight: FontWeight.bold,
+                                          shadows: [Shadow(color: Colors.black, blurRadius: 4)],
+                                        ),
+                                      ),
+                                    ],
+                                  ),
+                                ),
+                                const SizedBox(height: 16),
+
+                                // C. Vitesse de lecture
+                                TouchableScale(
+                                  onTap: () {
+                                    _resetHideControlsTimer();
+                                    _showSpeedPickerModal(l10n);
+                                  },
+                                  child: Container(
+                                    padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 6),
+                                    decoration: BoxDecoration(
+                                      color: Colors.black.withValues(alpha: 0.5),
+                                      borderRadius: BorderRadius.circular(14),
+                                      border: Border.all(color: Colors.white24),
+                                    ),
+                                    child: Text(
+                                      '${_playbackSpeed}x',
+                                      style: const TextStyle(
+                                        color: Colors.white,
+                                        fontSize: 11,
+                                        fontWeight: FontWeight.bold,
+                                      ),
+                                    ),
+                                  ),
+                                ),
+                                const SizedBox(height: 16),
+
+                                // D. Mute / Démute
+                                TouchableScale(
+                                  onTap: _toggleMute,
+                                  child: Container(
+                                    padding: const EdgeInsets.all(10),
+                                    decoration: BoxDecoration(
+                                      color: Colors.black.withValues(alpha: 0.45),
+                                      shape: BoxShape.circle,
+                                      border: Border.all(color: Colors.white12),
+                                    ),
+                                    child: Icon(
+                                      _isMuted ? Icons.volume_off_rounded : Icons.volume_up_rounded,
+                                      color: Colors.white,
+                                      size: 24,
+                                    ),
+                                  ),
+                                ),
+                                const SizedBox(height: 16),
+
+                                // E. Bouton Rotation / Plein écran
+                                TouchableScale(
+                                  onTap: _toggleOrientation,
+                                  child: Container(
+                                    padding: const EdgeInsets.all(10),
+                                    decoration: BoxDecoration(
+                                      color: Colors.black.withValues(alpha: 0.45),
+                                      shape: BoxShape.circle,
+                                      border: Border.all(color: Colors.white12),
+                                    ),
+                                    child: Icon(
+                                      isLandscape ? Icons.fullscreen_exit_rounded : Icons.fullscreen_rounded,
+                                      color: Colors.white,
+                                      size: 24,
+                                    ),
                                   ),
                                 ),
                               ],
                             ),
                           ),
-                          const SizedBox(height: 16),
-
-                          // B. Liste des épisodes
-                          TouchableScale(
-                            onTap: () => _showEpisodesBottomSheet(item, l10n),
-                            child: Column(
-                              children: [
-                                Container(
-                                  padding: const EdgeInsets.all(10),
-                                  decoration: BoxDecoration(
-                                    color: Colors.black.withValues(alpha: 0.45),
-                                    shape: BoxShape.circle,
-                                    border: Border.all(color: Colors.white12),
-                                  ),
-                                  child: const Icon(
-                                    Icons.video_library_rounded,
-                                    color: Colors.white,
-                                    size: 26,
-                                  ),
-                                ),
-                                const SizedBox(height: 4),
-                                Text(
-                                  l10n.episodesList,
-                                  style: const TextStyle(
-                                    color: Colors.white70,
-                                    fontSize: 10,
-                                    fontWeight: FontWeight.bold,
-                                    shadows: [Shadow(color: Colors.black, blurRadius: 4)],
-                                  ),
-                                ),
-                              ],
-                            ),
-                          ),
-                          const SizedBox(height: 16),
-
-                          // C. Vitesse de lecture
-                          TouchableScale(
-                            onTap: () => _showSpeedPickerModal(l10n),
-                            child: Container(
-                              padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 6),
-                              decoration: BoxDecoration(
-                                color: Colors.black.withValues(alpha: 0.5),
-                                borderRadius: BorderRadius.circular(14),
-                                border: Border.all(color: Colors.white24),
-                              ),
-                              child: Text(
-                                '${_playbackSpeed}x',
-                                style: const TextStyle(
-                                  color: Colors.white,
-                                  fontSize: 11,
-                                  fontWeight: FontWeight.bold,
-                                ),
-                              ),
-                            ),
-                          ),
-                          const SizedBox(height: 16),
-
-                          // D. Mute / Démute
-                          TouchableScale(
-                            onTap: _toggleMute,
-                            child: Container(
-                              padding: const EdgeInsets.all(10),
-                              decoration: BoxDecoration(
-                                color: Colors.black.withValues(alpha: 0.45),
-                                shape: BoxShape.circle,
-                                border: Border.all(color: Colors.white12),
-                              ),
-                              child: Icon(
-                                _isMuted ? Icons.volume_off_rounded : Icons.volume_up_rounded,
-                                color: Colors.white,
-                                size: 24,
-                              ),
-                            ),
-                          ),
-                        ],
+                        ),
                       ),
                     ),
 
-                    // 7. Métadonnées textuelles en bas à gauche
+                    // 9. Métadonnées textuelles en bas à gauche (avec masquage automatique)
                     Positioned(
-                      left: 16,
-                      bottom: 40,
-                      right: 84,
-                      child: Column(
-                        crossAxisAlignment: CrossAxisAlignment.start,
-                        mainAxisSize: MainAxisSize.min,
-                        children: [
-                          if (item.seriesTitle != null)
-                            Row(
+                      left: isLandscape ? 32 : 16,
+                      bottom: isLandscape ? 28 : 40,
+                      right: isLandscape ? 130 : 84,
+                      child: IgnorePointer(
+                        ignoring: !_controlsVisible,
+                        child: AnimatedOpacity(
+                          opacity: _controlsVisible ? 1.0 : 0.0,
+                          duration: const Duration(milliseconds: 250),
+                          child: SafeArea(
+                            left: true,
+                            bottom: true,
+                            child: Column(
+                              crossAxisAlignment: CrossAxisAlignment.start,
+                              mainAxisSize: MainAxisSize.min,
                               children: [
-                                Container(
-                                  padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 3),
-                                  decoration: BoxDecoration(
-                                    color: AppTheme.netflixRed,
-                                    borderRadius: BorderRadius.circular(4),
+                                if (item.seriesTitle != null)
+                                  Row(
+                                    children: [
+                                      Container(
+                                        padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 3),
+                                        decoration: BoxDecoration(
+                                          color: AppTheme.netflixRed,
+                                          borderRadius: BorderRadius.circular(4),
+                                        ),
+                                        child: Text(
+                                          'S${item.seasonNumber} : E${item.episodeNumber}',
+                                          style: const TextStyle(
+                                            color: Colors.white,
+                                            fontSize: 11,
+                                            fontWeight: FontWeight.bold,
+                                          ),
+                                        ),
+                                      ),
+                                      const SizedBox(width: 8),
+                                      Expanded(
+                                        child: Text(
+                                          item.seriesTitle!,
+                                          style: const TextStyle(
+                                            color: Colors.white,
+                                            fontSize: 15,
+                                            fontWeight: FontWeight.bold,
+                                            shadows: [Shadow(color: Colors.black, blurRadius: 6)],
+                                          ),
+                                          maxLines: 1,
+                                          overflow: TextOverflow.ellipsis,
+                                        ),
+                                      ),
+                                    ],
                                   ),
-                                  child: Text(
-                                    'S${item.seasonNumber} : E${item.episodeNumber}',
-                                    style: const TextStyle(
-                                      color: Colors.white,
-                                      fontSize: 11,
-                                      fontWeight: FontWeight.bold,
-                                    ),
+                                const SizedBox(height: 6),
+                                Text(
+                                  item.episodeTitle ?? item.title,
+                                  style: const TextStyle(
+                                    color: Colors.white,
+                                    fontSize: 14,
+                                    fontWeight: FontWeight.w600,
+                                    shadows: [Shadow(color: Colors.black, blurRadius: 4)],
                                   ),
+                                  maxLines: isLandscape ? 1 : 2,
+                                  overflow: TextOverflow.ellipsis,
                                 ),
-                                const SizedBox(width: 8),
-                                Expanded(
-                                  child: Text(
-                                    item.seriesTitle!,
+                                if (item.caption != null && item.caption!.isNotEmpty) ...[
+                                  const SizedBox(height: 4),
+                                  Text(
+                                    item.caption!,
                                     style: const TextStyle(
-                                      color: Colors.white,
-                                      fontSize: 15,
-                                      fontWeight: FontWeight.bold,
-                                      shadows: [Shadow(color: Colors.black, blurRadius: 6)],
+                                      color: Colors.white70,
+                                      fontSize: 12,
+                                      shadows: [Shadow(color: Colors.black, blurRadius: 4)],
                                     ),
-                                    maxLines: 1,
+                                    maxLines: isLandscape ? 1 : 2,
                                     overflow: TextOverflow.ellipsis,
                                   ),
-                                ),
+                                ],
                               ],
                             ),
-                          const SizedBox(height: 6),
-                          Text(
-                            item.episodeTitle ?? item.title,
-                            style: const TextStyle(
-                              color: Colors.white,
-                              fontSize: 14,
-                              fontWeight: FontWeight.w600,
-                              shadows: [Shadow(color: Colors.black, blurRadius: 4)],
-                            ),
-                            maxLines: 2,
-                            overflow: TextOverflow.ellipsis,
                           ),
-                          if (item.caption != null && item.caption!.isNotEmpty) ...[
-                            const SizedBox(height: 4),
-                            Text(
-                              item.caption!,
-                              style: const TextStyle(
-                                color: Colors.white70,
-                                fontSize: 12,
-                                shadows: [Shadow(color: Colors.black, blurRadius: 4)],
-                              ),
-                              maxLines: 2,
-                              overflow: TextOverflow.ellipsis,
-                            ),
-                          ],
-                        ],
+                        ),
                       ),
                     ),
 
-                    // 8. Barre fine de scrubbing rouge au bas de l'écran
+                    // 10. Barre de scrubbing rouge au bas de l'écran (discrète puis s'épaissit au toucher)
                     if (ctrl != null)
                       Positioned(
                         left: 0,
@@ -1835,18 +2003,60 @@ class _ReelsScreenState extends ConsumerState<ReelsScreen>
                             final durationMs = val.duration.inMilliseconds;
                             final positionMs = val.position.inMilliseconds;
                             final progress = durationMs > 0 ? (positionMs / durationMs).clamp(0.0, 1.0) : 0.0;
+                            final isBarExpanded = _controlsVisible || _isScrubbing;
 
-                            return LinearProgressIndicator(
-                              value: progress,
-                              backgroundColor: Colors.white12,
-                              valueColor: const AlwaysStoppedAnimation<Color>(AppTheme.netflixRed),
-                              minHeight: 2.5,
+                            return GestureDetector(
+                              behavior: HitTestBehavior.opaque,
+                              onHorizontalDragStart: (details) {
+                                _isScrubbing = true;
+                                _hideControlsTimer?.cancel();
+                                setState(() {});
+                              },
+                              onHorizontalDragUpdate: (details) {
+                                final box = context.findRenderObject() as RenderBox?;
+                                if (box != null && durationMs > 0) {
+                                  final dx = details.localPosition.dx.clamp(0.0, box.size.width);
+                                  final targetMs = (dx / box.size.width * durationMs).toInt();
+                                  ctrl.seekTo(Duration(milliseconds: targetMs));
+                                }
+                              },
+                              onHorizontalDragEnd: (details) {
+                                _isScrubbing = false;
+                                _resetHideControlsTimer();
+                                setState(() {});
+                              },
+                              onTapDown: (details) {
+                                final box = context.findRenderObject() as RenderBox?;
+                                if (box != null && durationMs > 0) {
+                                  final dx = details.localPosition.dx.clamp(0.0, box.size.width);
+                                  final targetMs = (dx / box.size.width * durationMs).toInt();
+                                  ctrl.seekTo(Duration(milliseconds: targetMs));
+                                  _resetHideControlsTimer();
+                                }
+                              },
+                              child: Container(
+                                padding: EdgeInsets.only(
+                                  top: isBarExpanded ? 12.0 : 0.0,
+                                  bottom: isBarExpanded ? 4.0 : 0.0,
+                                ),
+                                color: Colors.transparent,
+                                child: AnimatedContainer(
+                                  duration: const Duration(milliseconds: 200),
+                                  height: isBarExpanded ? 5.0 : 2.5,
+                                  child: LinearProgressIndicator(
+                                    value: progress,
+                                    backgroundColor: Colors.white12,
+                                    valueColor: const AlwaysStoppedAnimation<Color>(AppTheme.netflixRed),
+                                    minHeight: isBarExpanded ? 5.0 : 2.5,
+                                  ),
+                                ),
+                              ),
                             );
                           },
                         ),
                       ),
 
-                    // 9. Écran de verrouillage publicitaire AdGate
+                    // 11. Écran de verrouillage publicitaire AdGate
                     if (isCurrent && isGateLocked)
                       Positioned.fill(
                         child: AdGateLockedOverlay(
@@ -1859,30 +2069,37 @@ class _ReelsScreenState extends ConsumerState<ReelsScreen>
                         ),
                       ),
 
-                    // 10. Bouton retour supérieur gauche (si standalone ou navigable en arrière)
+                    // 12. Bouton retour supérieur gauche (si standalone ou navigable en arrière)
                     if (widget.isStandalone || Navigator.canPop(context))
                       Positioned(
                         top: 0,
                         left: 0,
-                        child: SafeArea(
-                          child: Padding(
-                            padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 12),
-                            child: TouchableScale(
-                              onTap: () {
-                                ref.read(videoPlayerManagerProvider).pauseAll();
-                                Navigator.pop(context);
-                              },
-                              child: Container(
-                                padding: const EdgeInsets.all(8),
-                                decoration: BoxDecoration(
-                                  color: Colors.black.withValues(alpha: 0.5),
-                                  shape: BoxShape.circle,
-                                  border: Border.all(color: Colors.white24),
-                                ),
-                                child: const Icon(
-                                  Icons.arrow_back_ios_new_rounded,
-                                  color: Colors.white,
-                                  size: 20,
+                        child: IgnorePointer(
+                          ignoring: !_controlsVisible,
+                          child: AnimatedOpacity(
+                            opacity: _controlsVisible ? 1.0 : 0.0,
+                            duration: const Duration(milliseconds: 250),
+                            child: SafeArea(
+                              child: Padding(
+                                padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 12),
+                                child: TouchableScale(
+                                  onTap: () {
+                                    ref.read(videoPlayerManagerProvider).pauseAll();
+                                    Navigator.pop(context);
+                                  },
+                                  child: Container(
+                                    padding: const EdgeInsets.all(8),
+                                    decoration: BoxDecoration(
+                                      color: Colors.black.withValues(alpha: 0.5),
+                                      shape: BoxShape.circle,
+                                      border: Border.all(color: Colors.white24),
+                                    ),
+                                    child: const Icon(
+                                      Icons.arrow_back_ios_new_rounded,
+                                      color: Colors.white,
+                                      size: 20,
+                                    ),
+                                  ),
                                 ),
                               ),
                             ),

@@ -60,6 +60,30 @@ class StorageService {
     final prefs = await SharedPreferences.getInstance();
     await prefs.setString(ApiConstants.keyLanguage, lang);
   }
+
+  // -------------------------------------------------------------
+  // Préférences de Lecture Vidéo (Masquage Automatique, Rotation)
+  // -------------------------------------------------------------
+
+  Future<bool> getAutoHideControls() async {
+    final prefs = await SharedPreferences.getInstance();
+    return prefs.getBool('vidtele_auto_hide_controls') ?? true;
+  }
+
+  Future<void> setAutoHideControls(bool enabled) async {
+    final prefs = await SharedPreferences.getInstance();
+    await prefs.setBool('vidtele_auto_hide_controls', enabled);
+  }
+
+  Future<int> getAutoHideSeconds() async {
+    final prefs = await SharedPreferences.getInstance();
+    return prefs.getInt('vidtele_auto_hide_seconds') ?? 3;
+  }
+
+  Future<void> setAutoHideSeconds(int seconds) async {
+    final prefs = await SharedPreferences.getInstance();
+    await prefs.setInt('vidtele_auto_hide_seconds', seconds);
+  }
 }
 
 final storageService = StorageService();

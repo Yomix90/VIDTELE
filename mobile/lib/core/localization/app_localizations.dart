@@ -432,6 +432,25 @@ class AppLocalizations {
           ? 'No ad available right now. Please try again in a moment.'
           : 'Aucune annonce disponible actuellement. Veuillez réessayer dans un instant.');
 
+  // ==================== PLAYER & AUTO-HIDE ====================
+  String get playbackPreferencesHeader => isArabic
+      ? 'إعدادات التشغيل'
+      : (isEnglish ? 'Playback Preferences' : 'Préférences de Lecture');
+  String get autoHideControlsTitle => isArabic
+      ? 'إخفاء الأزرار تلقائياً'
+      : (isEnglish ? 'Auto-hide controls' : 'Masquer automatiquement les boutons');
+  String get autoHideControlsDesc => isArabic
+      ? 'إخفاء أزرار التحكم بعد بدء التشغيل لتجربة سينمائية نقية'
+      : (isEnglish
+          ? 'Hide controls after playback starts for a cinematic experience'
+          : 'Faire disparaître les boutons pour une expérience cinéma immersive');
+  String get autoHideDelayTitle => isArabic
+      ? 'مدة بقاء الأزرار'
+      : (isEnglish ? 'Controls display duration' : 'Durée d\'affichage des boutons');
+  String autoHideSecondsSummary(int sec) => isArabic
+      ? '$sec ثوانٍ'
+      : (isEnglish ? '$sec seconds' : '$sec secondes');
+
   // ==================== FORMATTERS ====================
   String formatDuration(int seconds) {
     if (seconds <= 0) {
