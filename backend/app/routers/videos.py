@@ -312,16 +312,16 @@ async def get_stream_token(
     Génère un jeton signé temporaire pour le lecteur vidéo mobile.
     Permet la lecture sans avoir à configurer des en-têtes Authorization complexes dans le player.
     """
-    stmt = select(Video).where(Video.id == video_id)
+    stmt = select(Video).where(or_(Video.id == video_id, Video.telegram_message_id == video_id))
     video = (await db.execute(stmt)).scalar_one_or_none()
     if not video or (not video.is_published and current_user.role != "admin"):
         raise HTTPException(status_code=404, detail="Vidéo introuvable ou non publiée")
 
-    token = create_stream_token(user_id=current_user.id, video_id=video_id)
+    token = create_stream_token(user_id=current_user.id, video_id=video.id)
     return {
-        "video_id": video_id,
+        "video_id": video.id,
         "stream_token": token,
-        "stream_url": f"/api/videos/{video_id}/stream?token={token}",
+        "stream_url": f"/api/videos/{video.id}/stream?token={token}",
     }
 
 
@@ -375,8 +375,8 @@ async def stream_video(
     if not user or not user.is_active:
         raise HTTPException(status_code=401, detail="Utilisateur introuvable ou compte désactivé")
 
-    # 2. Récupération de la vidéo
-    stmt = select(Video).where(Video.id == video_id)
+    # 2. Récupération de la vidéo (supporte l'ID interne ou le telegram_message_id)
+    stmt = select(Video).where(or_(Video.id == video_id, Video.telegram_message_id == video_id))
     result = await db.execute(stmt)
     video = result.scalar_one_or_none()
 

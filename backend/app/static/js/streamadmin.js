@@ -184,7 +184,7 @@ function showToast(message, type = "success") {
 }
 
 // 4. Lecteur Vidéo Streaming Intégré (Aperçu Admin HTTP 206)
-function playAdminVideo(videoId, title = "Aperçu Vidéo") {
+async function playAdminVideo(videoId, title = "Aperçu Vidéo") {
   const modalEl = document.getElementById("videoPlayerModal");
   const videoEl = document.getElementById("adminGlobalVideoElement");
   const titleEl = document.getElementById("videoPlayerModalTitle");
@@ -200,8 +200,10 @@ function playAdminVideo(videoId, title = "Aperçu Vidéo") {
   if (infoEl) infoEl.textContent = `Vidéo #${videoId} - Streaming natif Telegram`;
   if (spinnerEl) spinnerEl.style.display = "block";
 
-  videoEl.src = `/api/videos/${videoId}/stream`;
-  
+  // Ouvrir immédiatement la modale avec le spinner
+  const modal = bootstrap.Modal.getOrCreateInstance(modalEl);
+  modal.show();
+
   videoEl.onloadeddata = function() {
     if (spinnerEl) spinnerEl.style.display = "none";
   };
@@ -210,8 +212,24 @@ function playAdminVideo(videoId, title = "Aperçu Vidéo") {
     showToast("Impossible de charger le flux vidéo depuis Telegram.", "danger");
   };
 
-  const modal = bootstrap.Modal.getOrCreateInstance(modalEl);
-  modal.show();
+  try {
+    // 1. Obtenir un jeton signé valide pour cette vidéo (gère l'authentification admin automatiquement)
+    const tokenRes = await fetch(`/api/videos/${videoId}/stream-token`);
+    if (tokenRes.ok) {
+      const tokenData = await tokenRes.json();
+      videoEl.src = tokenData.stream_url || `/api/videos/${videoId}/stream?token=${tokenData.stream_token}`;
+    } else {
+      const errData = await tokenRes.json().catch(() => ({}));
+      // Fallback direct sur l'URL de stream avec cookie
+      videoEl.src = `/api/videos/${videoId}/stream`;
+      if (errData.detail) {
+        showToast(errData.detail, "warning");
+      }
+    }
+  } catch (err) {
+    videoEl.src = `/api/videos/${videoId}/stream`;
+  }
+
   videoEl.play().catch(e => console.log("Autoplay bloqué ou en attente :", e));
 }
 

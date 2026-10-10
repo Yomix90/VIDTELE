@@ -69,19 +69,39 @@ class StreamService:
                 cache_service.touch(video.telegram_message_id)
                 return cached_path
 
-            # Vérification de l'état du client Telegram
+            # Vérification et rétablissement automatique de l'état du client Telegram
             client = telegram_manager.client
             if not client or not client.is_connected():
-                raise HTTPException(
-                    status_code=status.HTTP_503_SERVICE_UNAVAILABLE,
-                    detail="Le service Telegram MTProto n'est pas connecté sur le serveur",
-                )
+                logger.info("Client Telegram non connecté lors de la demande de flux : tentative de démarrage automatique...")
+                # Tenter de restaurer le compte actif depuis la base si disponible
+                try:
+                    from app.database import AsyncSessionLocal
+                    from app.models import TelegramAccount
+                    async with AsyncSessionLocal() as db_session:
+                        stmt_acc = select(TelegramAccount).where(TelegramAccount.is_active == True)
+                        active_acc = (await db_session.execute(stmt_acc)).scalar_one_or_none()
+                        if active_acc and active_acc.string_session:
+                            settings.TELEGRAM_STRING_SESSION = active_acc.string_session
+                            if active_acc.api_id:
+                                settings.TELEGRAM_API_ID = active_acc.api_id
+                            if active_acc.api_hash:
+                                settings.TELEGRAM_API_HASH = active_acc.api_hash
+                except Exception as ex_db:
+                    logger.debug(f"Impossible de vérifier le compte Telegram en base : {ex_db}")
+
+                started = await telegram_manager.start()
+                client = telegram_manager.client
+                if not started or not client or not client.is_connected():
+                    raise HTTPException(
+                        status_code=status.HTTP_503_SERVICE_UNAVAILABLE,
+                        detail="Le service Telegram MTProto n'est pas connecté sur le serveur. Rendez-vous dans 'Telegram MTProto' sur le panel d'administration pour connecter votre session.",
+                    )
 
             channel = await telegram_manager.get_channel_entity()
             if not channel:
                 raise HTTPException(
                     status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
-                    detail="Canal Telegram inaccessible",
+                    detail="Canal Telegram inaccessible ou identifiant de canal invalide. Vérifiez TELEGRAM_CHANNEL_ID dans les paramètres.",
                 )
 
             # Vérification du quota disque avant téléchargement
