@@ -43,6 +43,9 @@ class GeminiService:
     async def test_key(self, api_key: str, model: Optional[str] = None) -> Dict[str, Any]:
         """Teste la validité d'une clé API Gemini."""
         target_model = model or self.DEFAULT_MODEL
+        if target_model in ("gemini-2.0-flash-exp", "gemini-exp", ""):
+            target_model = self.DEFAULT_MODEL
+
         url = f"https://generativelanguage.googleapis.com/v1beta/models/{target_model}:generateContent?key={api_key}"
         payload = {
             "contents": [{"parts": [{"text": "Hello, reponds simplement 'OK'"}]}]
@@ -52,7 +55,7 @@ class GeminiService:
             try:
                 res = await client.post(url, json=payload)
                 if res.status_code == 200:
-                    return {"success": True, "message": "Clé API Gemini validée avec succès !"}
+                    return {"success": True, "message": f"Clé API Gemini validée avec succès avec le modèle {target_model} !"}
                 else:
                     data = res.json()
                     err = data.get("error", {}).get("message", res.text)
@@ -73,6 +76,8 @@ class GeminiService:
         conf = await self.get_config()
         api_key = conf.get("api_key")
         model = conf.get("model", self.DEFAULT_MODEL)
+        if model in ("gemini-2.0-flash-exp", "gemini-exp", ""):
+            model = self.DEFAULT_MODEL
 
         if not api_key:
             logger.info("Aucune clé API Gemini configurée. Utilisation du fallback basique.")
