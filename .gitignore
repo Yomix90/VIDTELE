@@ -40,3 +40,6 @@ mobile/*.lock
 *.DS_Store
 Thumbs.db
 *.log
+
+# Tests
+.pytest_cache/

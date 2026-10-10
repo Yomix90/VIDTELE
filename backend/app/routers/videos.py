@@ -200,7 +200,7 @@ async def get_categories(
     ]
 
 
-@router.get("/{video_id}", response_model=VideoResponse)
+@router.get("/{video_id:int}", response_model=VideoResponse)
 async def get_video_detail(
     video_id: int,
     current_user: User = Depends(get_current_active_user),
@@ -260,7 +260,7 @@ async def get_video_detail(
     )
 
 
-@router.get("/{video_id}/thumbnail")
+@router.get("/{video_id:int}/thumbnail")
 async def get_video_thumbnail(video_id: int, db: AsyncSession = Depends(get_db)):
     """
     Renvoie le fichier image de la miniature avec mise en cache HTTP.
@@ -305,7 +305,7 @@ async def get_video_thumbnail(video_id: int, db: AsyncSession = Depends(get_db))
     )
 
 
-@router.api_route("/{video_id}/stream-token", methods=["GET", "POST"])
+@router.api_route("/{video_id:int}/stream-token", methods=["GET", "POST"])
 async def get_stream_token(
     video_id: int,
     current_user: User = Depends(get_current_active_user),
@@ -332,7 +332,7 @@ async def get_stream_token(
     }
 
 
-@router.get("/{video_id}/stream")
+@router.get("/{video_id:int}/stream")
 async def stream_video(
     video_id: int,
     request: Request,
@@ -415,7 +415,7 @@ async def stream_video(
     return await stream_service.create_streaming_response(video, range_header)
 
 
-@router.post("/{video_id}/stream/stop")
+@router.post("/{video_id:int}/stream/stop")
 async def stop_stream(
     video_id: int,
     request: Request,
