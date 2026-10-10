@@ -15,6 +15,8 @@ from app.database import get_db
 from app.models import Favorite, User, Video, WatchHistory, Episode, Season, Series, Movie
 from app.schemas import (
     CategoryItem,
+    FeedItemResponse,
+    FeedResponse,
     HomeGenreSection,
     HomeHeroItem,
     HomeScreenResponse,
@@ -842,6 +844,158 @@ async def get_home_content(
         "trending": trending,
         "genres": genres,
     }
+
+
+@router.get("/feed", response_model=FeedResponse)
+async def get_vertical_feed(
+    cursor: Optional[int] = Query(None, description="Curseur ID de pagination (Video.id)"),
+    limit: int = Query(15, ge=1, le=50, description="Nombre de vidéos par page"),
+    series_id: Optional[int] = Query(None, description="Filtrer pour binger une série spécifique"),
+    current_user: User = Depends(get_current_active_user),
+    db: AsyncSession = Depends(get_db),
+):
+    """
+    Flux vertical plein écran optimisé pour le swipe vidéo façon TikTok / Reels.
+    Supporte la pagination par curseur, l'enchaînement automatique (binge),
+    et les épisodes avec miniatures et progression de reprise.
+    """
+    if series_id:
+        # Mode Binge d'une série spécifique : ordre chronologique strict (S1E1, S1E2...)
+        stmt = (
+            select(Video, Episode, Season, Series)
+            .join(Episode, Episode.telegram_video_id == Video.id)
+            .join(Season, Episode.season_id == Season.id)
+            .join(Series, Season.series_id == Series.id)
+            .where(Series.id == series_id, Video.is_published == True)
+        )
+        if cursor:
+            stmt = stmt.where(Video.id > cursor)
+        stmt = stmt.order_by(Season.number.asc(), Episode.number.asc(), Video.id.asc()).limit(limit + 1)
+    else:
+        # Flux général : vidéos et épisodes récents pour la découverte
+        stmt = (
+            select(Video, Episode, Season, Series)
+            .outerjoin(Episode, Episode.telegram_video_id == Video.id)
+            .outerjoin(Season, Episode.season_id == Season.id)
+            .outerjoin(Series, Season.series_id == Series.id)
+            .where(Video.is_published == True)
+        )
+        if cursor:
+            stmt = stmt.where(Video.id < cursor)
+        stmt = stmt.order_by(desc(Video.id)).limit(limit + 1)
+
+    rows = (await db.execute(stmt)).all()
+    has_more = len(rows) > limit
+    effective_rows = rows[:limit] if has_more else rows
+    next_cursor = effective_rows[-1][0].id if (has_more and effective_rows) else None
+
+    video_ids = [r[0].id for r in effective_rows]
+
+    # Favoris utilisateur
+    user_fav_ids = set()
+    if video_ids:
+        fav_res = await db.execute(
+            select(Favorite.video_id).where(
+                Favorite.user_id == current_user.id,
+                Favorite.video_id.in_(video_ids),
+            )
+        )
+        user_fav_ids = set(fav_res.scalars().all())
+
+    # Historique de reprise utilisateur
+    user_history_map = {}
+    if video_ids:
+        hist_res = await db.execute(
+            select(WatchHistory).where(
+                WatchHistory.user_id == current_user.id,
+                WatchHistory.video_id.in_(video_ids),
+            )
+        )
+        for h in hist_res.scalars().all():
+            user_history_map[h.video_id] = (h.position_seconds, h.completed)
+
+    feed_items = []
+    for v, ep, season, series in effective_rows:
+        pos, completed = user_history_map.get(v.id, (0.0, False))
+
+        # Trouver l'épisode suivant pour le mode binge
+        next_vid_id = None
+        if ep and season:
+            # Épisode suivant dans la même saison
+            next_ep_stmt = (
+                select(Episode.telegram_video_id)
+                .where(
+                    Episode.season_id == season.id,
+                    Episode.number == ep.number + 1,
+                    Episode.telegram_video_id.isnot(None),
+                )
+                .limit(1)
+            )
+            next_vid_id = (await db.execute(next_ep_stmt)).scalar_one_or_none()
+
+            # Si fin de saison, premier épisode de la saison suivante
+            if not next_vid_id and series:
+                next_season_stmt = (
+                    select(Season.id)
+                    .where(Season.series_id == series.id, Season.number == season.number + 1)
+                    .limit(1)
+                )
+                next_season_id = (await db.execute(next_season_stmt)).scalar_one_or_none()
+                if next_season_id:
+                    first_ep_next_season = (
+                        select(Episode.telegram_video_id)
+                        .where(
+                            Episode.season_id == next_season_id,
+                            Episode.number == 1,
+                            Episode.telegram_video_id.isnot(None),
+                        )
+                        .limit(1)
+                    )
+                    next_vid_id = (await db.execute(first_ep_next_season)).scalar_one_or_none()
+
+        effective_thumb = (
+            v.thumbnail_path
+            or (ep.thumbnail_path if ep else None)
+            or (series.poster_path if series else None)
+            or f"/api/videos/{v.id}/thumbnail"
+        )
+
+        effective_title = (
+            ep.title_fr
+            if (ep and ep.title_fr)
+            else (f"{series.title_fr} - S{season.number:02d}E{ep.number:02d}" if (series and ep and season) else v.title)
+        )
+
+        feed_items.append(
+            FeedItemResponse(
+                id=v.id,
+                telegram_message_id=v.telegram_message_id,
+                title=effective_title,
+                series_id=series.id if series else None,
+                series_title=series.title_fr if series else None,
+                season_number=season.number if season else v.season_number or 1,
+                episode_number=ep.number if ep else v.episode_number or 1,
+                episode_title=ep.title_fr if ep else v.episode_title,
+                caption=ep.synopsis_fr if (ep and ep.synopsis_fr) else v.caption,
+                category=series.title_fr if series else v.category,
+                duration_seconds=v.duration_seconds,
+                file_size_bytes=v.file_size_bytes,
+                mime_type=v.mime_type,
+                thumbnail_path=effective_thumb,
+                views_count=v.views_count,
+                is_favorite=(v.id in user_fav_ids),
+                watch_progress_seconds=pos,
+                is_completed=completed,
+                stream_url=f"/api/videos/{v.id}/stream",
+                next_episode_video_id=next_vid_id,
+            )
+        )
+
+    return FeedResponse(
+        items=feed_items,
+        next_cursor=next_cursor,
+        has_more=has_more,
+    )
 
 
 @router.get("/series/{series_id}")

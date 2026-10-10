@@ -165,6 +165,16 @@ class AppLocalizations {
   String get cannotPlayVideo => isArabic
       ? 'تعذر تشغيل الفيديو'
       : (isEnglish ? 'Cannot play video' : 'Impossible de lancer la vidéo');
+  String get episodesList => isArabic ? 'قائمة الحلقات' : (isEnglish ? 'Episodes List' : 'Liste des épisodes');
+  String get nextEpisode => isArabic ? 'الحلقة التالية' : (isEnglish ? 'Next Episode' : 'Épisode suivant');
+  String get playbackSpeed => isArabic ? 'سرعة التشغيل' : (isEnglish ? 'Playback Speed' : 'Vitesse de lecture');
+  String get linkCopied => isArabic
+      ? 'تم نسخ الرابط إلى الحافظة'
+      : (isEnglish ? 'Link copied to clipboard' : 'Lien copié dans le presse-papier');
+  String get noReelsAvailable => isArabic
+      ? 'لا توجد حلقات متوفرة في الموجز'
+      : (isEnglish ? 'No episodes available in the feed' : 'Aucun épisode disponible dans le flux');
+
 
   // ==================== MY LIST (FAVORITES) ====================
   String get myListTitle => isArabic ? 'قائمتي' : (isEnglish ? 'My List' : 'Ma Liste');

@@ -16,7 +16,7 @@ from app.config import settings
 from app.database import AsyncSessionLocal, get_db, init_db
 from app.models import InviteCode, User
 from app.routers import admin, admin_web, auth, library, videos
-from app.schemas import HomeScreenResponse, TopSeriesItem
+from app.schemas import FeedResponse, HomeScreenResponse, TopSeriesItem
 from app.security import get_current_active_user, hash_password
 from app.services.sync_service import sync_service
 from app.telegram_client import telegram_manager
@@ -174,6 +174,24 @@ async def get_series_top_alias(
 ):
     """Alias racine pour le classement Top des séries."""
     return await videos.get_top_series(period=period, limit=limit, current_user=current_user, db=db)
+
+
+@app.get("/api/feed", response_model=FeedResponse, tags=["Feed Vertical"])
+async def get_feed_alias(
+    cursor: Optional[int] = None,
+    limit: int = 15,
+    series_id: Optional[int] = None,
+    current_user: User = Depends(get_current_active_user),
+    db: AsyncSession = Depends(get_db),
+):
+    """Alias racine pour le flux vertical d'épisodes et de vidéos."""
+    return await videos.get_vertical_feed(
+        cursor=cursor,
+        limit=limit,
+        series_id=series_id,
+        current_user=current_user,
+        db=db,
+    )
 
 
 @app.get("/api/app/version", tags=["Application Mobile"])

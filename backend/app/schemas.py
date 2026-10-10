@@ -457,6 +457,35 @@ class HomeScreenResponse(BaseModel):
     genres: List[HomeGenreSection] = []
 
 
+class FeedItemResponse(BaseModel):
+    id: int
+    telegram_message_id: int
+    title: str
+    series_id: Optional[int] = None
+    series_title: Optional[str] = None
+    season_number: int = 1
+    episode_number: int = 1
+    episode_title: Optional[str] = None
+    caption: Optional[str] = None
+    category: str = "Général"
+    duration_seconds: int = 0
+    file_size_bytes: int = 0
+    mime_type: str = "video/mp4"
+    thumbnail_path: Optional[str] = None
+    views_count: int = 0
+    is_favorite: bool = False
+    watch_progress_seconds: float = 0.0
+    is_completed: bool = False
+    stream_url: str
+    next_episode_video_id: Optional[int] = None
+
+
+class FeedResponse(BaseModel):
+    items: List[FeedItemResponse] = []
+    next_cursor: Optional[int] = None
+    has_more: bool = False
+
+
 class SeriesCreate(BaseModel):
     title_fr: str = Field(..., min_length=1, max_length=255)
     title_ar: Optional[str] = None

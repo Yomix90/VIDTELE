@@ -154,6 +154,14 @@ async def test_mobile_compatibility():
             assert isinstance(top_series, list)
             print(f"[OK] 16. GET /api/series/top -> 200 OK ({len(top_series)} séries dans le Top)")
 
+            # 17. Nouvel endpoint Feed Vertical TikTok (/api/feed et /api/videos/feed)
+            r_feed = await client.get("/api/feed?limit=10", headers=headers)
+            assert r_feed.status_code == 200
+            feed_data = r_feed.json()
+            assert "items" in feed_data
+            assert "has_more" in feed_data
+            print(f"[OK] 17. GET /api/feed -> 200 OK ({len(feed_data['items'])} éléments dans le feed vertical)")
+
         print("=" * 65)
         print("CONFORMITE 100% VALIDEE : AUCUNE REGRESSION SUR L'API MOBILE !")
         print("=" * 65)
