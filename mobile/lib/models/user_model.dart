@@ -5,6 +5,7 @@ class UserModel {
   final String role;
   final bool isActive;
   final int maxConcurrentStreams;
+  final bool adsFree;
 
   UserModel({
     required this.id,
@@ -12,9 +13,10 @@ class UserModel {
     required this.role,
     required this.isActive,
     required this.maxConcurrentStreams,
+    this.adsFree = false,
   });
 
-  bool get isAdmin => role == 'admin';
+  bool get isAdmin => role == 'admin' || role == 'super_admin';
 
   factory UserModel.fromJson(Map<String, dynamic> json) {
     return UserModel(
@@ -23,6 +25,7 @@ class UserModel {
       role: json['role'] ?? 'user',
       isActive: json['is_active'] ?? true,
       maxConcurrentStreams: json['max_concurrent_streams'] ?? 2,
+      adsFree: json['ads_free'] ?? false,
     );
   }
 
@@ -33,6 +36,7 @@ class UserModel {
       'role': role,
       'is_active': isActive,
       'max_concurrent_streams': maxConcurrentStreams,
+      'ads_free': adsFree,
     };
   }
 }

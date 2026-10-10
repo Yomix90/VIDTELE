@@ -7,6 +7,8 @@ import 'package:google_mobile_ads/google_mobile_ads.dart';
 
 import 'core/ads/ads_config.dart';
 import 'core/ads/consent_manager.dart';
+import 'core/ads/rewarded_ad_service.dart';
+import 'core/ads/watch_gate_controller.dart';
 import 'core/localization/app_localizations.dart';
 import 'core/navigation/app_route_observer.dart';
 import 'core/theme/app_theme.dart';
@@ -31,6 +33,12 @@ void main() async {
       debugPrint('[Main] Erreur consentement: $e');
       return true;
     });
+
+    // 3. Initialisation du contrôleur de quota vidéo
+    await WatchGateController.instance.initialize();
+
+    // 4. Préchargement prédictif de la première annonce avec récompense
+    RewardedAdService.instance.preloadAd();
   } catch (e) {
     debugPrint('[Main] Initialisation AdMob ignorée/échouée: $e');
   }

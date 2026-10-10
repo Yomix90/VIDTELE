@@ -5,6 +5,7 @@ import 'package:flutter_riverpod/flutter_riverpod.dart';
 import '../../core/ads/ads_config.dart';
 import '../../core/ads/consent_manager.dart';
 import '../../core/ads/rewarded_ad_service.dart';
+import '../../core/ads/watch_gate_controller.dart';
 import '../../core/theme/app_theme.dart';
 import '../../widgets/touchable_scale.dart';
 
@@ -23,6 +24,7 @@ class _AdsDebugScreenState extends ConsumerState<AdsDebugScreen> {
   @override
   Widget build(BuildContext context) {
     final adService = ref.watch(rewardedAdServiceProvider);
+    final watchGate = ref.watch(watchGateProvider);
 
     return Scaffold(
       backgroundColor: AppTheme.netflixBlack,
@@ -92,7 +94,92 @@ class _AdsDebugScreenState extends ConsumerState<AdsDebugScreen> {
 
             const SizedBox(height: 16),
 
-            // 2. Compteur de récompenses
+            // 2. Statut WatchGate (Quota de visionnage)
+            Container(
+              padding: const EdgeInsets.all(16),
+              decoration: BoxDecoration(
+                color: const Color(0xFF16161E),
+                borderRadius: BorderRadius.circular(12),
+                border: Border.all(
+                  color: watchGate.isGateLocked ? Colors.redAccent.withValues(alpha: 0.5) : Colors.greenAccent.withValues(alpha: 0.3),
+                ),
+              ),
+              child: Column(
+                crossAxisAlignment: CrossAxisAlignment.start,
+                children: [
+                  Row(
+                    children: [
+                      Icon(
+                        watchGate.isGateLocked ? Icons.lock : Icons.lock_open,
+                        color: watchGate.isGateLocked ? Colors.redAccent : Colors.greenAccent,
+                        size: 24,
+                      ),
+                      const SizedBox(width: 8),
+                      const Text(
+                        'Contrôleur de Quota (WatchGate)',
+                        style: TextStyle(color: Colors.white, fontSize: 14, fontWeight: FontWeight.bold),
+                      ),
+                      const Spacer(),
+                      Container(
+                        padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 3),
+                        decoration: BoxDecoration(
+                          color: watchGate.isGateLocked
+                              ? Colors.redAccent.withValues(alpha: 0.2)
+                              : Colors.greenAccent.withValues(alpha: 0.2),
+                          borderRadius: BorderRadius.circular(4),
+                        ),
+                        child: Text(
+                          watchGate.isGateLocked ? 'BLOQUÉ (PUB REQUISE)' : 'ACCÈS LIBRE',
+                          style: TextStyle(
+                            color: watchGate.isGateLocked ? Colors.redAccent : Colors.greenAccent,
+                            fontSize: 10,
+                            fontWeight: FontWeight.bold,
+                          ),
+                        ),
+                      ),
+                    ],
+                  ),
+                  const SizedBox(height: 12),
+                  Row(
+                    mainAxisAlignment: MainAxisAlignment.spaceBetween,
+                    children: [
+                      const Text('Progression du cycle :', style: TextStyle(color: Colors.white70, fontSize: 13)),
+                      Text(
+                        '${watchGate.watchedCount} / ${watchGate.currentCycleThreshold} vidéos',
+                        style: const TextStyle(color: Colors.white, fontSize: 14, fontWeight: FontWeight.bold),
+                      ),
+                    ],
+                  ),
+                  const SizedBox(height: 6),
+                  ClipRRect(
+                    borderRadius: BorderRadius.circular(4),
+                    child: LinearProgressIndicator(
+                      value: watchGate.currentCycleThreshold > 0
+                          ? (watchGate.watchedCount / watchGate.currentCycleThreshold).clamp(0.0, 1.0)
+                          : 0.0,
+                      backgroundColor: Colors.white12,
+                      valueColor: AlwaysStoppedAnimation<Color>(
+                        watchGate.isGateLocked ? Colors.redAccent : AppTheme.netflixRed,
+                      ),
+                      minHeight: 6,
+                    ),
+                  ),
+                  const SizedBox(height: 10),
+                  Text(
+                    'Vidéos restantes avant pub : ${watchGate.remainingVideos}',
+                    style: const TextStyle(color: Colors.white54, fontSize: 12),
+                  ),
+                  Text(
+                    'Identifiants uniques comptés : ${watchGate.watchedVideoIds.length}',
+                    style: const TextStyle(color: Colors.white38, fontSize: 11),
+                  ),
+                ],
+              ),
+            ),
+
+            const SizedBox(height: 16),
+
+            // 3. Compteur de récompenses
             Container(
               padding: const EdgeInsets.all(16),
               decoration: BoxDecoration(
@@ -121,7 +208,7 @@ class _AdsDebugScreenState extends ConsumerState<AdsDebugScreen> {
 
             const SizedBox(height: 16),
 
-            // 3. Journal des derniers événements
+            // 4. Journal des derniers événements
             Container(
               width: double.infinity,
               padding: const EdgeInsets.all(12),
@@ -233,6 +320,78 @@ class _AdsDebugScreenState extends ConsumerState<AdsDebugScreen> {
               ),
             ),
 
+            const SizedBox(height: 16),
+            const Text(
+              'Simulation Quota (WatchGate)',
+              style: TextStyle(color: Colors.white70, fontSize: 13, fontWeight: FontWeight.bold),
+            ),
+            const SizedBox(height: 8),
+            Row(
+              children: [
+                Expanded(
+                  child: OutlinedButton.icon(
+                    onPressed: () {
+                      HapticFeedback.lightImpact();
+                      final simId = 'sim_video_${DateTime.now().millisecondsSinceEpoch}';
+                      final locked = watchGate.recordVideoProgress(
+                        videoId: simId,
+                        position: const Duration(seconds: 70),
+                        duration: const Duration(seconds: 100),
+                      );
+                      setState(() {
+                        _lastEvent = locked
+                            ? 'Vidéo $simId lue (70%) -> SEUIL ATTEINT ET BLOQUÉ !'
+                            : 'Vidéo $simId lue (70%) -> ${watchGate.watchedCount}/${watchGate.currentCycleThreshold}';
+                      });
+                    },
+                    icon: const Icon(Icons.check_circle_outline, size: 16),
+                    label: const Text('+1 Vue (70%)', style: TextStyle(fontSize: 12)),
+                  ),
+                ),
+                const SizedBox(width: 8),
+                Expanded(
+                  child: OutlinedButton.icon(
+                    onPressed: () async {
+                      HapticFeedback.lightImpact();
+                      await watchGate.unlockNewCycle();
+                      setState(() {
+                        _lastEvent = 'Cycle débloqué ! Nouveau seuil : ${watchGate.currentCycleThreshold}';
+                      });
+                    },
+                    icon: const Icon(Icons.refresh, size: 16),
+                    label: const Text('Débloquer', style: TextStyle(fontSize: 12)),
+                  ),
+                ),
+              ],
+            ),
+            const SizedBox(height: 8),
+            Row(
+              children: [
+                Expanded(
+                  child: OutlinedButton.icon(
+                    onPressed: () async {
+                      HapticFeedback.lightImpact();
+                      await watchGate.lockGate();
+                      setState(() => _lastEvent = 'Quota verrouillé manuellement');
+                    },
+                    icon: const Icon(Icons.lock, size: 16, color: Colors.redAccent),
+                    label: const Text('Verrouiller', style: TextStyle(fontSize: 12, color: Colors.redAccent)),
+                  ),
+                ),
+                const SizedBox(width: 8),
+                Expanded(
+                  child: OutlinedButton.icon(
+                    onPressed: () async {
+                      HapticFeedback.lightImpact();
+                      await watchGate.resetState();
+                      setState(() => _lastEvent = 'Compteur réinitialisé');
+                    },
+                    icon: const Icon(Icons.delete_outline, size: 16),
+                    label: const Text('Reset', style: TextStyle(fontSize: 12)),
+                  ),
+                ),
+              ],
+            ),
             const SizedBox(height: 24),
 
             // 5. Consentement UMP
