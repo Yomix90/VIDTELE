@@ -14,6 +14,9 @@ async def test_mobile_compatibility():
     print("TEST DE NON-REGRESSION STRICTE DE L'API MOBILE FLUTTER")
     print("=" * 65)
 
+    from app.database import init_db
+    await init_db()
+
     transport = httpx.ASGITransport(app=app)
     async with httpx.AsyncClient(transport=transport, base_url="http://testserver") as client:
         # 1. Health check
@@ -133,6 +136,23 @@ async def test_mobile_compatibility():
             )
             assert r_stop.status_code in (200, 404)
             print(f"[OK] 14. POST /api/videos/{video_id}/stream/stop -> 200 OK")
+
+            # 15. Nouvel endpoint Accueil (/api/home et /api/videos/home)
+            r_home = await client.get("/api/home", headers=headers)
+            assert r_home.status_code == 200
+            home_data = r_home.json()
+            assert "hero" in home_data
+            assert "top5" in home_data
+            assert "continue_watching" in home_data
+            assert "genres" in home_data
+            print(f"[OK] 15. GET /api/home -> 200 OK (hero: {len(home_data['hero'])}, top5: {len(home_data['top5'])})")
+
+            # 16. Nouvel endpoint Top Séries (/api/series/top et /api/videos/series/top)
+            r_top = await client.get("/api/series/top?period=7d&limit=5", headers=headers)
+            assert r_top.status_code == 200
+            top_series = r_top.json()
+            assert isinstance(top_series, list)
+            print(f"[OK] 16. GET /api/series/top -> 200 OK ({len(top_series)} séries dans le Top)")
 
         print("=" * 65)
         print("CONFORMITE 100% VALIDEE : AUCUNE REGRESSION SUR L'API MOBILE !")

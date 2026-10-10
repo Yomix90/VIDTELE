@@ -6,14 +6,25 @@ import '../../core/localization/app_localizations.dart';
 import '../../core/storage/storage_service.dart';
 import '../../core/theme/app_theme.dart';
 import '../../core/utils/image_utils.dart';
+import '../../models/home_model.dart';
 import '../../models/video_model.dart';
 import '../../providers/video_provider.dart';
+import '../../widgets/empty_state.dart';
+import '../../widgets/error_state.dart';
+import '../../widgets/hero_slider.dart';
+import '../../widgets/shimmer_placeholder.dart';
 import '../../widgets/top_number_card.dart';
+import '../../widgets/touchable_scale.dart';
 import '../../widgets/video_card.dart';
 import '../player/video_player_screen.dart';
 import '../series/series_detail_screen.dart';
 
-/// Écran d'accueil immersif style Netflix pour VidTele.
+/// Écran d'accueil immersif moderne pour VidTele / Atlas Play.
+/// Intègre :
+/// - Slider Héro des séries avec lecture auto (5s), pause au toucher, indicateurs animés
+/// - Section Top 5 des séries avec grands chiffres stylisés Netflix
+/// - Rangées horizontales : Continuer la lecture, Nouveautés, Tendances, Séries, Par genre
+/// - Shimmer loading, pull-to-refresh et gestion d'erreurs soignée
 class HomeScreen extends ConsumerStatefulWidget {
   const HomeScreen({super.key});
 
@@ -44,32 +55,47 @@ class _HomeScreenState extends ConsumerState<HomeScreen> {
     );
   }
 
+  void _onSeriesSelected(int seriesId, String title, String? posterPath) {
+    Navigator.push(
+      context,
+      MaterialPageRoute(
+        builder: (_) => SeriesDetailScreen(
+          seriesId: seriesId,
+          initialTitle: title,
+          initialPoster: posterPath,
+        ),
+      ),
+    );
+  }
+
+  Future<void> _refreshAll() async {
+    ref.invalidate(homeDataProvider);
+    ref.invalidate(videoListProvider);
+    ref.invalidate(categoriesProvider);
+    ref.invalidate(seriesListProvider);
+  }
+
   @override
   Widget build(BuildContext context) {
-    final videoListAsync = ref.watch(videoListProvider);
-    final featuredVideo = ref.watch(featuredVideoProvider);
-    final continueWatching = ref.watch(continueWatchingProvider);
-    final top5Videos = ref.watch(top5VideosProvider);
-    final categoriesAsync = ref.watch(categoriesProvider);
+    final homeDataAsync = ref.watch(homeDataProvider);
+    final seriesListAsync = ref.watch(seriesListProvider);
     final searchResults = ref.watch(searchResultsProvider);
     final l10n = context.l10n;
 
     return Scaffold(
-      backgroundColor: AppTheme.netflixBlack,
+      backgroundColor: AppTheme.darkBackground,
       body: RefreshIndicator(
         color: AppTheme.netflixRed,
-        backgroundColor: AppTheme.netflixDarkGray,
-        onRefresh: () async {
-          ref.invalidate(videoListProvider);
-          ref.invalidate(categoriesProvider);
-        },
+        backgroundColor: AppTheme.darkSurface,
+        onRefresh: _refreshAll,
         child: CustomScrollView(
+          physics: const AlwaysScrollableScrollPhysics(parent: BouncingScrollPhysics()),
           slivers: [
-            // 1. Barre d'application transparente style Netflix
+            // 1. Barre d'application transparente stylisée
             SliverAppBar(
               floating: true,
               pinned: true,
-              backgroundColor: Colors.black.withValues(alpha: 0.9),
+              backgroundColor: AppTheme.darkBackground.withValues(alpha: 0.92),
               elevation: 0,
               title: _isSearching
                   ? TextField(
@@ -97,7 +123,7 @@ class _HomeScreenState extends ConsumerState<HomeScreen> {
                             fit: BoxFit.cover,
                           ),
                         ),
-                        const SizedBox(width: 9),
+                        const SizedBox(width: 10),
                         RichText(
                           text: const TextSpan(
                             children: [
@@ -127,6 +153,7 @@ class _HomeScreenState extends ConsumerState<HomeScreen> {
               actions: [
                 IconButton(
                   icon: Icon(_isSearching ? Icons.close : Icons.search, color: Colors.white),
+                  tooltip: _isSearching ? 'Fermer' : l10n.search,
                   onPressed: () {
                     setState(() {
                       _isSearching = !_isSearching;
@@ -140,15 +167,12 @@ class _HomeScreenState extends ConsumerState<HomeScreen> {
                 IconButton(
                   icon: const Icon(Icons.refresh, color: Colors.white70),
                   tooltip: l10n.refresh,
-                  onPressed: () {
-                    ref.invalidate(videoListProvider);
-                    ref.invalidate(categoriesProvider);
-                  },
+                  onPressed: _refreshAll,
                 ),
               ],
             ),
 
-            // 2. Si l'utilisateur est en train de chercher : afficher les résultats en grille
+            // 2. Mode Recherche active : grille de résultats
             if (_isSearching)
               SliverPadding(
                 padding: const EdgeInsets.all(16),
@@ -156,18 +180,9 @@ class _HomeScreenState extends ConsumerState<HomeScreen> {
                     ? SliverToBoxAdapter(
                         child: Padding(
                           padding: const EdgeInsets.only(top: 60),
-                          child: Center(
-                            child: Column(
-                              children: [
-                                const Icon(Icons.search_off, size: 54, color: Colors.white38),
-                                const SizedBox(height: 12),
-                                Text(
-                                  l10n.noResultsFor(_searchController.text),
-                                  textAlign: TextAlign.center,
-                                  style: const TextStyle(color: Colors.white60, fontSize: 15),
-                                ),
-                              ],
-                            ),
+                          child: EmptyStateView(
+                            icon: Icons.search_off_rounded,
+                            title: l10n.noResultsFor(_searchController.text),
                           ),
                         ),
                       )
@@ -190,348 +205,252 @@ class _HomeScreenState extends ConsumerState<HomeScreen> {
                         ),
                       ),
               )
-            else ...[
-              // 3. Bannière Hero (Vidéo mise en avant tout en haut façon Netflix)
-              if (featuredVideo != null)
-                SliverToBoxAdapter(
-                  child: _buildHeroBanner(featuredVideo, l10n),
-                )
-              else
-                SliverToBoxAdapter(
-                  child: videoListAsync.when(
-                    loading: () => const SizedBox(
-                      height: 380,
-                      child: Center(
-                        child: CircularProgressIndicator(color: AppTheme.netflixRed),
-                      ),
-                    ),
-                    error: (err, _) => SizedBox(
-                      height: 250,
-                      child: Center(
-                        child: Column(
-                          mainAxisSize: MainAxisSize.min,
-                          children: [
-                            const Icon(Icons.wifi_off, color: Colors.redAccent, size: 40),
-                            const SizedBox(height: 8),
-                            Text(
-                              l10n.catalogLoadError,
-                              style: const TextStyle(color: Colors.white70),
-                            ),
-                            const SizedBox(height: 12),
-                            ElevatedButton(
-                              onPressed: () => ref.invalidate(videoListProvider),
-                              child: Text(l10n.retry),
-                            ),
-                          ],
-                        ),
-                      ),
-                    ),
-                    data: (_) => const SizedBox.shrink(),
+            else
+              // 3. Contenu principal de la page d'accueil
+              homeDataAsync.when(
+                loading: () => SliverToBoxAdapter(
+                  child: Column(
+                    crossAxisAlignment: CrossAxisAlignment.start,
+                    children: [
+                      const ShimmerHeroBanner(),
+                      const SizedBox(height: 20),
+                      _buildSectionHeader(l10n.top5Series),
+                      const ShimmerVideoRow(cardWidth: 155, cardHeight: 200, count: 3),
+                      const SizedBox(height: 24),
+                      _buildSectionHeader(l10n.continueWatching),
+                      const ShimmerVideoRow(),
+                      const SizedBox(height: 24),
+                      _buildSectionHeader(l10n.newReleases),
+                      const ShimmerVideoRow(),
+                    ],
                   ),
                 ),
-
-              // 4. Contenu déroulant façon Netflix
-              SliverToBoxAdapter(
-                child: Column(
-                  crossAxisAlignment: CrossAxisAlignment.start,
-                  children: [
-                    const SizedBox(height: 18),
-
-                    // 0. Slider / Carousel des Dernières Séries Ajoutées
-                    _buildLatestSeriesSlider(l10n),
-
-                    // 0.bis Section Catalogue des Séries TV
-                    _buildSeriesSection(l10n),
-
-                    // A. Rangée "Continuer la lecture" (si historique en cours)
-                    if (continueWatching.isNotEmpty) ...[
-                      _buildSectionHeader(l10n.continueWatching),
-                      SizedBox(
-                        height: 195,
-                        child: ListView.builder(
-                          scrollDirection: Axis.horizontal,
-                          padding: const EdgeInsets.symmetric(horizontal: 16),
-                          itemCount: continueWatching.length,
-                          itemBuilder: (context, index) {
-                            final vid = continueWatching[index];
-                            return VideoCard(
-                              video: vid,
-                              showProgress: true,
-                              width: 135,
-                              height: 190,
-                              onTap: () => _onVideoSelected(vid, continueWatching),
-                            );
-                          },
-                        ),
-                      ),
-                      const SizedBox(height: 24),
-                    ],
-
-                    // B. Rangée "Top 5 des Tendances" (grands chiffres Netflix)
-                    if (top5Videos.isNotEmpty) ...[
-                      _buildSectionHeader(l10n.top5Trending),
-                      SizedBox(
-                        height: 200,
-                        child: ListView.builder(
-                          scrollDirection: Axis.horizontal,
-                          padding: const EdgeInsets.symmetric(horizontal: 16),
-                          itemCount: top5Videos.length,
-                          itemBuilder: (context, index) {
-                            final vid = top5Videos[index];
-                            return TopNumberCard(
-                              rank: index + 1,
-                              video: vid,
-                              onTap: () => _onVideoSelected(vid, top5Videos),
-                            );
-                          },
-                        ),
-                      ),
-                      const SizedBox(height: 24),
-                    ],
-
-                    // C. Rangées Dynamiques par Catégorie (Films, Séries, etc.)
-                    categoriesAsync.when(
-                      data: (categories) {
-                        return Column(
-                          children: categories.map((cat) {
-                            return Consumer(
-                              builder: (context, ref, _) {
-                                final catVideos = ref.watch(videosByCategoryProvider(cat.name));
-                                if (catVideos.isEmpty) return const SizedBox.shrink();
-
-                                return Column(
-                                  crossAxisAlignment: CrossAxisAlignment.start,
-                                  children: [
-                                    _buildSectionHeader('${cat.name} (${cat.count})'),
-                                    SizedBox(
-                                      height: 195,
-                                      child: ListView.builder(
-                                        scrollDirection: Axis.horizontal,
-                                        padding: const EdgeInsets.symmetric(horizontal: 16),
-                                        itemCount: catVideos.length,
-                                        itemBuilder: (context, index) {
-                                          final vid = catVideos[index];
-                                          return VideoCard(
-                                            video: vid,
-                                            width: 135,
-                                            height: 190,
-                                            onTap: () => _onVideoSelected(vid, catVideos),
-                                          );
-                                        },
-                                      ),
-                                    ),
-                                    const SizedBox(height: 24),
-                                  ],
-                                );
-                              },
-                            );
-                          }).toList(),
-                        );
-                      },
-                      loading: () => const SizedBox.shrink(),
-                      error: (_, __) => const SizedBox.shrink(),
+                error: (err, _) => SliverToBoxAdapter(
+                  child: Padding(
+                    padding: const EdgeInsets.only(top: 100),
+                    child: ErrorStateView(
+                      message: l10n.catalogLoadError,
+                      onRetry: _refreshAll,
                     ),
-                    const SizedBox(height: 32),
-                  ],
+                  ),
                 ),
-              ),
+                data: (homeData) {
+                  return SliverToBoxAdapter(
+                    child: Column(
+                      crossAxisAlignment: CrossAxisAlignment.start,
+                      children: [
+                        // A. Slider Héro cinématique des dernières séries
+                        if (homeData.hero.isNotEmpty)
+                          HeroSlider(
+                            items: homeData.hero,
+                            onWatch: (heroItem) {
+                              _onSeriesSelected(
+                                heroItem.id,
+                                heroItem.titleFr ?? heroItem.title,
+                                heroItem.posterPath,
+                              );
+                            },
+                          )
+                        else
+                          // Fallback si la liste hero est vide : featured video
+                          ref.watch(featuredVideoProvider) != null
+                              ? _buildSingleHeroBanner(ref.watch(featuredVideoProvider)!, l10n)
+                              : const SizedBox.shrink(),
 
-            ],
+                        const SizedBox(height: 16),
+
+                        // B. Section "Continuer la lecture" (si historique en cours)
+                        _buildContinueWatchingSection(homeData, l10n),
+
+                        // C. Section "Top 5 des séries" (chiffres géants Netflix 1 à 5)
+                        _buildTop5SeriesSection(homeData, l10n),
+
+                        // D. Rangée "Nouveautés"
+                        if (homeData.newReleases.isNotEmpty) ...[
+                          _buildSectionHeader(l10n.newReleases),
+                          _buildHorizontalVideoList(homeData.newReleases),
+                          const SizedBox(height: 24),
+                        ],
+
+                        // E. Rangée "Tendances"
+                        if (homeData.trending.isNotEmpty) ...[
+                          _buildSectionHeader(l10n.trendingNow),
+                          _buildHorizontalVideoList(homeData.trending),
+                          const SizedBox(height: 24),
+                        ],
+
+                        // F. Section Catalogue complet des Séries TV
+                        _buildSeriesCatalogSection(seriesListAsync, l10n),
+
+                        // G. Rangées Dynamiques par Genre / Catégorie
+                        if (homeData.genres.isNotEmpty)
+                          ...homeData.genres.map((genre) {
+                            if (genre.items.isEmpty) return const SizedBox.shrink();
+                            return Column(
+                              crossAxisAlignment: CrossAxisAlignment.start,
+                              children: [
+                                _buildSectionHeader('${genre.name} (${genre.count})'),
+                                _buildHorizontalVideoList(genre.items),
+                                const SizedBox(height: 24),
+                              ],
+                            );
+                          })
+                        else
+                          // Fallback sur le catalogue vidéo classique par catégorie
+                          _buildFallbackCategoriesSection(),
+
+                        const SizedBox(height: 36),
+                      ],
+                    ),
+                  );
+                },
+              ),
           ],
         ),
       ),
     );
   }
 
-  /// Titre de section stylisé
+  /// Titre de section stylisé avec typography du design system
   Widget _buildSectionHeader(String title) {
     return Padding(
-      padding: const EdgeInsets.only(left: 16, right: 16, bottom: 10),
+      padding: const EdgeInsets.only(left: 16, right: 16, bottom: 12),
       child: Text(
         title,
         style: const TextStyle(
           color: Colors.white,
           fontSize: 18,
-          fontWeight: FontWeight.bold,
+          fontWeight: FontWeight.w800,
           letterSpacing: 0.3,
         ),
       ),
     );
   }
 
-  /// Section Slider / Carousel des Dernières Séries Ajoutées
-  Widget _buildLatestSeriesSlider(AppLocalizations l10n) {
-    final latestSeriesAsync = ref.watch(latestSeriesProvider);
-
-    return latestSeriesAsync.when(
-      data: (seriesList) {
-        if (seriesList.isEmpty) return const SizedBox.shrink();
-
-        return Column(
-          crossAxisAlignment: CrossAxisAlignment.start,
-          children: [
-            _buildSectionHeader(l10n.latestSeriesTitle),
-            SizedBox(
-              height: 220,
-              child: FutureBuilder<String>(
-                future: storageService.getServerUrl(),
-                builder: (context, snapshot) {
-                  final baseUrl = snapshot.data ?? ApiConstants.defaultBaseUrl;
-
-                  return ListView.builder(
-                    scrollDirection: Axis.horizontal,
-                    padding: const EdgeInsets.symmetric(horizontal: 16),
-                    itemCount: seriesList.length,
-                    itemBuilder: (context, index) {
-                      final s = seriesList[index];
-                      final posterUrl = ImageUtils.resolveUrl(s.posterPath ?? s.bannerPath, baseUrl);
-
-                      return GestureDetector(
-                        onTap: () {
-                          Navigator.push(
-                            context,
-                            MaterialPageRoute(
-                              builder: (_) => SeriesDetailScreen(
-                                seriesId: s.id,
-                                initialTitle: s.title,
-                                initialPoster: s.posterPath,
-                              ),
-                            ),
-                          );
-                        },
-                        child: Container(
-                          width: 145,
-                          margin: const EdgeInsets.only(right: 12),
-                          decoration: BoxDecoration(
-                            color: AppTheme.netflixCard,
-                            borderRadius: BorderRadius.circular(8),
-                            boxShadow: [
-                              BoxShadow(
-                                color: Colors.black.withValues(alpha: 0.5),
-                                blurRadius: 6,
-                                offset: const Offset(0, 3),
-                              ),
-                            ],
-                          ),
-                          child: ClipRRect(
-                            borderRadius: BorderRadius.circular(8),
-                            child: Stack(
-                              fit: StackFit.expand,
-                              children: [
-                                posterUrl != null
-                                    ? CachedNetworkImage(
-                                        imageUrl: posterUrl,
-                                        fit: BoxFit.cover,
-                                        placeholder: (context, url) => Container(
-                                          color: const Color(0xFF1F1F1F),
-                                          child: const Center(
-                                            child: CircularProgressIndicator(
-                                              strokeWidth: 2,
-                                              color: AppTheme.netflixRed,
-                                            ),
-                                          ),
-                                        ),
-                                        errorWidget: (context, url, error) => Container(
-                                          color: const Color(0xFF1F1F1F),
-                                          child: const Icon(Icons.tv, size: 40, color: Colors.white24),
-                                        ),
-                                      )
-                                    : Container(
-                                        color: const Color(0xFF1F1F1F),
-                                        child: const Icon(Icons.tv, size: 40, color: Colors.white24),
-                                      ),
-                                Positioned.fill(
-                                  child: Container(
-                                    decoration: const BoxDecoration(
-                                      gradient: LinearGradient(
-                                        colors: [
-                                          Colors.transparent,
-                                          Colors.transparent,
-                                          Color(0xCC000000),
-                                          Colors.black,
-                                        ],
-                                        begin: Alignment.topCenter,
-                                        end: Alignment.bottomCenter,
-                                      ),
-                                    ),
-                                  ),
-                                ),
-                                if (s.rating != null)
-                                  Positioned(
-                                    top: 6,
-                                    right: 6,
-                                    child: Container(
-                                      padding: const EdgeInsets.symmetric(horizontal: 5, vertical: 2),
-                                      decoration: BoxDecoration(
-                                        color: Colors.black.withValues(alpha: 0.75),
-                                        borderRadius: BorderRadius.circular(4),
-                                      ),
-                                      child: Row(
-                                        mainAxisSize: MainAxisSize.min,
-                                        children: [
-                                          const Icon(Icons.star, color: Colors.amber, size: 12),
-                                          const SizedBox(width: 2),
-                                          Text(
-                                            s.rating!.toStringAsFixed(1),
-                                            style: const TextStyle(
-                                              color: Colors.white,
-                                              fontSize: 10,
-                                              fontWeight: FontWeight.bold,
-                                            ),
-                                          ),
-                                        ],
-                                      ),
-                                    ),
-                                  ),
-                                Positioned(
-                                  left: 8,
-                                  right: 8,
-                                  bottom: 8,
-                                  child: Column(
-                                    crossAxisAlignment: CrossAxisAlignment.start,
-                                    mainAxisSize: MainAxisSize.min,
-                                    children: [
-                                      Text(
-                                        s.title,
-                                        maxLines: 1,
-                                        overflow: TextOverflow.ellipsis,
-                                        style: const TextStyle(
-                                          color: Colors.white,
-                                          fontSize: 12,
-                                          fontWeight: FontWeight.bold,
-                                        ),
-                                      ),
-                                      if (s.year != null)
-                                        Text(
-                                          '${s.year}',
-                                          style: const TextStyle(color: Colors.white54, fontSize: 10),
-                                        ),
-                                    ],
-                                  ),
-                                ),
-                              ],
-                            ),
-                          ),
-                        ),
-                      );
-                    },
-                  );
-                },
-              ),
-            ),
-            const SizedBox(height: 24),
-          ],
-        );
-      },
-      loading: () => const SizedBox.shrink(),
-      error: (_, __) => const SizedBox.shrink(),
+  /// Rangée horizontale standard de vidéos
+  Widget _buildHorizontalVideoList(List<VideoModel> videos) {
+    return SizedBox(
+      height: 195,
+      child: ListView.builder(
+        scrollDirection: Axis.horizontal,
+        physics: const BouncingScrollPhysics(),
+        padding: const EdgeInsets.symmetric(horizontal: 16),
+        itemCount: videos.length,
+        itemBuilder: (context, index) {
+          final vid = videos[index];
+          return VideoCard(
+            video: vid,
+            width: 135,
+            height: 190,
+            onTap: () => _onVideoSelected(vid, videos),
+          );
+        },
+      ),
     );
   }
 
-  /// Section Catalogue des Séries TV (affiche les cartes des séries qui s'ouvrent vers la liste des épisodes)
-  Widget _buildSeriesSection(AppLocalizations l10n) {
-    final seriesListAsync = ref.watch(seriesListProvider);
+  /// Section "Continuer la lecture" avec barre de progression
+  Widget _buildContinueWatchingSection(HomeScreenData homeData, AppLocalizations l10n) {
+    final list = homeData.continueWatching.isNotEmpty
+        ? homeData.continueWatching
+        : ref.watch(continueWatchingProvider);
 
+    if (list.isEmpty) return const SizedBox.shrink();
+
+    return Column(
+      crossAxisAlignment: CrossAxisAlignment.start,
+      children: [
+        _buildSectionHeader(l10n.continueWatching),
+        SizedBox(
+          height: 195,
+          child: ListView.builder(
+            scrollDirection: Axis.horizontal,
+            physics: const BouncingScrollPhysics(),
+            padding: const EdgeInsets.symmetric(horizontal: 16),
+            itemCount: list.length,
+            itemBuilder: (context, index) {
+              final vid = list[index];
+              return VideoCard(
+                video: vid,
+                showProgress: true,
+                width: 135,
+                height: 190,
+                onTap: () => _onVideoSelected(vid, list),
+              );
+            },
+          ),
+        ),
+        const SizedBox(height: 24),
+      ],
+    );
+  }
+
+  /// Section "Top 5 des Séries" (avec grands chiffres Netflix 1 à 5)
+  Widget _buildTop5SeriesSection(HomeScreenData homeData, AppLocalizations l10n) {
+    final topSeries = homeData.top5;
+
+    if (topSeries.isNotEmpty) {
+      return Column(
+        crossAxisAlignment: CrossAxisAlignment.start,
+        children: [
+          _buildSectionHeader(l10n.top5Series),
+          SizedBox(
+            height: 200,
+            child: ListView.builder(
+              scrollDirection: Axis.horizontal,
+              physics: const BouncingScrollPhysics(),
+              padding: const EdgeInsets.symmetric(horizontal: 16),
+              itemCount: topSeries.length,
+              itemBuilder: (context, index) {
+                final s = topSeries[index];
+                return TopNumberCard.fromSeries(
+                  rank: index + 1,
+                  series: s,
+                  onTap: () => _onSeriesSelected(s.id, s.titleFr ?? s.title, s.posterPath),
+                );
+              },
+            ),
+          ),
+          const SizedBox(height: 24),
+        ],
+      );
+    }
+
+    // Fallback si pas de top5 séries : top5 vidéos
+    final top5Videos = ref.watch(top5VideosProvider);
+    if (top5Videos.isEmpty) return const SizedBox.shrink();
+
+    return Column(
+      crossAxisAlignment: CrossAxisAlignment.start,
+      children: [
+        _buildSectionHeader(l10n.top5Trending),
+        SizedBox(
+          height: 200,
+          child: ListView.builder(
+            scrollDirection: Axis.horizontal,
+            physics: const BouncingScrollPhysics(),
+            padding: const EdgeInsets.symmetric(horizontal: 16),
+            itemCount: top5Videos.length,
+            itemBuilder: (context, index) {
+              final vid = top5Videos[index];
+              return TopNumberCard.fromVideo(
+                rank: index + 1,
+                video: vid,
+                onTap: () => _onVideoSelected(vid, top5Videos),
+              );
+            },
+          ),
+        ),
+        const SizedBox(height: 24),
+      ],
+    );
+  }
+
+  /// Section Catalogue des Séries TV
+  Widget _buildSeriesCatalogSection(
+    AsyncValue<List<dynamic>> seriesListAsync,
+    AppLocalizations l10n,
+  ) {
     return seriesListAsync.when(
       data: (seriesList) {
         if (seriesList.isEmpty) return const SizedBox.shrink();
@@ -549,31 +468,25 @@ class _HomeScreenState extends ConsumerState<HomeScreen> {
 
                   return ListView.builder(
                     scrollDirection: Axis.horizontal,
+                    physics: const BouncingScrollPhysics(),
                     padding: const EdgeInsets.symmetric(horizontal: 16),
                     itemCount: seriesList.length,
                     itemBuilder: (context, index) {
                       final s = seriesList[index];
                       final posterUrl = ImageUtils.resolveUrl(s.posterPath ?? s.bannerPath, baseUrl);
 
-                      return GestureDetector(
-                        onTap: () {
-                          Navigator.push(
-                            context,
-                            MaterialPageRoute(
-                              builder: (_) => SeriesDetailScreen(
-                                seriesId: s.id,
-                                initialTitle: s.titleFr,
-                                initialPoster: s.posterPath,
-                              ),
-                            ),
-                          );
-                        },
+                      return TouchableScale(
+                        onTap: () => _onSeriesSelected(s.id, s.titleFr ?? s.title, s.posterPath),
                         child: Container(
                           width: 135,
                           margin: const EdgeInsets.only(right: 12),
                           decoration: BoxDecoration(
-                            color: AppTheme.netflixCard,
+                            color: AppTheme.darkSurface,
                             borderRadius: BorderRadius.circular(8),
+                            border: Border.all(
+                              color: Colors.white.withValues(alpha: 0.08),
+                              width: 1,
+                            ),
                             boxShadow: [
                               BoxShadow(
                                 color: Colors.black.withValues(alpha: 0.5),
@@ -591,15 +504,15 @@ class _HomeScreenState extends ConsumerState<HomeScreen> {
                                   CachedNetworkImage(
                                     imageUrl: posterUrl,
                                     fit: BoxFit.cover,
-                                    placeholder: (context, url) => Container(color: const Color(0xFF1F1F1F)),
+                                    placeholder: (context, url) => Container(color: AppTheme.darkSurfaceLight),
                                     errorWidget: (context, url, error) => Container(
-                                      color: const Color(0xFF1F1F1F),
+                                      color: AppTheme.darkSurfaceLight,
                                       child: const Icon(Icons.tv, size: 40, color: Colors.white24),
                                     ),
                                   )
                                 else
                                   Container(
-                                    color: const Color(0xFF1F1F1F),
+                                    color: AppTheme.darkSurfaceLight,
                                     child: const Icon(Icons.tv, size: 40, color: Colors.white24),
                                   ),
                                 Positioned.fill(
@@ -626,7 +539,7 @@ class _HomeScreenState extends ConsumerState<HomeScreen> {
                                     mainAxisSize: MainAxisSize.min,
                                     children: [
                                       Text(
-                                        s.titleFr,
+                                        s.titleFr ?? s.title,
                                         maxLines: 1,
                                         overflow: TextOverflow.ellipsis,
                                         style: const TextStyle(
@@ -635,13 +548,14 @@ class _HomeScreenState extends ConsumerState<HomeScreen> {
                                           fontWeight: FontWeight.bold,
                                         ),
                                       ),
-                                      Text(
-                                        '${s.seasonsCount} saison(s) · ${s.episodesCount} ép.',
-                                        style: const TextStyle(
-                                          color: Colors.white60,
-                                          fontSize: 10,
+                                      if (s.seasonsCount != null)
+                                        Text(
+                                          '${s.seasonsCount} saison(s) · ${s.episodesCount ?? 0} ép.',
+                                          style: const TextStyle(
+                                            color: Colors.white60,
+                                            fontSize: 10,
+                                          ),
                                         ),
-                                      ),
                                     ],
                                   ),
                                 ),
@@ -664,8 +578,39 @@ class _HomeScreenState extends ConsumerState<HomeScreen> {
     );
   }
 
-  /// Affiche principale Hero Banner
-  Widget _buildHeroBanner(VideoModel video, AppLocalizations l10n) {
+  /// Fallback par catégories si homeData.genres est vide
+  Widget _buildFallbackCategoriesSection() {
+    final categoriesAsync = ref.watch(categoriesProvider);
+
+    return categoriesAsync.when(
+      data: (categories) {
+        return Column(
+          children: categories.map((cat) {
+            return Consumer(
+              builder: (context, ref, _) {
+                final catVideos = ref.watch(videosByCategoryProvider(cat.name));
+                if (catVideos.isEmpty) return const SizedBox.shrink();
+
+                return Column(
+                  crossAxisAlignment: CrossAxisAlignment.start,
+                  children: [
+                    _buildSectionHeader('${cat.name} (${cat.count})'),
+                    _buildHorizontalVideoList(catVideos),
+                    const SizedBox(height: 24),
+                  ],
+                );
+              },
+            );
+          }).toList(),
+        );
+      },
+      loading: () => const SizedBox.shrink(),
+      error: (_, __) => const SizedBox.shrink(),
+    );
+  }
+
+  /// Bannière unique de secours si aucune série hero n'est disponible
+  Widget _buildSingleHeroBanner(VideoModel video, AppLocalizations l10n) {
     return FutureBuilder<String>(
       future: storageService.getServerUrl(),
       builder: (context, snapshot) {
@@ -675,7 +620,6 @@ class _HomeScreenState extends ConsumerState<HomeScreen> {
         return Stack(
           alignment: Alignment.bottomCenter,
           children: [
-            // Affiche en arrière-plan
             SizedBox(
               height: 440,
               width: double.infinity,
@@ -684,17 +628,15 @@ class _HomeScreenState extends ConsumerState<HomeScreen> {
                       imageUrl: thumbUrl,
                       fit: BoxFit.cover,
                       errorWidget: (context, url, error) =>
-                          Container(color: const Color(0xFF1F1F1F)),
+                          Container(color: AppTheme.darkSurface),
                     )
                   : Container(
-                      color: const Color(0xFF1F1F1F),
+                      color: AppTheme.darkSurface,
                       child: const Center(
                         child: Icon(Icons.movie, size: 100, color: Colors.white24),
                       ),
                     ),
             ),
-
-            // Dégradé noir vertical (du transparent au noir pur façon Netflix)
             Container(
               height: 440,
               decoration: const BoxDecoration(
@@ -702,7 +644,7 @@ class _HomeScreenState extends ConsumerState<HomeScreen> {
                   colors: [
                     Colors.transparent,
                     Colors.transparent,
-                    Color(0xCC000000),
+                    Color(0xCC09090C),
                     AppTheme.netflixBlack,
                   ],
                   stops: [0.0, 0.45, 0.75, 1.0],
@@ -711,14 +653,11 @@ class _HomeScreenState extends ConsumerState<HomeScreen> {
                 ),
               ),
             ),
-
-            // Métadonnées & Boutons centrés en bas de la bannière
             Padding(
               padding: const EdgeInsets.symmetric(horizontal: 20, vertical: 16),
               child: Column(
                 mainAxisSize: MainAxisSize.min,
                 children: [
-                  // Badge Catégorie
                   Container(
                     padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 4),
                     decoration: BoxDecoration(
@@ -736,8 +675,6 @@ class _HomeScreenState extends ConsumerState<HomeScreen> {
                     ),
                   ),
                   const SizedBox(height: 8),
-
-                  // Titre du contenu
                   Text(
                     video.title,
                     textAlign: TextAlign.center,
@@ -747,19 +684,15 @@ class _HomeScreenState extends ConsumerState<HomeScreen> {
                       color: Colors.white,
                       fontSize: 24,
                       fontWeight: FontWeight.bold,
-                      letterSpacing: 0.5,
                       shadows: [
                         Shadow(color: Colors.black, blurRadius: 10, offset: Offset(0, 2)),
                       ],
                     ),
                   ),
                   const SizedBox(height: 16),
-
-                  // Boutons d'action Hero
                   Row(
                     mainAxisAlignment: MainAxisAlignment.center,
                     children: [
-                      // Bouton Lecture blanc (Style Netflix)
                       ElevatedButton.icon(
                         onPressed: () {
                           final allVids = ref.read(videoListProvider).value ?? [];
@@ -776,23 +709,6 @@ class _HomeScreenState extends ConsumerState<HomeScreen> {
                           l10n.play,
                           style: const TextStyle(fontSize: 16, fontWeight: FontWeight.bold),
                         ),
-                      ),
-                      const SizedBox(width: 16),
-
-                      // Bouton Info / Détails
-                      OutlinedButton.icon(
-                        onPressed: () {
-                          final allVids = ref.read(videoListProvider).value ?? [];
-                          _onVideoSelected(video, allVids);
-                        },
-                        style: OutlinedButton.styleFrom(
-                          foregroundColor: Colors.white,
-                          side: const BorderSide(color: Colors.white54),
-                          padding: const EdgeInsets.symmetric(horizontal: 20, vertical: 12),
-                          shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(4)),
-                        ),
-                        icon: const Icon(Icons.info_outline, size: 22),
-                        label: Text(l10n.details),
                       ),
                     ],
                   ),

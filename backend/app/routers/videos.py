@@ -2,6 +2,7 @@
 Routeur pour les vidéos : liste, catégories, détails et miniatures.
 """
 import math
+from datetime import datetime, timedelta, timezone
 from pathlib import Path
 from typing import List, Optional
 from fastapi import APIRouter, Depends, HTTPException, Query, Request, status
@@ -12,7 +13,15 @@ from sqlalchemy.ext.asyncio import AsyncSession
 from app.config import settings
 from app.database import get_db
 from app.models import Favorite, User, Video, WatchHistory, Episode, Season, Series, Movie
-from app.schemas import CategoryItem, VideoListResponse, VideoResponse
+from app.schemas import (
+    CategoryItem,
+    HomeGenreSection,
+    HomeHeroItem,
+    HomeScreenResponse,
+    TopSeriesItem,
+    VideoListResponse,
+    VideoResponse,
+)
 from app.security import create_stream_token, decode_token, get_client_ip, get_current_active_user
 from app.services.stream_manager import stream_manager
 from app.services.stream_service import stream_service
@@ -518,6 +527,321 @@ async def list_public_series(
             "created_at": s.created_at,
         })
     return out
+
+
+async def enrich_videos_list(videos: List[Video], user_id: int, db: AsyncSession) -> List[VideoResponse]:
+    """Enrichit une liste de vidéos avec favoris, historique et posters associés."""
+    if not videos:
+        return []
+    video_ids = [v.id for v in videos]
+
+    # Favoris
+    fav_res = await db.execute(
+        select(Favorite.video_id).where(
+            Favorite.user_id == user_id,
+            Favorite.video_id.in_(video_ids),
+        )
+    )
+    user_fav_ids = set(fav_res.scalars().all())
+
+    # Historique de visionnage
+    user_history_map = {}
+    hist_res = await db.execute(
+        select(WatchHistory).where(
+            WatchHistory.user_id == user_id,
+            WatchHistory.video_id.in_(video_ids),
+        )
+    )
+    for h in hist_res.scalars().all():
+        user_history_map[h.video_id] = (h.position_seconds, h.completed)
+
+    # Récupérer les affiches des séries et films
+    poster_map = {}
+    ep_stmt = (
+        select(Episode.telegram_video_id, Episode.thumbnail_path, Series.poster_path)
+        .join(Season, Episode.season_id == Season.id)
+        .join(Series, Season.series_id == Series.id)
+        .where(Episode.telegram_video_id.in_(video_ids))
+    )
+    ep_res = await db.execute(ep_stmt)
+    for vid_id, ep_thumb, series_poster in ep_res.all():
+        if vid_id and (ep_thumb or series_poster):
+            poster_map[vid_id] = ep_thumb or series_poster
+
+    mv_stmt = select(Movie.telegram_video_id, Movie.poster_path).where(
+        Movie.telegram_video_id.in_(video_ids)
+    )
+    mv_res = await db.execute(mv_stmt)
+    for vid_id, mv_poster in mv_res.all():
+        if vid_id and mv_poster:
+            poster_map[vid_id] = mv_poster
+
+    out: List[VideoResponse] = []
+    for v in videos:
+        pos, completed = user_history_map.get(v.id, (0.0, False))
+        effective_thumb = v.thumbnail_path or poster_map.get(v.id) or f"/api/videos/{v.id}/thumbnail"
+        out.append(
+            VideoResponse(
+                id=v.id,
+                telegram_message_id=v.telegram_message_id,
+                title=v.title,
+                caption=v.caption,
+                category=v.category,
+                duration_seconds=v.duration_seconds,
+                file_size_bytes=v.file_size_bytes,
+                mime_type=v.mime_type,
+                thumbnail_path=effective_thumb,
+                file_name=v.file_name,
+                views_count=v.views_count,
+                telegram_date=v.telegram_date,
+                is_published=v.is_published,
+                media_item_id=v.media_item_id,
+                season_number=v.season_number,
+                episode_number=v.episode_number,
+                episode_title=v.episode_title,
+                is_favorite=(v.id in user_fav_ids),
+                watch_progress_seconds=pos,
+                is_completed=completed,
+            )
+        )
+    return out
+
+
+async def compute_top_series(
+    period: str,
+    limit: int,
+    db: AsyncSession,
+) -> List[dict]:
+    """Calcule le classement des séries les plus regardées sur une période donnée (ex: 7d)."""
+    cutoff = None
+    if period == "7d":
+        cutoff = datetime.now(timezone.utc) - timedelta(days=7)
+    elif period == "30d":
+        cutoff = datetime.now(timezone.utc) - timedelta(days=30)
+
+    # 1. Compte des lectures par série via WatchHistory et Episode
+    wh_stmt = (
+        select(Season.series_id, func.count(WatchHistory.id).label("watch_count"))
+        .join(Episode, Episode.telegram_video_id == WatchHistory.video_id)
+        .join(Season, Season.id == Episode.season_id)
+        .join(Series, Series.id == Season.series_id)
+        .where(Series.visibility == "published")
+    )
+    if cutoff:
+        wh_stmt = wh_stmt.where(WatchHistory.last_watched_at >= cutoff)
+    wh_stmt = wh_stmt.group_by(Season.series_id).order_by(desc("watch_count")).limit(limit)
+
+    wh_rows = (await db.execute(wh_stmt)).all()
+    top_series_ids = [row[0] for row in wh_rows if row[0] is not None]
+    views_map = {row[0]: row[1] for row in wh_rows if row[0] is not None}
+
+    # 2. Compléter si nécessaire avec les séries publiées les mieux notées / récentes
+    if len(top_series_ids) < limit:
+        needed = limit - len(top_series_ids)
+        suppl_stmt = select(Series.id).where(
+            Series.visibility == "published",
+            Series.id.not_in(top_series_ids) if top_series_ids else True,
+        ).order_by(desc(Series.rating), desc(Series.created_at)).limit(needed)
+        suppl_res = (await db.execute(suppl_stmt)).scalars().all()
+        top_series_ids.extend(suppl_res)
+
+    if not top_series_ids:
+        fallback_stmt = select(Series.id).order_by(desc(Series.created_at)).limit(limit)
+        top_series_ids = (await db.execute(fallback_stmt)).scalars().all()
+
+    # 3. Charger les séries dans l'ordre du classement
+    out = []
+    for rank, sid in enumerate(top_series_ids, start=1):
+        s = (await db.execute(select(Series).where(Series.id == sid))).scalar_one_or_none()
+        if not s:
+            continue
+
+        seasons = (await db.execute(select(Season).where(Season.series_id == s.id))).scalars().all()
+        season_ids = [sn.id for sn in seasons]
+        ep_count = 0
+        if season_ids:
+            ep_count = (await db.execute(
+                select(func.count(Episode.id)).where(Episode.season_id.in_(season_ids))
+            )).scalar_one() or 0
+
+        first_ep_stmt = (
+            select(Episode, Video)
+            .join(Season, Episode.season_id == Season.id)
+            .outerjoin(Video, Episode.telegram_video_id == Video.id)
+            .where(Season.series_id == s.id)
+            .order_by(Season.number, Episode.number)
+            .limit(1)
+        )
+        ep_row = (await db.execute(first_ep_stmt)).first()
+        first_vid = ep_row[1].id if ep_row and ep_row[1] else None
+
+        out.append({
+            "id": s.id,
+            "rank": rank,
+            "title": s.title_fr or s.title_en or s.title_ar,
+            "title_fr": s.title_fr,
+            "title_ar": s.title_ar,
+            "title_en": s.title_en,
+            "synopsis": s.synopsis_fr or s.synopsis_ar or s.synopsis_en or "",
+            "poster_path": s.poster_path,
+            "banner_path": s.banner_path or s.poster_path,
+            "year": s.year_start,
+            "rating": s.rating,
+            "seasons_count": len(seasons),
+            "episodes_count": ep_count,
+            "views_last_7d": views_map.get(s.id, 0),
+            "first_video_id": first_vid,
+        })
+
+    return out
+
+
+@router.get("/series/top", response_model=List[TopSeriesItem])
+async def get_top_series(
+    period: str = Query("7d", description="Période : 7d, 30d, all"),
+    limit: int = Query(5, ge=1, le=20, description="Nombre max de séries"),
+    current_user: User = Depends(get_current_active_user),
+    db: AsyncSession = Depends(get_db),
+):
+    """Classement Top 5 des séries par lectures des 7 derniers jours."""
+    return await compute_top_series(period=period, limit=limit, db=db)
+
+
+@router.get("/home", response_model=HomeScreenResponse)
+async def get_home_content(
+    current_user: User = Depends(get_current_active_user),
+    db: AsyncSession = Depends(get_db),
+):
+    """
+    Fournit l'ensemble des sections de la page d'accueil :
+    - hero (slider des séries en vedette)
+    - top5 (Top 5 des séries par nombre de lectures sur 7 jours)
+    - continue_watching (reprise de lecture de l'utilisateur)
+    - new / new_releases (derniers contenus publiés)
+    - trending (vidéos les plus populaires)
+    - genres (catégories avec leurs vidéos)
+    """
+    # 1. Hero
+    hero_stmt = (
+        select(Series)
+        .where(Series.visibility == "published")
+        .order_by(desc(Series.is_featured), desc(Series.created_at))
+        .limit(10)
+    )
+    hero_series = (await db.execute(hero_stmt)).scalars().all()
+    if not hero_series:
+        hero_stmt2 = select(Series).order_by(desc(Series.created_at)).limit(10)
+        hero_series = (await db.execute(hero_stmt2)).scalars().all()
+
+    hero_items = []
+    for s in hero_series:
+        seasons = (await db.execute(select(Season.id).where(Season.series_id == s.id))).scalars().all()
+        ep_count = 0
+        if seasons:
+            ep_count = (await db.execute(select(func.count(Episode.id)).where(Episode.season_id.in_(seasons)))).scalar_one() or 0
+
+        first_ep_stmt = (
+            select(Episode, Video)
+            .join(Season, Episode.season_id == Season.id)
+            .outerjoin(Video, Episode.telegram_video_id == Video.id)
+            .where(Season.series_id == s.id)
+            .order_by(Season.number, Episode.number)
+            .limit(1)
+        )
+        ep_row = (await db.execute(first_ep_stmt)).first()
+        first_vid = ep_row[1].id if ep_row and ep_row[1] else None
+
+        hero_items.append({
+            "id": s.id,
+            "title": s.title_fr or s.title_en or s.title_ar,
+            "title_fr": s.title_fr,
+            "title_ar": s.title_ar,
+            "title_en": s.title_en,
+            "synopsis": s.synopsis_fr or s.synopsis_ar or s.synopsis_en or "",
+            "poster_path": s.poster_path,
+            "banner_path": s.banner_path or s.poster_path,
+            "year": s.year_start,
+            "rating": s.rating,
+            "category": "Micro-série" if ep_count > 0 else "Série",
+            "episodes_count": ep_count,
+            "first_video_id": first_vid,
+        })
+
+    # 2. Top 5
+    top5_series = await compute_top_series(period="7d", limit=5, db=db)
+
+    # 3. Continuer la lecture
+    cw_stmt = (
+        select(Video)
+        .join(WatchHistory, WatchHistory.video_id == Video.id)
+        .where(
+            WatchHistory.user_id == current_user.id,
+            WatchHistory.position_seconds > 0,
+            WatchHistory.completed == False,
+            Video.is_published == True,
+        )
+        .order_by(desc(WatchHistory.last_watched_at))
+        .limit(15)
+    )
+    cw_videos = (await db.execute(cw_stmt)).scalars().all()
+    continue_watching = await enrich_videos_list(cw_videos, current_user.id, db)
+
+    # 4. Nouveautés
+    new_stmt = (
+        select(Video)
+        .where(Video.is_published == True)
+        .order_by(desc(Video.telegram_date), desc(Video.id))
+        .limit(15)
+    )
+    new_videos = (await db.execute(new_stmt)).scalars().all()
+    new_releases = await enrich_videos_list(new_videos, current_user.id, db)
+
+    # 5. Tendances
+    trending_stmt = (
+        select(Video)
+        .where(Video.is_published == True)
+        .order_by(desc(Video.views_count), desc(Video.id))
+        .limit(15)
+    )
+    trending_videos = (await db.execute(trending_stmt)).scalars().all()
+    trending = await enrich_videos_list(trending_videos, current_user.id, db)
+
+    # 6. Catégories / Genres
+    cat_stmt = (
+        select(Video.category, func.count(Video.id).label("count"))
+        .where(Video.is_published == True)
+        .group_by(Video.category)
+        .order_by(desc("count"))
+        .limit(8)
+    )
+    cat_rows = (await db.execute(cat_stmt)).all()
+
+    genres = []
+    for cat_name, cat_count in cat_rows:
+        vids_stmt = (
+            select(Video)
+            .where(Video.is_published == True, Video.category == cat_name)
+            .order_by(desc(Video.views_count), desc(Video.id))
+            .limit(10)
+        )
+        cat_vids = (await db.execute(vids_stmt)).scalars().all()
+        enriched_cat_vids = await enrich_videos_list(cat_vids, current_user.id, db)
+        if enriched_cat_vids:
+            genres.append({
+                "name": cat_name,
+                "count": cat_count,
+                "items": enriched_cat_vids,
+            })
+
+    return {
+        "hero": hero_items,
+        "top5": top5_series,
+        "continue_watching": continue_watching,
+        "new": new_releases,
+        "new_releases": new_releases,
+        "trending": trending,
+        "genres": genres,
+    }
 
 
 @router.get("/series/{series_id}")

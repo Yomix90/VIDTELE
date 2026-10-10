@@ -14,6 +14,11 @@ class ApiConstants {
   static const String me = '/api/auth/me';
 
   // Endpoints Vidéos & Séries
+  static const String home = '/api/home';
+  static const String topSeries = '/api/series/top';
+  static String topSeriesWithParams({String period = '7d', int limit = 5}) =>
+      '/api/series/top?period=$period&limit=$limit';
+  static const String feed = '/api/feed';
   static const String videos = '/api/videos';
   static const String series = '/api/videos/series';
   static String seriesDetail(int id) => '/api/videos/series/$id';

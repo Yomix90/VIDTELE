@@ -106,6 +106,7 @@ class AppLocalizations {
       : (isEnglish
           ? 'Search movies, series, hashtags...'
           : 'Rechercher un film, une série, un hashtag...');
+  String get search => isArabic ? 'بحث' : (isEnglish ? 'Search' : 'Recherche');
   String get searchResultsTitle => isArabic
       ? 'نتائج البحث'
       : (isEnglish ? 'Search Results' : 'Résultats de recherche');
@@ -124,6 +125,18 @@ class AppLocalizations {
       : (isEnglish
           ? 'Top 5 Most Watched Videos'
           : 'Top 5 des Vidéos les plus regardées');
+  String get top5Series => isArabic
+      ? 'أفضل 5 مسلسلات'
+      : (isEnglish ? 'Top 5 Series' : 'Top 5 des Séries');
+  String get newReleases => isArabic
+      ? 'أحدث الإصدارات'
+      : (isEnglish ? 'New Releases' : 'Nouveautés');
+  String get trendingNow => isArabic
+      ? 'الأكثر رواجاً'
+      : (isEnglish ? 'Trending Now' : 'Tendances du moment');
+  String get recommendedForYou => isArabic
+      ? 'موصى به لك'
+      : (isEnglish ? 'Recommended for you' : 'Recommandé pour vous');
   String get refresh => isArabic ? 'تحديث' : (isEnglish ? 'Refresh' : 'Rafraîchir');
   String get retry => isArabic ? 'إعادة المحاولة' : (isEnglish ? 'Retry' : 'Réessayer');
   String get catalogLoadError => isArabic

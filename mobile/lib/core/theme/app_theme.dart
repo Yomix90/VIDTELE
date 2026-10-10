@@ -19,6 +19,12 @@ class AppTheme {
   static const Color netflixGold = Color(0xFFFFB800);
   static const Color netflixBorder = Color(0x1AFFFFFF);
 
+  // Alias sémantiques pour les vues et cartes
+  static const Color darkBackground = netflixBlack;
+  static const Color darkSurface = netflixDarkGray;
+  static const Color darkSurfaceLight = netflixCard;
+  static const Color darkCard = netflixCard;
+
   /// Génère le thème sombre avec typographie adaptée à la langue (RTL / LTR)
   static ThemeData getDarkTheme([Locale? locale]) {
     final isArabic = locale?.languageCode == 'ar';

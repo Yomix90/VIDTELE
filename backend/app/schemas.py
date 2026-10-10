@@ -407,6 +407,56 @@ class SeriesDetailResponse(SeriesResponse):
     seasons: list[SeasonDetailResponse] = []
 
 
+class TopSeriesItem(BaseModel):
+    id: int
+    rank: int
+    title: str
+    title_fr: str
+    title_ar: Optional[str] = None
+    title_en: Optional[str] = None
+    synopsis: Optional[str] = None
+    poster_path: Optional[str] = None
+    banner_path: Optional[str] = None
+    year: Optional[int] = None
+    rating: Optional[float] = None
+    seasons_count: int = 0
+    episodes_count: int = 0
+    views_last_7d: int = 0
+    first_video_id: Optional[int] = None
+
+
+class HomeHeroItem(BaseModel):
+    id: int
+    title: str
+    title_fr: str
+    title_ar: Optional[str] = None
+    title_en: Optional[str] = None
+    synopsis: Optional[str] = None
+    poster_path: Optional[str] = None
+    banner_path: Optional[str] = None
+    year: Optional[int] = None
+    rating: Optional[float] = None
+    category: str = "Série"
+    episodes_count: int = 0
+    first_video_id: Optional[int] = None
+
+
+class HomeGenreSection(BaseModel):
+    name: str
+    count: int = 0
+    items: List[VideoResponse] = []
+
+
+class HomeScreenResponse(BaseModel):
+    hero: List[HomeHeroItem] = []
+    top5: List[TopSeriesItem] = []
+    continue_watching: List[VideoResponse] = []
+    new: List[VideoResponse] = []
+    new_releases: List[VideoResponse] = []
+    trending: List[VideoResponse] = []
+    genres: List[HomeGenreSection] = []
+
+
 class SeriesCreate(BaseModel):
     title_fr: str = Field(..., min_length=1, max_length=255)
     title_ar: Optional[str] = None

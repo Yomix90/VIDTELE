@@ -2,6 +2,7 @@ import 'package:flutter_riverpod/flutter_riverpod.dart';
 import '../core/api/api_client.dart';
 import '../core/constants/api_constants.dart';
 import '../models/category_model.dart';
+import '../models/home_model.dart';
 import '../models/series_detail_model.dart';
 import '../models/video_model.dart';
 
@@ -172,6 +173,34 @@ final seriesDetailProvider = FutureProvider.family.autoDispose<SeriesDetailModel
     }
   } catch (_) {}
   return null;
+});
+
+/// Provider principal pour les données complètes de la page d'accueil (/api/home)
+final homeDataProvider = FutureProvider.autoDispose<HomeScreenData>((ref) async {
+  try {
+    final res = await apiClient.dio.get(ApiConstants.home);
+    if (res.statusCode == 200 && res.data != null) {
+      return HomeScreenData.fromJson(res.data);
+    }
+  } catch (_) {}
+  try {
+    final res = await apiClient.dio.get('/api/videos/home');
+    if (res.statusCode == 200 && res.data != null) {
+      return HomeScreenData.fromJson(res.data);
+    }
+  } catch (_) {}
+  return HomeScreenData();
+});
+
+/// Provider pour le Top 5 des séries par lectures des 7 derniers jours (/api/series/top)
+final topSeriesProvider = FutureProvider.autoDispose<List<TopSeriesModel>>((ref) async {
+  try {
+    final res = await apiClient.dio.get(ApiConstants.topSeriesWithParams(period: '7d', limit: 5));
+    if (res.statusCode == 200 && res.data is List) {
+      return (res.data as List).map((e) => TopSeriesModel.fromJson(e)).toList();
+    }
+  } catch (_) {}
+  return [];
 });
 
 

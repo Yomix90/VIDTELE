@@ -11,11 +11,13 @@ from fastapi.middleware.cors import CORSMiddleware
 from sqlalchemy import select
 from sqlalchemy.ext.asyncio import AsyncSession
 
+from typing import List, Optional
 from app.config import settings
 from app.database import AsyncSessionLocal, get_db, init_db
 from app.models import InviteCode, User
 from app.routers import admin, admin_web, auth, library, videos
-from app.security import hash_password
+from app.schemas import HomeScreenResponse, TopSeriesItem
+from app.security import get_current_active_user, hash_password
 from app.services.sync_service import sync_service
 from app.telegram_client import telegram_manager
 
@@ -152,6 +154,26 @@ async def health_check():
         "app": "Atlas Play",
         "timestamp": datetime.now(timezone.utc).isoformat(),
     }
+
+
+@app.get("/api/home", response_model=HomeScreenResponse, tags=["Accueil"])
+async def get_home_alias(
+    current_user: User = Depends(get_current_active_user),
+    db: AsyncSession = Depends(get_db),
+):
+    """Alias racine pour le chargement complet de l'écran d'accueil."""
+    return await videos.get_home_content(current_user=current_user, db=db)
+
+
+@app.get("/api/series/top", response_model=List[TopSeriesItem], tags=["Séries"])
+async def get_series_top_alias(
+    period: str = "7d",
+    limit: int = 5,
+    current_user: User = Depends(get_current_active_user),
+    db: AsyncSession = Depends(get_db),
+):
+    """Alias racine pour le classement Top des séries."""
+    return await videos.get_top_series(period=period, limit=limit, current_user=current_user, db=db)
 
 
 @app.get("/api/app/version", tags=["Application Mobile"])
