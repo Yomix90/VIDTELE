@@ -403,6 +403,34 @@ class TelegramManager:
         )
         return msg
 
+    async def delete_telegram_messages(self, message_ids: List[int]) -> bool:
+        """
+        Supprime définitivement un ou plusieurs messages (vidéos) directement sur le canal Telegram MTProto.
+        """
+        if not message_ids:
+            return True
+
+        if (not self._client or not self._client.is_connected()) and self.is_configured() and self.session_exists():
+            await self.start()
+
+        if not self._client or not self._client.is_connected():
+            logger.warning("Impossible de supprimer sur Telegram : client non connecté.")
+            return False
+
+        channel = await self.get_channel_entity()
+        if not channel:
+            logger.warning("Impossible de supprimer sur Telegram : canal introuvable.")
+            return False
+
+        try:
+            await self._client.delete_messages(channel, message_ids)
+            logger.info(f"Messages Telegram {message_ids} supprimés avec succès du canal.")
+            return True
+        except Exception as e:
+            logger.error(f"Erreur lors de la suppression des messages sur Telegram : {e}")
+            return False
+
+
     # -----------------------------------------------------------------
     # Gestion Multi-Comptes & Outils de Diagnostic / Authentification
     # -----------------------------------------------------------------

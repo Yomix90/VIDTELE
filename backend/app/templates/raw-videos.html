@@ -31,6 +31,10 @@
   </div>
   <div class="d-flex align-items-center gap-2">
     <button class="btn btn-outline-secondary btn-sm" onclick="deselectAllBatch()">Tout désélectionner</button>
+    <button class="btn btn-outline-danger btn-sm d-flex align-items-center gap-1 shadow-sm" onclick="confirmBatchDeleteVideos()">
+      <i class="bi bi-trash3-fill"></i>
+      <span>Supprimer la sélection</span>
+    </button>
     <button class="btn btn-danger btn-sm d-flex align-items-center gap-1 shadow-sm" onclick="openBatchSeriesModal()">
       <i class="bi bi-magic"></i>
       <span>Créer une Série par Lots</span>
@@ -98,9 +102,13 @@
               <button class="btn btn-sm btn-outline-warning py-1 px-2" title="Détecter intelligemment" onclick="autoDetectVideo({{ v.id }})">
                 <i class="bi bi-magic"></i>
               </button>
+              <button class="btn btn-sm btn-outline-danger py-1 px-2" title="Supprimer (Base & Telegram)" onclick="confirmDeleteSingleVideo({{ v.id }}, '{{ v.title|replace('\'', '\\\'') }}')">
+                <i class="bi bi-trash3"></i>
+              </button>
             </div>
           </td>
         </tr>
+
         {% else %}
         <tr>
           <td colspan="8" class="text-center text-muted py-5">
@@ -523,6 +531,61 @@ async function uploadImageToServer(fileInputId, targetInputId) {
     showToast('Erreur d\'upload image', 'error');
   }
 }
+
+// 6. Suppression Unitaire d'une Vidéo (Base + Telegram)
+async function confirmDeleteSingleVideo(videoId, title) {
+  if (!confirm(`Supprimer définitivement la vidéo "${title}" ?\n\nAttention : le fichier sera également supprimé du canal privé Telegram et de la base de données.`)) {
+    return;
+  }
+
+  showToast('Suppression en cours sur Telegram et la base...', 'info');
+  try {
+    const res = await fetch(`/api/admin/raw-videos/${videoId}?delete_from_telegram=true`, {
+      method: 'DELETE',
+    });
+    const data = await res.json();
+    if (res.ok) {
+      showToast(data.message || 'Vidéo supprimée avec succès !', 'success');
+      setTimeout(() => location.reload(), 800);
+    } else {
+      showToast(data.detail || 'Erreur lors de la suppression', 'error');
+    }
+  } catch (e) {
+    showToast('Erreur serveur lors de la suppression', 'error');
+  }
+}
+
+// 7. Suppression par Lots (Base + Telegram)
+async function confirmBatchDeleteVideos() {
+  const selected = Array.from(document.querySelectorAll('.batch-video-checkbox:checked')).map(cb => parseInt(cb.value));
+  if (selected.length === 0) {
+    showToast('Veuillez sélectionner au moins une vidéo à supprimer.', 'warning');
+    return;
+  }
+
+  if (!confirm(`Supprimer définitivement ${selected.length} vidéo(s) sélectionnée(s) ?\n\nLes fichiers seront définitivement effacés de votre canal privé Telegram et retirés de la base de données.`)) {
+    return;
+  }
+
+  showToast(`Suppression de ${selected.length} vidéo(s) sur Telegram et la base...`, 'info');
+  try {
+    const res = await fetch('/api/admin/raw-videos/batch-delete', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ video_ids: selected, delete_from_telegram: true })
+    });
+    const data = await res.json();
+    if (res.ok && data.success) {
+      showToast(data.message || 'Vidéos supprimées avec succès !', 'success');
+      setTimeout(() => location.reload(), 1000);
+    } else {
+      showToast(data.detail || 'Erreur lors de la suppression par lot', 'error');
+    }
+  } catch (e) {
+    showToast('Erreur de requête', 'error');
+  }
+}
 </script>
 {% endblock %}
+
 

@@ -18,6 +18,7 @@ from app.schemas import (
     AppUpdateConfig,
     AppUpdateInfo,
     AdminStatsResponse,
+    BatchDeleteVideosRequest,
     BatchSeriesCreate,
     CacheStats,
     EpisodeAssignRequest,
@@ -2223,4 +2224,104 @@ async def translate_with_gemini(
         content_type=data.content_type,
     )
     return res
+
+
+# =============================================================
+# 18. Suppression Unitaire et par Lots de Vidéos Brutes (Base & Telegram)
+# =============================================================
+
+@router.delete("/raw-videos/{video_id}", response_model=MessageResponse)
+async def delete_single_raw_video(
+    video_id: int,
+    delete_from_telegram: bool = Query(True, description="Supprimer également le fichier sur le canal Telegram"),
+    current_admin: User = Depends(get_current_admin),
+    db: AsyncSession = Depends(get_db),
+):
+    """
+    Supprime une vidéo brute de la base de données Atlas Play, détache ses éventuelles
+    liaisons (épisode / film), vide son cache local et la supprime directement sur le canal Telegram.
+    """
+    video = (await db.execute(select(Video).where(Video.id == video_id))).scalar_one_or_none()
+    if not video:
+        raise HTTPException(status_code=404, detail="Vidéo introuvable")
+
+    # 1. Détacher les épisodes ou films pointant vers cette vidéo
+    episodes = (await db.execute(select(Episode).where(Episode.telegram_video_id == video.id))).scalars().all()
+    for ep in episodes:
+        ep.telegram_video_id = None
+
+    movies = (await db.execute(select(Movie).where(Movie.telegram_video_id == video.id))).scalars().all()
+    for m in movies:
+        m.telegram_video_id = None
+
+    # 2. Supprimer sur le canal Telegram si demandé
+    deleted_on_telegram = False
+    if delete_from_telegram and video.telegram_message_id:
+        deleted_on_telegram = await telegram_manager.delete_telegram_messages([video.telegram_message_id])
+
+    # 3. Supprimer du cache local disque si présent
+    try:
+        cache_service.purge_cache()
+    except Exception:
+        pass
+
+    # 4. Supprimer de la base de données
+    await db.delete(video)
+    await db.commit()
+
+    tg_status = " et sur le canal Telegram" if deleted_on_telegram else ""
+    return MessageResponse(message=f"Vidéo #{video_id} supprimée avec succès de la base{tg_status}.")
+
+
+@router.post("/raw-videos/batch-delete")
+async def batch_delete_raw_videos(
+    data: BatchDeleteVideosRequest,
+    current_admin: User = Depends(get_current_admin),
+    db: AsyncSession = Depends(get_db),
+):
+    """
+    Supprime une sélection de vidéos brutes de la base de données Atlas Play
+    et supprime définitivement tous les messages correspondants sur le canal Telegram.
+    """
+    if not data.video_ids:
+        raise HTTPException(status_code=400, detail="Veuillez sélectionner au moins une vidéo.")
+
+    stmt = select(Video).where(Video.id.in_(data.video_ids))
+    videos = (await db.execute(stmt)).scalars().all()
+    if not videos:
+        raise HTTPException(status_code=404, detail="Aucune vidéo trouvée pour ces identifiants.")
+
+    # Récupérer les identifiants de messages Telegram
+    tg_msg_ids = [v.telegram_message_id for v in videos if v.telegram_message_id]
+    v_ids = [v.id for v in videos]
+
+    # Détacher les épisodes et films rattachés
+    eps = (await db.execute(select(Episode).where(Episode.telegram_video_id.in_(v_ids)))).scalars().all()
+    for ep in eps:
+        ep.telegram_video_id = None
+
+    movies = (await db.execute(select(Movie).where(Movie.telegram_video_id.in_(v_ids)))).scalars().all()
+    for m in movies:
+        m.telegram_video_id = None
+
+    # Supprimer sur Telegram
+    deleted_count_tg = 0
+    if data.delete_from_telegram and tg_msg_ids:
+        ok = await telegram_manager.delete_telegram_messages(tg_msg_ids)
+        if ok:
+            deleted_count_tg = len(tg_msg_ids)
+
+    # Supprimer de la base de données
+    for v in videos:
+        await db.delete(v)
+
+    await db.commit()
+
+    return {
+        "success": True,
+        "deleted_count": len(videos),
+        "deleted_from_telegram": deleted_count_tg,
+        "message": f"{len(videos)} vidéo(s) supprimée(s) avec succès de la base et {deleted_count_tg} message(s) supprimé(s) sur Telegram !",
+    }
+
 

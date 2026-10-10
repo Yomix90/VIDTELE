@@ -605,3 +605,8 @@ class GeminiConfigRequest(BaseModel):
     model: Optional[str] = None
 
 
+class BatchDeleteVideosRequest(BaseModel):
+    video_ids: List[int]
+    delete_from_telegram: bool = True
+
+
