@@ -302,7 +302,7 @@ async def get_video_thumbnail(video_id: int, db: AsyncSession = Depends(get_db))
     )
 
 
-@router.get("/{video_id}/stream-token")
+@router.api_route("/{video_id}/stream-token", methods=["GET", "POST"])
 async def get_stream_token(
     video_id: int,
     current_user: User = Depends(get_current_active_user),

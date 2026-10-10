@@ -134,7 +134,7 @@ void main() {
       expect(manager.activePlayerId, isNull);
     });
 
-    test('AppLifecycleState.inactive (appel entrant / notification) coupe immédiatement le son', () async {
+    test('AppLifecycleState.inactive (notification ou overlay système) maintient la lecture au premier plan', () async {
       manager.registerPlayer(
         id: 'player_1',
         controller: controller1,
@@ -143,11 +143,32 @@ void main() {
       await manager.play('player_1');
       expect(controller1.isPlayingState, isTrue);
 
-      // Simulation d'un appel entrant ou notification modale système
+      // Simulation d'une notification push ou réglage du volume système
       manager.didChangeAppLifecycleState(AppLifecycleState.inactive);
 
+      // La lecture reste active au premier plan
+      expect(controller1.isPlayingState, isTrue);
+      expect(manager.activePlayerId, equals('player_1'));
+    });
+
+    test('AppLifecycleState.paused puis resumed reprend la lecture automatiquement', () async {
+      manager.registerPlayer(
+        id: 'player_1',
+        controller: controller1,
+      );
+
+      await manager.play('player_1');
+      expect(controller1.isPlayingState, isTrue);
+
+      // Passage en arrière-plan
+      manager.didChangeAppLifecycleState(AppLifecycleState.paused);
       expect(controller1.isPlayingState, isFalse);
-      expect(manager.activePlayerId, isNull);
+
+      // Retour au premier plan
+      manager.didChangeAppLifecycleState(AppLifecycleState.resumed);
+      await Future.delayed(Duration.zero);
+      expect(controller1.isPlayingState, isTrue);
+      expect(manager.activePlayerId, equals('player_1'));
     });
 
     test('AppLifecycleState.hidden (écran verrouillé) coupe immédiatement le son', () async {
