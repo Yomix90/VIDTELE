@@ -59,7 +59,7 @@ class SyncService:
         return title, category, clean_text
 
     def _is_video_message(self, message) -> bool:
-        """Vérifie si le message contient une vidéo valide."""
+        """Vérifie si le message contient une vidéo valide (MP4, MKV, WebM, TS, AVI, etc.)."""
         if not message or not message.media:
             return False
 
@@ -67,8 +67,16 @@ class SyncService:
             return True
 
         if getattr(message, "document", None):
-            mime = getattr(message.document, "mime_type", "") or ""
-            if mime.startswith("video/"):
+            mime = (getattr(message.document, "mime_type", "") or "").lower()
+            if mime.startswith("video/") or mime in ["application/vnd.apple.mpegurl", "application/x-mpegurl"]:
+                return True
+
+            # Vérification par extension de fichier (ex: .ts, .m2ts, .mkv, .mp4, .webm)
+            fname = getattr(message.file, "name", "") or ""
+            video_extensions = (
+                ".mp4", ".mkv", ".ts", ".m2ts", ".webm", ".avi", ".mov", ".flv", ".wmv", ".m4v"
+            )
+            if fname.lower().endswith(video_extensions):
                 return True
 
         return False
@@ -87,8 +95,19 @@ class SyncService:
                     break
 
         file_size = getattr(message.file, "size", 0) or 0
-        mime_type = getattr(message.file, "mime_type", "video/mp4") or "video/mp4"
+        mime_type = getattr(message.file, "mime_type", None)
         file_name = getattr(message.file, "name", None)
+
+        # Si le mime type est générique ou absent pour un fichier .ts, lui assigner le bon type MIME vidéo
+        if not mime_type or mime_type == "application/octet-stream":
+            if file_name and file_name.lower().endswith((".ts", ".m2ts")):
+                mime_type = "video/mp2t"
+            elif file_name and file_name.lower().endswith(".mkv"):
+                mime_type = "video/x-matroska"
+            elif file_name and file_name.lower().endswith(".webm"):
+                mime_type = "video/webm"
+            else:
+                mime_type = "video/mp4"
         raw_caption = getattr(message, "message", "")
 
         default_name = file_name or f"Vidéo #{message.id}"

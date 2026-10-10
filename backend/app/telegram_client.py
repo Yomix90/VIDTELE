@@ -401,7 +401,7 @@ class TelegramManager:
                 DocumentAttributeFilename(file_name=file_name),
             ],
         )
-        return msg
+        return {"success": True, "message": msg}
 
     async def delete_telegram_messages(self, message_ids: List[int]) -> bool:
         """

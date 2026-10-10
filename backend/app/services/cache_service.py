@@ -20,31 +20,38 @@ class CacheService:
         self.cache_dir.mkdir(parents=True, exist_ok=True)
         self._lock = asyncio.Lock()
 
-    def get_video_path(self, telegram_message_id: int) -> Path:
-        """Retourne le chemin cible du fichier vidéo en cache."""
-        return self.cache_dir / f"video_{telegram_message_id}.mp4"
+    def get_video_path(self, telegram_message_id: int, extension: str = "mp4") -> Path:
+        """Retourne le chemin cible du fichier vidéo en cache en préservant l'extension ou en détectant un fichier existant."""
+        clean_ext = extension.lstrip(".") if extension else "mp4"
+        # Si un fichier existe déjà sous une autre extension (ex: .ts ou .mp4), le retourner
+        for candidate in self.cache_dir.glob(f"video_{telegram_message_id}.*"):
+            if candidate.is_file() and candidate.suffix != ".tmp":
+                return candidate
+        return self.cache_dir / f"video_{telegram_message_id}.{clean_ext}"
 
     def is_cached(self, telegram_message_id: int) -> bool:
-        """Vérifie si la vidéo complète est disponible sur le disque."""
-        path = self.get_video_path(telegram_message_id)
-        return path.exists() and path.stat().st_size > 0
+        """Vérifie si la vidéo complète est disponible sur le disque (quelle que soit son extension)."""
+        for candidate in self.cache_dir.glob(f"video_{telegram_message_id}.*"):
+            if candidate.is_file() and candidate.suffix != ".tmp" and candidate.stat().st_size > 0:
+                return True
+        return False
 
     def touch(self, telegram_message_id: int) -> None:
         """Met à jour le temps de dernier accès (atime) pour l'algorithme LRU."""
-        path = self.get_video_path(telegram_message_id)
-        if path.exists():
-            try:
-                os.utime(path, None)
-            except Exception as e:
-                logger.warning(f"Impossible de mettre à jour le timestamp de {path}: {e}")
+        for path in self.cache_dir.glob(f"video_{telegram_message_id}.*"):
+            if path.is_file() and path.suffix != ".tmp":
+                try:
+                    os.utime(path, None)
+                except Exception as e:
+                    logger.warning(f"Impossible de mettre à jour le timestamp de {path}: {e}")
 
     def get_cache_stats(self) -> Dict[str, float]:
         """Retourne les métriques d'utilisation du cache disque."""
         total_bytes = 0
         file_count = 0
 
-        for file in self.cache_dir.glob("video_*.mp4"):
-            if file.is_file():
+        for file in self.cache_dir.glob("video_*.*"):
+            if file.is_file() and file.suffix != ".tmp":
                 total_bytes += file.stat().st_size
                 file_count += 1
 
@@ -82,7 +89,7 @@ class CacheService:
             )
 
             # Lister tous les fichiers vidéo avec leur date de dernier accès
-            files: List[Path] = [f for f in self.cache_dir.glob("video_*.mp4") if f.is_file()]
+            files: List[Path] = [f for f in self.cache_dir.glob("video_*.*") if f.is_file() and f.suffix != ".tmp"]
             # Trier par atime (le plus ancien en premier)
             files.sort(key=lambda f: f.stat().st_atime)
 
@@ -100,7 +107,7 @@ class CacheService:
     def clear_all(self) -> int:
         """Supprime tous les fichiers du cache disque (pour maintenance admin)."""
         deleted_count = 0
-        for file in self.cache_dir.glob("*.mp4"):
+        for file in self.cache_dir.glob("video_*.*"):
             try:
                 file.unlink()
                 deleted_count += 1

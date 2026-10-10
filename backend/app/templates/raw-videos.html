@@ -136,9 +136,9 @@
       <div class="modal-body">
         <form id="formDirectVideoUpload" onsubmit="submitDirectVideoUpload(event)">
           <div class="mb-3">
-            <label class="form-label small fw-semibold">Fichier Vidéo (MP4, MKV, WebM, AVI) *</label>
-            <input type="file" id="directVideoFile" class="form-control" accept="video/*" required>
-            <div class="text-muted" style="font-size: 0.75rem;">Le fichier sera téléversé sur votre canal privé Telegram avec activation native du streaming vidéo.</div>
+            <label class="form-label small fw-semibold">Fichier Vidéo (MP4, MKV, TS, M2TS, WebM, AVI) *</label>
+            <input type="file" id="directVideoFile" class="form-control" accept="video/*,.ts,.m2ts,.mkv,.mp4,.webm" required>
+            <div class="text-muted" style="font-size: 0.75rem;">Le fichier (y compris les flux MPEG Transport Stream .ts) sera téléversé sur votre canal privé Telegram avec activation native du streaming vidéo.</div>
           </div>
           <div class="mb-3">
             <label class="form-label small">Titre personnalisé (optionnel)</label>

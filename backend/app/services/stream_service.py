@@ -43,7 +43,18 @@ class StreamService:
         Garantit que la vidéo est présente sur le disque local.
         Si absente, la télécharge depuis Telegram par morceaux avec gestion de concurrence.
         """
-        cached_path = cache_service.get_video_path(video.telegram_message_id)
+        ext = "mp4"
+        if video.file_name and "." in video.file_name:
+            ext = video.file_name.rsplit(".", 1)[1].lower()
+        elif video.mime_type:
+            if "mp2t" in video.mime_type:
+                ext = "ts"
+            elif "matroska" in video.mime_type:
+                ext = "mkv"
+            elif "webm" in video.mime_type:
+                ext = "webm"
+
+        cached_path = cache_service.get_video_path(video.telegram_message_id, extension=ext)
 
         # Si le fichier existe déjà et est complet, on met à jour son timestamp LRU
         if cache_service.is_cached(video.telegram_message_id):
@@ -201,11 +212,22 @@ class StreamService:
 
         start, end, content_length = self.parse_range_header(range_header, file_size)
 
+        # Déterminer le Content-Type le plus précis pour les lecteurs vidéo natifs (Android ExoPlayer / iOS AVPlayer)
+        content_type = video.mime_type
+        if file_path.suffix.lower() in [".ts", ".m2ts"]:
+            content_type = "video/mp2t"
+        elif file_path.suffix.lower() == ".mkv":
+            content_type = "video/x-matroska"
+        elif file_path.suffix.lower() == ".webm":
+            content_type = "video/webm"
+        elif not content_type:
+            content_type = "video/mp4"
+
         headers = {
             "Content-Range": f"bytes {start}-{end}/{file_size}",
             "Accept-Ranges": "bytes",
             "Content-Length": str(content_length),
-            "Content-Type": video.mime_type or "video/mp4",
+            "Content-Type": content_type,
             "Cache-Control": "no-cache",
         }
 
@@ -216,7 +238,7 @@ class StreamService:
             self.stream_file_range(file_path, start, content_length),
             status_code=status_code,
             headers=headers,
-            media_type=video.mime_type or "video/mp4",
+            media_type=content_type,
         )
 
 
