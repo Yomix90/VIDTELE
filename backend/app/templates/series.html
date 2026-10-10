@@ -77,46 +77,99 @@
 
 <!-- Modale : Créer une nouvelle série -->
 <div class="modal fade" id="modalCreateSeries" tabindex="-1">
-  <div class="modal-dialog">
+  <div class="modal-dialog modal-lg">
     <div class="modal-content bg-dark text-white border-secondary">
       <div class="modal-header border-secondary">
-        <h5 class="modal-title">Créer une Série</h5>
+        <h5 class="modal-title d-flex align-items-center gap-2">
+          <i class="bi bi-collection-play-fill text-danger"></i>
+          <span>Créer une Série</span>
+        </h5>
         <button type="button" class="btn-close btn-close-white" data-bs-dismiss="modal"></button>
       </div>
       <div class="modal-body">
         <form id="formCreateSeries" onsubmit="submitCreateSeries(event)">
-          <div class="mb-3">
-            <label class="form-label small">Titre (Français) *</label>
-            <input type="text" id="seriesTitleFr" class="form-control" placeholder="ex: Breaking Bad" required>
+          <!-- Bouton Traduction & Enrichissement IA Gemini -->
+          <div class="d-flex justify-content-between align-items-center mb-3 p-2 rounded bg-black bg-opacity-40 border border-secondary border-opacity-50">
+            <span class="small text-muted">Traduire automatiquement les titres et le synopsis :</span>
+            <button type="button" class="btn btn-outline-info btn-sm d-flex align-items-center gap-1" onclick="autoTranslateSeriesWithGemini()">
+              <i class="bi bi-stars"></i>
+              <span>Traduire avec Gemini AI</span>
+            </button>
           </div>
-          <div class="mb-3">
-            <label class="form-label small">Titre (Arabe - optionnel)</label>
-            <input type="text" id="seriesTitleAr" class="form-control" dir="rtl" placeholder="اختياري">
-          </div>
+
           <div class="row g-2 mb-3">
-            <div class="col-6">
-              <label class="form-label small">Année</label>
+            <div class="col-12 col-md-4">
+              <label class="form-label small">Titre (Français) *</label>
+              <input type="text" id="seriesTitleFr" class="form-control" placeholder="ex: Breaking Bad" required>
+            </div>
+            <div class="col-12 col-md-4">
+              <label class="form-label small">Titre (Arabe)</label>
+              <input type="text" id="seriesTitleAr" class="form-control" dir="rtl" placeholder="اختياري">
+            </div>
+            <div class="col-12 col-md-4">
+              <label class="form-label small">Titre (Anglais)</label>
+              <input type="text" id="seriesTitleEn" class="form-control" placeholder="Optional">
+            </div>
+          </div>
+
+          <div class="row g-2 mb-3">
+            <div class="col-6 col-md-4">
+              <label class="form-label small">Année de début</label>
               <input type="number" id="seriesYear" class="form-control" placeholder="2024" min="1950" max="2035">
             </div>
-            <div class="col-6">
+            <div class="col-6 col-md-4">
               <label class="form-label small">Note (0 à 10)</label>
               <input type="number" id="seriesRating" class="form-control" placeholder="8.5" step="0.1" min="0" max="10">
             </div>
+            <div class="col-12 col-md-4">
+              <label class="form-label small">Statut</label>
+              <select id="seriesStatus" class="form-select">
+                <option value="ongoing" selected>En cours</option>
+                <option value="completed">Terminé</option>
+                <option value="upcoming">À venir</option>
+              </select>
+            </div>
+          </div>
+
+          <!-- Upload Affiche VPS -->
+          <div class="mb-3">
+            <label class="form-label small">Affiche (Poster 2:3)</label>
+            <div class="input-group mb-2">
+              <input type="text" id="seriesPoster" class="form-control" placeholder="https://... ou téléverser sur VPS">
+              <label class="btn btn-outline-secondary" for="uploadCreateSeriesPosterFile">
+                <i class="bi bi-cloud-arrow-up me-1"></i>Téléverser Image
+              </label>
+              <input type="file" id="uploadCreateSeriesPosterFile" class="d-none" accept="image/*" onchange="uploadImageToServer('uploadCreateSeriesPosterFile', 'seriesPoster')">
+            </div>
+          </div>
+
+          <!-- Upload Bannière VPS -->
+          <div class="mb-3">
+            <label class="form-label small">Bannière (Backdrop 16:9)</label>
+            <div class="input-group mb-2">
+              <input type="text" id="seriesBanner" class="form-control" placeholder="https://... ou téléverser sur VPS">
+              <label class="btn btn-outline-secondary" for="uploadCreateSeriesBannerFile">
+                <i class="bi bi-cloud-arrow-up me-1"></i>Téléverser Image
+              </label>
+              <input type="file" id="uploadCreateSeriesBannerFile" class="d-none" accept="image/*" onchange="uploadImageToServer('uploadCreateSeriesBannerFile', 'seriesBanner')">
+            </div>
+          </div>
+
+          <div class="mb-3">
+            <label class="form-label small">Synopsis (Français)</label>
+            <textarea id="seriesSynopsis" class="form-control" rows="2" placeholder="Résumé de l'histoire..."></textarea>
           </div>
           <div class="mb-3">
-            <label class="form-label small">URL Affiche (Poster)</label>
-            <input type="url" id="seriesPoster" class="form-control" placeholder="https://image.tmdb.org/...">
+            <label class="form-label small">Synopsis (Arabe)</label>
+            <textarea id="seriesSynopsisAr" class="form-control" rows="2" dir="rtl" placeholder="ملخص القصة..."></textarea>
           </div>
           <div class="mb-3">
-            <label class="form-label small">URL Bannière (Backdrop)</label>
-            <input type="url" id="seriesBanner" class="form-control" placeholder="https://image.tmdb.org/...">
+            <label class="form-label small">Synopsis (Anglais)</label>
+            <textarea id="seriesSynopsisEn" class="form-control" rows="2" placeholder="Plot summary..."></textarea>
           </div>
-          <div class="mb-3">
-            <label class="form-label small">Synopsis</label>
-            <textarea id="seriesSynopsis" class="form-control" rows="3" placeholder="Résumé de l'histoire..."></textarea>
-          </div>
+
           <div class="mb-3 form-check">
-            <input type="checkbox" id="seriesPublishImmediate" class="form-check-input">
+            <input type="checkbox" id="seriesPublishImmediate" class="form-check-input" checked>
             <label class="form-check-label small" for="seriesPublishImmediate">Publier immédiatement sur l'application mobile</label>
           </div>
           <button type="submit" class="btn btn-danger w-100">Créer la série</button>
@@ -129,25 +182,97 @@
 
 {% block extra_scripts %}
 <script>
+async function uploadImageToServer(fileInputId, targetInputId) {
+  const fileInput = document.getElementById(fileInputId);
+  if (!fileInput.files || !fileInput.files[0]) return;
+  const file = fileInput.files[0];
+
+  const formData = new FormData();
+  formData.append('file', file);
+
+  showToast('Téléversement de l\'image sur le serveur VPS...', 'info');
+  try {
+    const res = await fetch('/api/admin/upload-image', {
+      method: 'POST',
+      body: formData,
+    });
+    const data = await res.json();
+    if (res.ok && data.success) {
+      document.getElementById(targetInputId).value = data.url;
+      showToast('Image enregistrée sur le VPS avec succès !', 'success');
+    } else {
+      showToast(data.detail || 'Erreur lors de l\'enregistrement', 'error');
+    }
+  } catch (e) {
+    showToast('Erreur d\'upload image', 'error');
+  }
+}
+
+async function autoTranslateSeriesWithGemini() {
+  const title = document.getElementById('seriesTitleFr').value.trim();
+  const synopsis = document.getElementById('seriesSynopsis').value.trim();
+  if (!title) {
+    showToast('Veuillez renseigner au moins un titre français.', 'warning');
+    return;
+  }
+
+  showToast('Traduction et enrichissement avec Gemini AI...', 'info');
+  try {
+    const res = await fetch('/api/admin/ai/translate', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ title: title, synopsis: synopsis, content_type: 'series' })
+    });
+    const data = await res.json();
+    if (res.ok) {
+      if (data.title_ar) document.getElementById('seriesTitleAr').value = data.title_ar;
+      if (data.title_en) document.getElementById('seriesTitleEn').value = data.title_en;
+      if (data.synopsis_fr && !synopsis) document.getElementById('seriesSynopsis').value = data.synopsis_fr;
+      if (data.synopsis_ar) document.getElementById('seriesSynopsisAr').value = data.synopsis_ar;
+      if (data.synopsis_en) document.getElementById('seriesSynopsisEn').value = data.synopsis_en;
+      if (data.year && !document.getElementById('seriesYear').value) {
+        document.getElementById('seriesYear').value = data.year;
+      }
+      if (data.warning) {
+        showToast(data.warning, 'warning');
+      } else {
+        showToast('Métadonnées multilingues générées par Gemini AI !', 'success');
+      }
+    } else {
+      showToast(data.detail || 'Erreur IA', 'error');
+    }
+  } catch (e) {
+    showToast('Erreur de requête Gemini', 'error');
+  }
+}
+
 async function submitCreateSeries(e) {
   e.preventDefault();
   const title = document.getElementById('seriesTitleFr').value.trim();
   const titleAr = document.getElementById('seriesTitleAr').value.trim();
+  const titleEn = document.getElementById('seriesTitleEn').value.trim();
   const year = document.getElementById('seriesYear').value ? parseInt(document.getElementById('seriesYear').value) : null;
   const rating = document.getElementById('seriesRating').value ? parseFloat(document.getElementById('seriesRating').value) : null;
+  const status = document.getElementById('seriesStatus').value;
   const poster = document.getElementById('seriesPoster').value.trim();
   const banner = document.getElementById('seriesBanner').value.trim();
   const synopsis = document.getElementById('seriesSynopsis').value.trim();
+  const synopsisAr = document.getElementById('seriesSynopsisAr').value.trim();
+  const synopsisEn = document.getElementById('seriesSynopsisEn').value.trim();
   const isPub = document.getElementById('seriesPublishImmediate').checked;
 
   const payload = {
     title_fr: title,
     title_ar: titleAr || null,
+    title_en: titleEn || null,
     year_start: year,
     rating: rating,
+    status: status,
     poster_path: poster || null,
     banner_path: banner || null,
     synopsis_fr: synopsis || null,
+    synopsis_ar: synopsisAr || null,
+    synopsis_en: synopsisEn || null,
     visibility: isPub ? 'published' : 'draft',
   };
 

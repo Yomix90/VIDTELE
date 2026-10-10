@@ -174,7 +174,7 @@
                   <button class="btn btn-sm btn-outline-light" title="Lier vidéo Telegram" onclick="openAssignModal({{ ep.id }}, {{ ep.number }})">
                     <i class="bi bi-link-45deg"></i>
                   </button>
-                  <button class="btn btn-sm btn-outline-warning" title="Modifier l'épisode" onclick="openEditEpisodeModal({{ ep.id }}, {{ ep.number }}, '{{ (ep.title_fr or '')|replace('\'', '\\\'') }}', '{{ (ep.title_ar or '')|replace('\'', '\\\'') }}', '{{ (ep.synopsis_fr or '')|replace('\'', '\\\'')|replace('\n', ' ') }}', {{ ep.telegram_video_id or 0 }})">
+                  <button class="btn btn-sm btn-outline-warning" title="Modifier l'épisode" onclick="openEditEpisodeModal({{ ep.id }}, {{ ep.number }}, '{{ (ep.title_fr or '')|replace('\'', '\\\'') }}', '{{ (ep.title_ar or '')|replace('\'', '\\\'') }}', '{{ (ep.title_en or '')|replace('\'', '\\\'') }}', '{{ (ep.synopsis_fr or '')|replace('\'', '\\\'')|replace('\n', ' ') }}', {{ ep.telegram_video_id or 0 }})">
                     <i class="bi bi-pencil"></i>
                   </button>
                   <button class="btn btn-sm btn-outline-danger" title="Supprimer l'épisode" onclick="confirmDeleteEpisode({{ ep.id }}, {{ ep.number }})">
@@ -405,6 +405,15 @@
       <div class="modal-body">
         <form id="formEditEpisode" onsubmit="submitUpdateEpisode(event)">
           <input type="hidden" id="editEpId">
+          <!-- Bouton Traduction IA pour l'épisode -->
+          <div class="d-flex justify-content-between align-items-center mb-3 p-2 rounded bg-black bg-opacity-40 border border-secondary border-opacity-50">
+            <span class="small text-muted">Traduire avec Gemini :</span>
+            <button type="button" class="btn btn-outline-info btn-sm d-flex align-items-center gap-1" onclick="autoTranslateEpisodeWithGemini()">
+              <i class="bi bi-stars"></i>
+              <span>Traduire Titre & Résumé</span>
+            </button>
+          </div>
+
           <div class="row g-2 mb-3">
             <div class="col-4">
               <label class="form-label small">Numéro *</label>
@@ -415,9 +424,15 @@
               <input type="text" id="editEpTitleFr" class="form-control">
             </div>
           </div>
-          <div class="mb-3">
-            <label class="form-label small">Titre (Arabe)</label>
-            <input type="text" id="editEpTitleAr" class="form-control" dir="rtl">
+          <div class="row g-2 mb-3">
+            <div class="col-6">
+              <label class="form-label small">Titre (Arabe)</label>
+              <input type="text" id="editEpTitleAr" class="form-control" dir="rtl">
+            </div>
+            <div class="col-6">
+              <label class="form-label small">Titre (Anglais)</label>
+              <input type="text" id="editEpTitleEn" class="form-control">
+            </div>
           </div>
           <div class="mb-3">
             <label class="form-label small">Synopsis</label>
@@ -567,12 +582,42 @@ async function confirmDeleteSeries(id, title) {
   }
 }
 
-function openEditEpisodeModal(id, num, titleFr, titleAr, synopsis, vidId) {
+async function autoTranslateEpisodeWithGemini() {
+  const title = document.getElementById('editEpTitleFr').value.trim();
+  const synopsis = document.getElementById('editEpSynopsis').value.trim();
+  if (!title) {
+    showToast('Veuillez renseigner au moins un titre français pour l\'épisode.', 'warning');
+    return;
+  }
+
+  showToast('Traduction de l\'épisode avec Gemini AI...', 'info');
+  try {
+    const res = await fetch('/api/admin/ai/translate', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ title: title, synopsis: synopsis, content_type: 'episode' })
+    });
+    const data = await res.json();
+    if (res.ok) {
+      if (data.title_ar) document.getElementById('editEpTitleAr').value = data.title_ar;
+      if (data.title_en) document.getElementById('editEpTitleEn').value = data.title_en;
+      if (data.synopsis_fr && !synopsis) document.getElementById('editEpSynopsis').value = data.synopsis_fr;
+      showToast('Titres de l\'épisode traduits avec Gemini !', 'success');
+    } else {
+      showToast(data.detail || 'Erreur IA', 'error');
+    }
+  } catch (e) {
+    showToast('Erreur de requête Gemini', 'error');
+  }
+}
+
+function openEditEpisodeModal(id, num, titleFr, titleAr, titleEn, synopsis, vidId) {
   document.getElementById('editEpId').value = id;
   document.getElementById('editEpNumber').value = num;
-  document.getElementById('editEpTitleFr').value = titleFr;
-  document.getElementById('editEpTitleAr').value = titleAr;
-  document.getElementById('editEpSynopsis').value = synopsis;
+  document.getElementById('editEpTitleFr').value = titleFr || '';
+  document.getElementById('editEpTitleAr').value = titleAr || '';
+  document.getElementById('editEpTitleEn').value = titleEn || '';
+  document.getElementById('editEpSynopsis').value = synopsis || '';
   document.getElementById('editEpVideoSelect').value = vidId || 0;
 
   const modal = bootstrap.Modal.getOrCreateInstance(document.getElementById('modalEditEpisode'));
@@ -586,6 +631,7 @@ async function submitUpdateEpisode(e) {
     number: parseInt(document.getElementById('editEpNumber').value),
     title_fr: document.getElementById('editEpTitleFr').value.trim() || null,
     title_ar: document.getElementById('editEpTitleAr').value.trim() || null,
+    title_en: document.getElementById('editEpTitleEn').value.trim() || null,
     synopsis_fr: document.getElementById('editEpSynopsis').value.trim() || null,
     telegram_video_id: parseInt(document.getElementById('editEpVideoSelect').value),
   };
