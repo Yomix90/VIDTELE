@@ -7,10 +7,12 @@ import logging
 import os
 import re
 from pathlib import Path
-from typing import AsyncGenerator, Dict, Optional, Tuple
+from typing import AsyncGenerator, Dict, Optional, Set, Tuple
 import aiofiles
 from fastapi import HTTPException, status
 from fastapi.responses import StreamingResponse
+from sqlalchemy import select
+from sqlalchemy.ext.asyncio import AsyncSession
 from telethon.errors import FloodWaitError
 
 from app.config import settings
@@ -20,16 +22,18 @@ from app.telegram_client import telegram_manager
 
 logger = logging.getLogger("vidtele.stream")
 
-CHUNK_SIZE = 64 * 1024  # 64 Ko par paquet pour une latence minimale et RAM ultra faible
+CHUNK_SIZE = int(settings.STREAM_CHUNK_SIZE_KB * 1024)  # 256 Ko par paquet pour un débit optimal et latence minimale
 
 
 class StreamService:
-    """Moteur de streaming vidéo gérant la mise en cache et les requêtes Range."""
+    """Moteur de streaming vidéo gérant la mise en cache, FastStart, préchauffage et requêtes Range."""
 
     def __init__(self):
         # Dictionnaire de verrous pour éviter le téléchargement simultané d'une même vidéo
         self._video_locks: Dict[int, asyncio.Lock] = {}
         self._master_lock = asyncio.Lock()
+        # Ensemble des identifiants vidéos actuellement en cours de préchauffage
+        self._prewarming_ids: Set[int] = set()
 
     async def _get_video_lock(self, video_id: int) -> asyncio.Lock:
         """Récupère ou crée le verrou associé à une vidéo spécifique."""
@@ -144,6 +148,12 @@ class StreamService:
                 if tmp_path.exists() and tmp_path.stat().st_size > 0:
                     tmp_path.replace(cached_path)
                     cache_service.touch(video.telegram_message_id)
+                    # Application du remuxage FastStart pour première image instantanée
+                    if settings.AUTO_FASTSTART:
+                        try:
+                            await cache_service.apply_faststart(cached_path)
+                        except Exception as ex_fs:
+                            logger.warning(f"FastStart ignoré pour {cached_path.name}: {ex_fs}")
                     logger.info(f"Vidéo '{video.title}' mise en cache avec succès ({cached_path.name})")
                     return cached_path
                 else:
@@ -248,7 +258,8 @@ class StreamService:
             "Accept-Ranges": "bytes",
             "Content-Length": str(content_length),
             "Content-Type": content_type,
-            "Cache-Control": "no-cache",
+            "Cache-Control": "public, max-age=86400, no-transform",
+            "X-Content-Type-Options": "nosniff",
         }
 
         # Status 206 si une plage spécifique a été demandée, 200 sinon
@@ -260,6 +271,66 @@ class StreamService:
             headers=headers,
             media_type=content_type,
         )
+
+    async def prewarm_video(self, video: Video) -> bool:
+        """
+        Télécharge et optimise (FastStart) un épisode en arrière-plan sans bloquer le client.
+        Évite tout téléchargement redondant si la vidéo est déjà en cache ou en cours.
+        """
+        if cache_service.is_cached(video.telegram_message_id):
+            return True
+
+        if video.id in self._prewarming_ids:
+            return False
+
+        self._prewarming_ids.add(video.id)
+        try:
+            logger.info(f"[Prewarm] Démarrage du préchauffage en tâche de fond pour '{video.title}' (ID {video.id})...")
+            await self.ensure_video_in_cache(video)
+            logger.info(f"[Prewarm] Vidéo {video.id} préchauffée avec succès dans le cache !")
+            return True
+        except Exception as e:
+            logger.warning(f"[Prewarm] Échec du préchauffage pour la vidéo {video.id}: {e}")
+            return False
+        finally:
+            self._prewarming_ids.discard(video.id)
+
+    def enqueue_prewarm(self, video: Video) -> None:
+        """Planifie le préchauffage en tâche de fond asynchrone non-bloquante."""
+        if cache_service.is_cached(video.telegram_message_id) or video.id in self._prewarming_ids:
+            return
+        asyncio.create_task(self.prewarm_video(video))
+
+    async def prewarm_next_episodes_in_series(self, current_video: Video, db: AsyncSession, count: int = 2) -> None:
+        """
+        Détecte les épisodes suivants de la même série et préchauffe en avance leur cache.
+        Permet un passage instantané (< 0.5 s) lors du swipe vertical.
+        """
+        try:
+            from app.models import Episode
+            # Trouver l'épisode actuel
+            stmt = select(Episode).where(Episode.telegram_video_id == current_video.id)
+            current_ep = (await db.execute(stmt)).scalar_one_or_none()
+            if not current_ep or not current_ep.season_id:
+                return
+
+            # Trouver les épisodes suivants dans la même saison
+            stmt_next = (
+                select(Video)
+                .join(Episode, Episode.telegram_video_id == Video.id)
+                .where(
+                    Episode.season_id == current_ep.season_id,
+                    Episode.number > current_ep.number,
+                    Video.is_published == True,
+                )
+                .order_by(Episode.number.asc())
+                .limit(count)
+            )
+            next_videos = (await db.execute(stmt_next)).scalars().all()
+            for nxt in next_videos:
+                self.enqueue_prewarm(nxt)
+        except Exception as e:
+            logger.debug(f"[Prewarm] Erreur lors de la recherche des épisodes suivants: {e}")
 
 
 # Instance unique (Singleton)

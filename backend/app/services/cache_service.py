@@ -115,6 +115,59 @@ class CacheService:
                 logger.error(f"Erreur lors de la purge du fichier {file}: {e}")
         return deleted_count
 
+    async def apply_faststart(self, file_path: Path) -> Path:
+        """
+        Remuxe le fichier vidéo MP4 en déplaçant le 'moov atom' au tout début du fichier
+        (drapeau -movflags +faststart de FFmpeg).
+        Opération purement structurelle sans aucun réencodage (CPU très faible, ~50ms pour 15 Mo).
+        Permet au lecteur mobile de démarrer la lecture dès les premiers 64 Ko reçus
+        sans avoir à chercher la fin du fichier.
+        """
+        if not settings.AUTO_FASTSTART:
+            return file_path
+
+        if not file_path.exists() or file_path.suffix.lower() != ".mp4":
+            return file_path
+
+        temp_faststart = file_path.parent / f"{file_path.stem}_faststart.tmp"
+        cmd = [
+            "ffmpeg",
+            "-y",
+            "-i", str(file_path),
+            "-c", "copy",
+            "-movflags", "+faststart",
+            str(temp_faststart),
+        ]
+
+        try:
+            process = await asyncio.create_subprocess_exec(
+                *cmd,
+                stdout=asyncio.subprocess.PIPE,
+                stderr=asyncio.subprocess.PIPE,
+            )
+            stdout, stderr = await asyncio.wait_for(process.communicate(), timeout=30.0)
+
+            if process.returncode == 0 and temp_faststart.exists() and temp_faststart.stat().st_size > 0:
+                # Remplacement atomique
+                temp_faststart.replace(file_path)
+                try:
+                    msg_id = int(file_path.stem.replace("video_", "")) if "video_" in file_path.stem else 0
+                    if msg_id:
+                        self.touch(msg_id)
+                except Exception:
+                    pass
+                logger.info(f"Remuxage FastStart réussi pour {file_path.name}")
+            else:
+                if temp_faststart.exists():
+                    temp_faststart.unlink(missing_ok=True)
+                logger.warning(f"FFmpeg FastStart a échoué (code {process.returncode}): {stderr.decode(errors='ignore')[:200]}")
+        except Exception as e:
+            if temp_faststart.exists():
+                temp_faststart.unlink(missing_ok=True)
+            logger.warning(f"Impossible d'appliquer FastStart sur {file_path.name} (continuera sans faststart): {e}")
+
+        return file_path
+
 
 # Instance unique (Singleton)
 cache_service = CacheService()

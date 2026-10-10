@@ -26,7 +26,10 @@ class Settings(BaseSettings):
     # Stockage et Cache Disque
     CACHE_DIR: str = "./cache"
     THUMBNAILS_DIR: str = "./thumbnails"
-    MAX_CACHE_GB: float = 20.0
+    MAX_CACHE_GB: float = 20.0  # 20 Go permet d'héberger 500 à 1000+ épisodes de ~15 Mo
+    AUTO_FASTSTART: bool = True  # Remuxage moov atom +faststart sans réencodage pour première image instantanée
+    STREAM_CHUNK_SIZE_KB: int = 256  # 256 Ko par morceau pour un équilibre parfait débit/mémoire
+    PREWARM_POPULAR_COUNT: int = 20  # Préchargement anticipé des épisodes populaires en tâche de fond
 
     # Limites et Concurrence (autorise le pool de 3 vidéos + marge)
     MAX_CONCURRENT_STREAMS_PER_USER: int = 4

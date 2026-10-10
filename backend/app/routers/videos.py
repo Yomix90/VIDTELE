@@ -394,6 +394,8 @@ async def stream_video(
     if not range_header or range_header.startswith("bytes=0-"):
         video.views_count += 1
         await db.commit()
+        # Préchargement anticipé transparent des 2 épisodes suivants de la même série
+        asyncio.create_task(stream_service.prewarm_next_episodes_in_series(video, db))
 
     # 5. Délégation au moteur de streaming Range 206
     return await stream_service.create_streaming_response(video, range_header)
