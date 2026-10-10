@@ -136,16 +136,23 @@
       <div class="modal-body">
         <form id="formDirectVideoUpload" onsubmit="submitDirectVideoUpload(event)">
           <div class="mb-3">
-            <label class="form-label small fw-semibold">Fichier Vidéo (MP4, MKV, TS, M2TS, WebM, AVI) *</label>
-            <input type="file" id="directVideoFile" class="form-control" accept="video/*,.ts,.m2ts,.mkv,.mp4,.webm" required>
-            <div class="text-muted" style="font-size: 0.75rem;">Le fichier (y compris les flux MPEG Transport Stream .ts) sera téléversé sur votre canal privé Telegram avec activation native du streaming vidéo.</div>
+            <label class="form-label small fw-semibold">Fichiers Vidéo (MP4, MKV, TS, M2TS, WebM, AVI) *</label>
+            <input type="file" id="directVideoFile" class="form-control" accept="video/*,.ts,.m2ts,.mkv,.mp4,.webm" multiple required onchange="handleMultipleVideosSelected(this)">
+            <div class="text-muted mt-1" style="font-size: 0.75rem;">
+              <i class="bi bi-info-circle me-1"></i>Vous pouvez sélectionner <strong>une ou plusieurs vidéos</strong> à la fois. Elles seront envoyées consécutivement vers votre canal Telegram privé.
+            </div>
+            <!-- Liste récapitulative des fichiers sélectionnés -->
+            <div id="selectedFilesSummary" class="d-none mt-2 p-2 rounded bg-dark border border-secondary" style="max-height: 140px; overflow-y: auto; font-size: 0.8rem;">
+              <div class="fw-bold text-info mb-1" id="selectedFilesCount">0 vidéo(s) sélectionnée(s)</div>
+              <ul class="list-unstyled mb-0 text-white-50" id="selectedFilesList"></ul>
+            </div>
           </div>
-          <div class="mb-3">
-            <label class="form-label small">Titre personnalisé (optionnel)</label>
+          <div class="mb-3" id="singleTitleGroup">
+            <label class="form-label small">Titre personnalisé (si une seule vidéo)</label>
             <input type="text" id="directVideoTitle" class="form-control" placeholder="ex: Breaking Bad S01E01 ou Nom du Film">
           </div>
           <div class="mb-3">
-            <label class="form-label small">Légende Telegram (optionnel)</label>
+            <label class="form-label small">Légende Telegram commune (optionnel)</label>
             <input type="text" id="directVideoCaption" class="form-control" placeholder="Description affichée sur le canal Telegram">
           </div>
 
@@ -439,23 +446,94 @@ async function submitBatchSeriesCreation(e) {
   }
 }
 
-// 4. Téléversement Direct de Vidéo vers Telegram avec Barre de Progression
-function submitDirectVideoUpload(e) {
-  e.preventDefault();
-  const fileInput = document.getElementById('directVideoFile');
-  if (!fileInput.files || !fileInput.files[0]) {
-    showToast('Veuillez sélectionner un fichier vidéo.', 'warning');
+// 4. Gestion de la sélection multiple et affichage
+function handleMultipleVideosSelected(input) {
+  const summaryBox = document.getElementById('selectedFilesSummary');
+  const countSpan = document.getElementById('selectedFilesCount');
+  const listEl = document.getElementById('selectedFilesList');
+  const titleGroup = document.getElementById('singleTitleGroup');
+
+  if (!input.files || input.files.length === 0) {
+    summaryBox.classList.add('d-none');
+    titleGroup.classList.remove('d-none');
     return;
   }
 
-  const file = fileInput.files[0];
-  const title = document.getElementById('directVideoTitle').value.trim();
-  const caption = document.getElementById('directVideoCaption').value.trim();
+  const files = Array.from(input.files);
+  summaryBox.classList.remove('d-none');
+  countSpan.textContent = `${files.length} vidéo(s) prête(s) à être téléversée(s)`;
 
-  const formData = new FormData();
-  formData.append('file', file);
-  if (title) formData.append('title', title);
-  if (caption) formData.append('caption', caption);
+  if (files.length > 1) {
+    titleGroup.classList.add('d-none'); // Titre masqué car le nom original de chaque fichier sera utilisé
+  } else {
+    titleGroup.classList.remove('d-none');
+  }
+
+  listEl.innerHTML = files.map((f, i) => {
+    const sizeMb = (f.size / (1024 * 1024)).toFixed(1);
+    return `<li class="d-flex justify-content-between py-1 border-bottom border-dark">
+      <span class="text-truncate me-2"><i class="bi bi-file-earmark-play text-danger me-1"></i>${f.name}</span>
+      <span class="badge bg-secondary">${sizeMb} Mo</span>
+    </li>`;
+  }).join('');
+}
+
+// Téléversement Direct d'une vidéo individuelle avec Promise
+function uploadSingleVideoFile(file, customTitle, caption, onProgress) {
+  return new Promise((resolve, reject) => {
+    const formData = new FormData();
+    formData.append('file', file);
+    if (customTitle) formData.append('title', customTitle);
+    if (caption) formData.append('caption', caption);
+
+    const xhr = new XMLHttpRequest();
+    xhr.open('POST', '/api/admin/videos/upload', true);
+
+    xhr.upload.onprogress = function(event) {
+      if (event.lengthComputable && onProgress) {
+        const percent = Math.round((event.loaded / event.total) * 95);
+        onProgress(percent);
+      }
+    };
+
+    xhr.onload = function() {
+      if (xhr.status === 200) {
+        try {
+          const data = JSON.parse(xhr.responseText);
+          resolve(data);
+        } catch (e) {
+          resolve({ success: true });
+        }
+      } else {
+        let err = 'Échec du téléversement';
+        try {
+          const data = JSON.parse(xhr.responseText);
+          err = data.detail || err;
+        } catch (e) {}
+        reject(new Error(err));
+      }
+    };
+
+    xhr.onerror = function() {
+      reject(new Error('Erreur réseau'));
+    };
+
+    xhr.send(formData);
+  });
+}
+
+// 4. bis. Lancement du Téléversement par Lots de toutes les vidéos sélectionnées
+async function submitDirectVideoUpload(e) {
+  e.preventDefault();
+  const fileInput = document.getElementById('directVideoFile');
+  if (!fileInput.files || fileInput.files.length === 0) {
+    showToast('Veuillez sélectionner au moins un fichier vidéo.', 'warning');
+    return;
+  }
+
+  const files = Array.from(fileInput.files);
+  const singleTitle = document.getElementById('directVideoTitle').value.trim();
+  const caption = document.getElementById('directVideoCaption').value.trim();
 
   const progressContainer = document.getElementById('uploadProgressBarContainer');
   const progressBar = document.getElementById('uploadProgressBar');
@@ -467,42 +545,35 @@ function submitDirectVideoUpload(e) {
   btnSubmit.disabled = true;
   btnCancel.disabled = true;
 
-  const xhr = new XMLHttpRequest();
-  xhr.open('POST', '/api/admin/videos/upload', true);
+  let successCount = 0;
+  let errorCount = 0;
 
-  xhr.upload.onprogress = function(event) {
-    if (event.lengthComputable) {
-      const percent = Math.round((event.loaded / event.total) * 95); // 95% = upload vers VPS
-      progressBar.style.width = percent + '%';
-      progressPercent.textContent = percent + '% (Transfert VPS)';
-    }
-  };
+  for (let i = 0; i < files.length; i++) {
+    const file = files[i];
+    const fileTitle = (files.length === 1 && singleTitle) ? singleTitle : '';
+    const currentIndex = i + 1;
 
-  xhr.onload = function() {
-    if (xhr.status === 200) {
+    progressPercent.textContent = `Vidéo ${currentIndex}/${files.length} : "${file.name}" (Transfert...)`;
+    progressBar.style.width = '5%';
+
+    try {
+      await uploadSingleVideoFile(file, fileTitle, caption, (pct) => {
+        progressBar.style.width = pct + '%';
+        progressPercent.textContent = `Vidéo ${currentIndex}/${files.length} : ${pct}% (Transfert VPS/Telegram)`;
+      });
+      successCount++;
       progressBar.style.width = '100%';
-      progressPercent.textContent = '100% (Prêt sur Telegram !)';
-      showToast('Vidéo téléversée vers Telegram avec succès !', 'success');
-      setTimeout(() => location.reload(), 1500);
-    } else {
-      let err = 'Erreur d\'upload';
-      try {
-        const data = JSON.parse(xhr.responseText);
-        err = data.detail || err;
-      } catch (ex) {}
-      showToast(err, 'error');
-      btnSubmit.disabled = false;
-      btnCancel.disabled = false;
+    } catch (err) {
+      errorCount++;
+      showToast(`Erreur sur "${file.name}": ${err.message}`, 'error');
     }
-  };
+  }
 
-  xhr.onerror = function() {
-    showToast('Erreur réseau lors du téléversement.', 'error');
-    btnSubmit.disabled = false;
-    btnCancel.disabled = false;
-  };
+  progressBar.style.width = '100%';
+  progressPercent.textContent = `Terminé : ${successCount} vidéo(s) envoyée(s) sur Telegram !`;
+  showToast(`Transfert terminé : ${successCount} vidéo(s) téléversée(s) avec succès !`, 'success');
 
-  xhr.send(formData);
+  setTimeout(() => location.reload(), 1500);
 }
 
 // 5. Upload Image vers VPS
