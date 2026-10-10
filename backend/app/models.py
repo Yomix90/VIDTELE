@@ -53,12 +53,19 @@ class InviteCode(Base):
 
     id: Mapped[int] = mapped_column(Integer, primary_key=True, index=True)
     code: Mapped[str] = mapped_column(String(64), unique=True, index=True, nullable=False)
+    description: Mapped[Optional[str]] = mapped_column(String(255), nullable=True)
     created_by_id: Mapped[Optional[int]] = mapped_column(Integer, ForeignKey("users.id", ondelete="SET NULL"), nullable=True)
     used_by_id: Mapped[Optional[int]] = mapped_column(Integer, ForeignKey("users.id", ondelete="SET NULL"), nullable=True)
+    max_uses: Mapped[int] = mapped_column(Integer, default=1, nullable=False)
+    uses_count: Mapped[int] = mapped_column(Integer, default=0, nullable=False)
     is_used: Mapped[bool] = mapped_column(Boolean, default=False, nullable=False)
     expires_at: Mapped[Optional[datetime]] = mapped_column(DateTime, nullable=True)
     created_at: Mapped[datetime] = mapped_column(DateTime, default=utc_now, nullable=False)
     used_at: Mapped[Optional[datetime]] = mapped_column(DateTime, nullable=True)
+
+    @property
+    def remaining_uses(self) -> int:
+        return max(0, self.max_uses - (self.uses_count or 0))
 
 
 class MediaItem(Base):

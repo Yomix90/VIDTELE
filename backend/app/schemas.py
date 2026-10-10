@@ -75,17 +75,25 @@ class UserUpdateAdmin(BaseModel):
 # -------------------------------------------------------------
 
 class InviteCodeCreate(BaseModel):
-    expires_in_days: Optional[int] = Field(default=7, ge=1, le=365, description="Durée de validité en jours")
+    code: Optional[str] = Field(None, max_length=64, description="Code personnalisé (optionnel, ex: ATLAS500). Si absent, généré automatiquement.")
+    max_uses: int = Field(default=1, ge=1, le=100000, description="Nombre maximum d'utilisations autorisées (ex: 1, 100, 200, 500...)")
+    expires_in_days: Optional[int] = Field(default=30, ge=1, le=3650, description="Durée de validité en jours (None si permanent)")
+    description: Optional[str] = Field(None, max_length=255, description="Description ou étiquette (ex: Campagne Telegram 500 places)")
 
 
 class InviteCodeResponse(BaseModel):
     id: int
     code: str
+    description: Optional[str] = None
+    max_uses: int = 1
+    uses_count: int = 0
+    remaining_uses: Optional[int] = None
     is_used: bool
     created_at: datetime
     expires_at: Optional[datetime] = None
     created_by_id: Optional[int] = None
     used_by_id: Optional[int] = None
+    used_at: Optional[datetime] = None
 
     model_config = ConfigDict(from_attributes=True)
 

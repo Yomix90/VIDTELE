@@ -63,16 +63,19 @@ async def register(
             detail="Code d'invitation invalide",
         )
 
-    if invite.is_used:
-        raise HTTPException(
-            status_code=status.HTTP_400_BAD_REQUEST,
-            detail="Ce code d'invitation a déjà été utilisé",
-        )
-
     if invite.expires_at and invite.expires_at < now:
         raise HTTPException(
             status_code=status.HTTP_400_BAD_REQUEST,
             detail="Ce code d'invitation a expiré",
+        )
+
+    # Vérification du quota d'utilisation du code
+    max_uses = getattr(invite, "max_uses", 1) or 1
+    uses_count = getattr(invite, "uses_count", 0) or 0
+    if invite.is_used or uses_count >= max_uses:
+        raise HTTPException(
+            status_code=status.HTTP_400_BAD_REQUEST,
+            detail=f"Ce code d'invitation a atteint sa limite d'utilisation ({uses_count}/{max_uses})",
         )
 
     # 3. Création du nouvel utilisateur
@@ -81,16 +84,19 @@ async def register(
         hashed_password=hash_password(data.password),
         role="user",
         is_active=True,
+        invited_by=invite.created_by_id,
         max_concurrent_streams=settings.MAX_CONCURRENT_STREAMS_PER_USER,
         last_login_at=now,
     )
     db.add(new_user)
     await db.flush()  # Pour générer l'id de new_user
 
-    # 4. Marquer le code d'invitation comme consommé
-    invite.is_used = True
+    # 4. Incrémenter l'utilisation du code d'invitation
+    invite.uses_count = (invite.uses_count or 0) + 1
     invite.used_by_id = new_user.id
     invite.used_at = now
+    if invite.uses_count >= (invite.max_uses or 1):
+        invite.is_used = True
 
     await db.commit()
     await db.refresh(new_user)

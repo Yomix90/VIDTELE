@@ -100,6 +100,23 @@ async def init_db() -> None:
             except Exception:
                 pass
 
+        # Migrations douces pour 'invite_codes' (multi-utilisations)
+        invite_cols_to_add = [
+            ("max_uses", "INTEGER DEFAULT 1 NOT NULL"),
+            ("uses_count", "INTEGER DEFAULT 0 NOT NULL"),
+            ("description", "VARCHAR(255)"),
+        ]
+        try:
+            res_i = await conn.execute(text("PRAGMA table_info(invite_codes)"))
+            existing_invite_cols = {row[1] for row in res_i.fetchall()}
+            for col_name, col_def in invite_cols_to_add:
+                if col_name not in existing_invite_cols:
+                    await conn.execute(text(f"ALTER TABLE invite_codes ADD COLUMN {col_name} {col_def}"))
+            # Synchroniser les anciens codes déjà utilisés
+            await conn.execute(text("UPDATE invite_codes SET uses_count = 1 WHERE is_used = 1 AND uses_count = 0"))
+        except Exception:
+            pass
+
 
         # Amorçage automatique des genres de référence si vide
         try:

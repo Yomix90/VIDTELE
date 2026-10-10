@@ -1,6 +1,7 @@
 """
 Routeur pour l'interface web d'administration Atlas Play (HTML + Jinja2 + Bootstrap 5).
 """
+from datetime import datetime, timezone
 from pathlib import Path
 from typing import Optional
 from fastapi import APIRouter, Depends, HTTPException, Request
@@ -441,12 +442,20 @@ async def admin_invitations_page(
     request: Request,
     db: AsyncSession = Depends(get_db),
 ):
-    """Sert la gestion des codes d'invitation VIP."""
+    """Sert la gestion des codes d'invitation VIP avec support multi-utilisations."""
     admin_user = await get_web_admin(request, db)
     if not admin_user:
         return RedirectResponse(url=f"/admin/login?next={request.url.path}", status_code=303)
 
-    invites = (await db.execute(select(InviteCode).order_by(desc(InviteCode.created_at)).limit(100))).scalars().all()
+    invites = (await db.execute(select(InviteCode).order_by(desc(InviteCode.created_at)).limit(200))).scalars().all()
+    now = datetime.now(timezone.utc).replace(tzinfo=None)
+
+    total_capacity = sum(inv.max_uses or 1 for inv in invites)
+    total_used_count = sum(inv.uses_count or 0 for inv in invites)
+    active_available_count = sum(
+        1 for inv in invites 
+        if not inv.is_used and (not inv.expires_at or inv.expires_at > now) and (inv.uses_count or 0) < (inv.max_uses or 1)
+    )
 
     return templates.TemplateResponse(
         request=request,
@@ -454,6 +463,10 @@ async def admin_invitations_page(
         context={
             "active_page": "invitations",
             "invites": invites,
+            "now": now,
+            "total_capacity": total_capacity,
+            "total_used_count": total_used_count,
+            "active_available_count": active_available_count,
             "current_user": admin_user,
         },
     )

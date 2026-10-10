@@ -3,26 +3,80 @@
 {% block title %}Atlas Play - Codes d'Invitation VIP{% endblock %}
 
 {% block content %}
+<!-- En-tête et Bouton de Création -->
 <div class="d-flex flex-wrap align-items-center justify-content-between gap-3 mb-4">
   <div>
     <h1 class="h3 mb-1 fw-bold text-white d-flex align-items-center gap-2" data-i18n="invites">
       <i class="bi bi-ticket-perforated text-warning"></i>
       <span>Codes d'Invitation VIP</span>
     </h1>
-    <div class="text-muted small">Générez des codes à usage unique nécessaires pour l'inscription de nouveaux utilisateurs sur l'application mobile.</div>
+    <div class="text-muted small">Créez des codes utilisables une ou plusieurs fois (100, 200, 500, 1000...) pour inviter vos utilisateurs sur l'application mobile.</div>
   </div>
-  <button class="btn btn-danger btn-sm d-flex align-items-center gap-1 shadow-sm" onclick="generateInviteCode()">
-    <i class="bi bi-ticket-perforated"></i>
-    <span>Générer un Code</span>
+  <button class="btn btn-danger btn-sm d-flex align-items-center gap-2 px-3 py-2 shadow-sm fw-semibold" data-bs-toggle="modal" data-bs-target="#modalCreateInvite">
+    <i class="bi bi-plus-circle"></i>
+    <span>Nouveau Code d'Invitation</span>
   </button>
 </div>
 
-<div class="card-dark p-3 p-lg-4 shadow-sm">
+<!-- Cartes Statistiques KPI -->
+<div class="row g-3 mb-4">
+  <div class="col-6 col-md-3">
+    <div class="card-dark p-3 h-100 border border-secondary border-opacity-25 rounded-3">
+      <div class="text-muted small mb-1 d-flex align-items-center gap-1">
+        <i class="bi bi-ticket-detailed text-primary"></i>
+        <span>Total Codes</span>
+      </div>
+      <div class="fs-4 fw-bold text-white">{{ invites|length }}</div>
+    </div>
+  </div>
+  <div class="col-6 col-md-3">
+    <div class="card-dark p-3 h-100 border border-secondary border-opacity-25 rounded-3">
+      <div class="text-muted small mb-1 d-flex align-items-center gap-1">
+        <i class="bi bi-people text-success"></i>
+        <span>Utilisations Effectuées</span>
+      </div>
+      <div class="fs-4 fw-bold text-success">{{ total_used_count }}</div>
+    </div>
+  </div>
+  <div class="col-6 col-md-3">
+    <div class="card-dark p-3 h-100 border border-secondary border-opacity-25 rounded-3">
+      <div class="text-muted small mb-1 d-flex align-items-center gap-1">
+        <i class="bi bi-check-circle text-info"></i>
+        <span>Codes Actifs</span>
+      </div>
+      <div class="fs-4 fw-bold text-info">{{ active_available_count }}</div>
+    </div>
+  </div>
+  <div class="col-6 col-md-3">
+    <div class="card-dark p-3 h-100 border border-secondary border-opacity-25 rounded-3">
+      <div class="text-muted small mb-1 d-flex align-items-center gap-1">
+        <i class="bi bi-pie-chart text-warning"></i>
+        <span>Capacité Totale</span>
+      </div>
+      <div class="fs-4 fw-bold text-warning">{{ total_capacity }} <span class="fs-6 fw-normal text-muted">places</span></div>
+    </div>
+  </div>
+</div>
+
+<!-- Table & Filtre Recherche -->
+<div class="card-dark p-3 p-lg-4 shadow-sm border border-secondary border-opacity-25 rounded-3">
+  <div class="d-flex flex-wrap justify-content-between align-items-center gap-2 mb-3">
+    <div class="input-group input-group-sm" style="max-width: 320px;">
+      <span class="input-group-text bg-black text-muted border-secondary"><i class="bi bi-search"></i></span>
+      <input type="text" id="inviteSearchInput" class="form-control bg-black text-white border-secondary" placeholder="Rechercher par code ou description..." onkeyup="filterInvitesTable()">
+    </div>
+    <div class="text-muted small">
+      <span id="visibleInvitesCount">{{ invites|length }}</span> code(s) affiché(s)
+    </div>
+  </div>
+
   <div class="table-responsive">
-    <table class="table-atlas">
+    <table class="table-atlas" id="invitesTable">
       <thead>
         <tr>
           <th>Code d'Invitation</th>
+          <th>Description</th>
+          <th style="min-width: 180px;">Utilisations / Capacité</th>
           <th>Statut</th>
           <th>Date de Création</th>
           <th>Expiration</th>
@@ -31,73 +85,274 @@
       </thead>
       <tbody>
         {% for inv in invites %}
-        <tr>
+        {% set is_expired = inv.expires_at and now and inv.expires_at < now %}
+        {% set is_full = inv.is_used or (inv.uses_count and inv.max_uses and inv.uses_count >= inv.max_uses) %}
+        {% set pct = ((inv.uses_count or 0) * 100 / (inv.max_uses or 1))|round(1) %}
+        <tr class="invite-row" data-code="{{ inv.code|lower }}" data-desc="{{ (inv.description or '')|lower }}">
           <td>
             <div class="d-flex align-items-center gap-2">
-              <code class="fs-6 text-white fw-bold px-2 py-1 rounded" style="background: rgba(229,9,20,0.15); border: 1px solid rgba(229,9,20,0.3);">{{ inv.code }}</code>
-              <button class="btn btn-sm btn-outline-light p-1" onclick="navigator.clipboard.writeText('{{ inv.code }}'); showToast('Code copié dans le presse-papier !', 'info');" title="Copier">
+              <code class="fs-6 text-white fw-bold px-2 py-1 rounded" style="background: rgba(229,9,20,0.15); border: 1px solid rgba(229,9,20,0.35); letter-spacing: 0.5px;">{{ inv.code }}</code>
+              <button class="btn btn-sm btn-outline-light p-1" onclick="copyToClipboard('{{ inv.code }}')" title="Copier le code">
                 <i class="bi bi-clipboard"></i>
               </button>
             </div>
           </td>
           <td>
-            {% if inv.is_used %}
-              <span class="badge badge-atlas-muted">Utilisé</span>
+            {% if inv.description %}
+              <span class="text-light small"><i class="bi bi-tag text-muted me-1"></i>{{ inv.description }}</span>
             {% else %}
-              <span class="badge badge-atlas-green">Disponible</span>
+              <span class="text-muted small fst-italic">--</span>
+            {% endif %}
+          </td>
+          <td>
+            <div class="d-flex justify-content-between align-items-center mb-1">
+              <span class="small fw-semibold text-white">{{ inv.uses_count or 0 }} / {{ inv.max_uses or 1 }}</span>
+              <span class="badge {% if is_full %}bg-danger{% elif pct > 80 %}bg-warning text-dark{% else %}bg-success{% endif %} p-1 px-2" style="font-size: 0.75rem;">
+                {% if is_full %}
+                  Complet
+                {% else %}
+                  Reste {{ (inv.max_uses or 1) - (inv.uses_count or 0) }}
+                {% endif %}
+              </span>
+            </div>
+            <div class="progress" style="height: 6px; background-color: rgba(255,255,255,0.1);">
+              <div class="progress-bar {% if is_full %}bg-danger{% elif pct > 80 %}bg-warning{% else %}bg-success{% endif %}" role="progressbar" style="width: {{ pct if pct <= 100 else 100 }}%;"></div>
+            </div>
+          </td>
+          <td>
+            {% if is_full %}
+              <span class="badge badge-atlas-muted"><i class="bi bi-x-circle me-1"></i>Épuisé</span>
+            {% elif is_expired %}
+              <span class="badge bg-warning text-dark"><i class="bi bi-clock me-1"></i>Expiré</span>
+            {% else %}
+              <span class="badge badge-atlas-green"><i class="bi bi-check-circle me-1"></i>Disponible</span>
             {% endif %}
           </td>
           <td class="text-muted small">{{ inv.created_at.strftime('%d/%m/%Y %H:%M') if inv.created_at else '--' }}</td>
-          <td class="text-muted small">{{ inv.expires_at.strftime('%d/%m/%Y') if inv.expires_at else 'Jamais' }}</td>
+          <td class="text-muted small">
+            {% if inv.expires_at %}
+              <span class="{% if is_expired %}text-danger fw-semibold{% endif %}">{{ inv.expires_at.strftime('%d/%m/%Y') }}</span>
+            {% else %}
+              <span class="text-success"><i class="bi bi-infinity me-1"></i>Permanente</span>
+            {% endif %}
+          </td>
           <td class="text-end">
-            <button class="btn btn-sm btn-outline-danger" onclick="deleteInvite({{ inv.id }})">
+            <button class="btn btn-sm btn-outline-danger p-1 px-2" onclick="deleteInvite({{ inv.id }})" title="Supprimer">
               <i class="bi bi-trash"></i>
             </button>
           </td>
         </tr>
         {% else %}
         <tr>
-          <td colspan="5" class="text-center text-muted py-4">Aucun code d'invitation actif. Cliquez sur "Générer un Code".</td>
+          <td colspan="7" class="text-center text-muted py-4">Aucun code d'invitation actif. Cliquez sur "Nouveau Code d'Invitation".</td>
         </tr>
         {% endfor %}
       </tbody>
     </table>
   </div>
 </div>
+
+<!-- Modal Création Code d'Invitation Multi-Usages -->
+<div class="modal fade" id="modalCreateInvite" tabindex="-1" aria-labelledby="modalCreateInviteLabel" aria-hidden="true">
+  <div class="modal-dialog modal-dialog-centered">
+    <div class="modal-content bg-dark text-white border-secondary">
+      <div class="modal-header border-secondary border-opacity-50">
+        <h5 class="modal-title fw-bold d-flex align-items-center gap-2" id="modalCreateInviteLabel">
+          <i class="bi bi-ticket-perforated text-warning"></i>
+          <span>Nouveau Code d'Invitation</span>
+        </h5>
+        <button type="button" class="btn-close btn-close-white" data-bs-dismiss="modal" aria-label="Close"></button>
+      </div>
+      <div class="modal-body">
+        <form id="formCreateInvite" onsubmit="event.preventDefault(); submitCreateInvite();">
+          
+          <!-- Capacité / Nombre d'utilisations -->
+          <div class="mb-3">
+            <label class="form-label text-light fw-semibold d-flex justify-content-between">
+              <span>Nombre d'utilisations autorisées (Capacité)</span>
+              <span class="text-warning small" id="lblSelectedUses">100 places</span>
+            </label>
+            
+            <!-- Quick select buttons (Presets) -->
+            <div class="d-flex flex-wrap gap-2 mb-2">
+              <button type="button" class="btn btn-sm btn-outline-secondary text-white preset-btn" onclick="setPresetUses(1)">1 unique</button>
+              <button type="button" class="btn btn-sm btn-outline-secondary text-white preset-btn" onclick="setPresetUses(50)">50</button>
+              <button type="button" class="btn btn-sm btn-outline-danger active text-white preset-btn" onclick="setPresetUses(100)">100</button>
+              <button type="button" class="btn btn-sm btn-outline-secondary text-white preset-btn" onclick="setPresetUses(200)">200</button>
+              <button type="button" class="btn btn-sm btn-outline-secondary text-white preset-btn" onclick="setPresetUses(500)">500</button>
+              <button type="button" class="btn btn-sm btn-outline-secondary text-white preset-btn" onclick="setPresetUses(1000)">1000</button>
+            </div>
+
+            <div class="input-group">
+              <span class="input-group-text bg-black text-muted border-secondary"><i class="bi bi-people"></i></span>
+              <input type="number" id="inputMaxUses" class="form-control bg-black text-white border-secondary" min="1" max="100000" value="100" required oninput="document.getElementById('lblSelectedUses').textContent = this.value + ' places';">
+              <span class="input-group-text bg-black text-muted border-secondary">utilisations</span>
+            </div>
+            <div class="form-text text-muted">Ce code pourra être utilisé par autant de personnes pour créer leur compte.</div>
+          </div>
+
+          <!-- Code personnalisé (optionnel) -->
+          <div class="mb-3">
+            <label class="form-label text-light fw-semibold d-flex justify-content-between">
+              <span>Code personnalisé <span class="text-muted fw-normal">(Optionnel)</span></span>
+              <a href="javascript:void(0)" class="small text-danger text-decoration-none" onclick="generateRandomCode()">Générer aléatoire</a>
+            </label>
+            <div class="input-group">
+              <span class="input-group-text bg-black text-muted border-secondary"><i class="bi bi-key"></i></span>
+              <input type="text" id="inputCustomCode" class="form-control bg-black text-white border-secondary text-uppercase" placeholder="Ex: ATLAS500, VIP2026, PROMO..." maxlength="64">
+            </div>
+            <div class="form-text text-muted">Laissez vide pour générer automatiquement un code sécurisé (ex: INV-9A2F-81C3).</div>
+          </div>
+
+          <!-- Description ou Campagne -->
+          <div class="mb-3">
+            <label class="form-label text-light fw-semibold">Note / Description <span class="text-muted fw-normal">(Optionnel)</span></label>
+            <div class="input-group">
+              <span class="input-group-text bg-black text-muted border-secondary"><i class="bi bi-tag"></i></span>
+              <input type="text" id="inputDescription" class="form-control bg-black text-white border-secondary" placeholder="Ex: Campagne Telegram 500 places, Cadeau VIP..." maxlength="255">
+            </div>
+          </div>
+
+          <!-- Durée de Validité -->
+          <div class="mb-3">
+            <label class="form-label text-light fw-semibold">Durée de validité</label>
+            <select id="selectExpiresDays" class="form-select bg-black text-white border-secondary">
+              <option value="7">7 jours</option>
+              <option value="14">14 jours</option>
+              <option value="30" selected>30 jours (1 mois)</option>
+              <option value="90">90 jours (3 mois)</option>
+              <option value="365">365 jours (1 an)</option>
+              <option value="0">Permanente (Sans expiration)</option>
+            </select>
+          </div>
+
+          <div class="modal-footer border-secondary border-opacity-50 px-0 pb-0">
+            <button type="button" class="btn btn-outline-secondary" data-bs-dismiss="modal">Annuler</button>
+            <button type="submit" id="btnSubmitCreateInvite" class="btn btn-danger fw-semibold px-4">
+              <i class="bi bi-check-lg me-1"></i> Créer le Code
+            </button>
+          </div>
+
+        </form>
+      </div>
+    </div>
+  </div>
+</div>
 {% endblock %}
 
 {% block extra_scripts %}
 <script>
-async function generateInviteCode() {
+function copyToClipboard(text) {
+  navigator.clipboard.writeText(text).then(() => {
+    showToast(`Code copié : ${text}`, 'success');
+  }).catch(() => {
+    showToast('Erreur lors de la copie', 'error');
+  });
+}
+
+function setPresetUses(num) {
+  const input = document.getElementById('inputMaxUses');
+  input.value = num;
+  document.getElementById('lblSelectedUses').textContent = num + ' place' + (num > 1 ? 's' : '');
+  
+  // Met à jour la classe active des boutons
+  document.querySelectorAll('.preset-btn').forEach(btn => {
+    if (btn.textContent.trim().startsWith(String(num))) {
+      btn.classList.add('btn-outline-danger', 'active');
+      btn.classList.remove('btn-outline-secondary');
+    } else {
+      btn.classList.remove('btn-outline-danger', 'active');
+      btn.classList.add('btn-outline-secondary');
+    }
+  });
+}
+
+function generateRandomCode() {
+  const chars = 'ABCDEFGHJKLMNPQRSTUVWXYZ23456789';
+  let p1 = '', p2 = '';
+  for (let i = 0; i < 4; i++) p1 += chars.charAt(Math.floor(Math.random() * chars.length));
+  for (let i = 0; i < 4; i++) p2 += chars.charAt(Math.floor(Math.random() * chars.length));
+  document.getElementById('inputCustomCode').value = `INV-${p1}-${p2}`;
+}
+
+async function submitCreateInvite() {
+  const maxUses = parseInt(document.getElementById('inputMaxUses').value, 10) || 1;
+  const customCode = document.getElementById('inputCustomCode').value.trim();
+  const description = document.getElementById('inputDescription').value.trim();
+  const expiresDaysVal = parseInt(document.getElementById('selectExpiresDays').value, 10);
+  const btn = document.getElementById('btnSubmitCreateInvite');
+
+  btn.disabled = true;
+  btn.innerHTML = '<span class="spinner-border spinner-border-sm me-1"></span> Création...';
+
+  const payload = {
+    max_uses: maxUses,
+    expires_in_days: expiresDaysVal > 0 ? expiresDaysVal : null,
+  };
+  if (customCode) payload.code = customCode;
+  if (description) payload.description = description;
+
   try {
     const res = await fetch('/api/admin/invites', {
       method: 'POST',
       headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify({ expires_in_days: 14 })
+      body: JSON.stringify(payload)
     });
+
     if (res.ok) {
       const data = await res.json();
-      showToast(`Code généré : ${data.code}`, 'success');
-      setTimeout(() => location.reload(), 1000);
+      showToast(`Code créé avec succès : ${data.code} (${data.max_uses} utilisations)`, 'success');
+      // Fermer le modal
+      const modalEl = document.getElementById('modalCreateInvite');
+      const modal = bootstrap.Modal.getInstance(modalEl);
+      if (modal) modal.hide();
+      setTimeout(() => location.reload(), 900);
     } else {
-      showToast('Erreur lors de la génération', 'error');
+      const err = await res.json().catch(() => ({}));
+      showToast(err.detail || 'Erreur lors de la création du code', 'error');
+      btn.disabled = false;
+      btn.innerHTML = '<i class="bi bi-check-lg me-1"></i> Créer le Code';
+    }
+  } catch (e) {
+    showToast('Erreur serveur lors de la communication', 'error');
+    btn.disabled = false;
+    btn.innerHTML = '<i class="bi bi-check-lg me-1"></i> Créer le Code';
+  }
+}
+
+async function deleteInvite(id) {
+  if (!confirm('Êtes-vous sûr de vouloir supprimer définitivement ce code d\'invitation ?')) return;
+  try {
+    const res = await fetch(`/api/admin/invites/${id}`, { method: 'DELETE' });
+    if (res.ok) {
+      showToast('Code d\'invitation supprimé', 'success');
+      setTimeout(() => location.reload(), 700);
+    } else {
+      showToast('Erreur lors de la suppression', 'error');
     }
   } catch (e) {
     showToast('Erreur serveur', 'error');
   }
 }
 
-async function deleteInvite(id) {
-  if (!confirm('Supprimer ce code d\'invitation ?')) return;
-  try {
-    const res = await fetch(`/api/admin/invites/${id}`, { method: 'DELETE' });
-    if (res.ok) {
-      showToast('Code supprimé', 'success');
-      setTimeout(() => location.reload(), 800);
+function filterInvitesTable() {
+  const query = (document.getElementById('inviteSearchInput').value || '').toLowerCase().trim();
+  const rows = document.querySelectorAll('.invite-row');
+  let visibleCount = 0;
+
+  rows.forEach(row => {
+    const code = row.getAttribute('data-code') || '';
+    const desc = row.getAttribute('data-desc') || '';
+    if (!query || code.includes(query) || desc.includes(query)) {
+      row.style.display = '';
+      visibleCount++;
+    } else {
+      row.style.display = 'none';
     }
-  } catch (e) {
-    showToast('Erreur serveur', 'error');
-  }
+  });
+
+  const counter = document.getElementById('visibleInvitesCount');
+  if (counter) counter.textContent = visibleCount;
 }
 </script>
 {% endblock %}

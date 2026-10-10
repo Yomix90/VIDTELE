@@ -240,17 +240,30 @@ async def create_invite(
     current_admin: User = Depends(get_current_admin),
     db: AsyncSession = Depends(get_db),
 ):
-    """Génère un nouveau code d'invitation unique avec une date d'expiration."""
+    """Génère un nouveau code d'invitation (supporte les codes multi-usages ex: 100, 200, 500...)."""
     now = datetime.now(timezone.utc).replace(tzinfo=None)
     expires_at = now + timedelta(days=data.expires_in_days) if data.expires_in_days else None
 
-    # Génération d'un code lisible et sécurisé (ex: INV-9A2F-81C3)
-    random_part = secrets.token_hex(4).upper()
-    code = f"INV-{random_part[:4]}-{random_part[4:]}"
+    # Code personnalisé ou génération automatique
+    if data.code and data.code.strip():
+        code = data.code.strip().upper()
+        stmt_check = select(InviteCode).where(InviteCode.code == code)
+        existing = (await db.execute(stmt_check)).scalar_one_or_none()
+        if existing:
+            raise HTTPException(
+                status_code=status.HTTP_400_BAD_REQUEST,
+                detail=f"Le code d'invitation '{code}' existe déjà. Veuillez en choisir un autre.",
+            )
+    else:
+        random_part = secrets.token_hex(4).upper()
+        code = f"INV-{random_part[:4]}-{random_part[4:]}"
 
     invite = InviteCode(
         code=code,
+        description=data.description.strip() if data.description and data.description.strip() else None,
         created_by_id=current_admin.id,
+        max_uses=max(1, data.max_uses),
+        uses_count=0,
         expires_at=expires_at,
         is_used=False,
     )
