@@ -13,7 +13,7 @@ from sqlalchemy.orm import selectinload
 from app.config import settings
 from app.database import get_db
 from app.models import Episode, HomeRow, InviteCode, Movie, Season, Series, SystemSetting, TelegramAccount, User, Video
-from app.security import create_access_token, decode_token, verify_password
+from app.security import create_access_token, decode_token, hash_password, verify_password
 from app.services.cache_service import cache_service
 from app.services.stream_manager import stream_manager
 from app.telegram_client import telegram_manager
