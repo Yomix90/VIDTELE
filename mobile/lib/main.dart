@@ -3,6 +3,10 @@ import 'package:flutter/services.dart';
 import 'package:flutter_localizations/flutter_localizations.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 
+import 'package:google_mobile_ads/google_mobile_ads.dart';
+
+import 'core/ads/ads_config.dart';
+import 'core/ads/consent_manager.dart';
 import 'core/localization/app_localizations.dart';
 import 'core/navigation/app_route_observer.dart';
 import 'core/theme/app_theme.dart';
@@ -13,6 +17,23 @@ import 'screens/main_navigation_screen.dart';
 
 void main() async {
   WidgetsFlutterBinding.ensureInitialized();
+
+  // 1. Initialisation de Google Mobile Ads et configuration des appareils de test
+  try {
+    await MobileAds.instance.initialize();
+    if (AdsConfig.testDeviceIds.isNotEmpty) {
+      await MobileAds.instance.updateRequestConfiguration(
+        RequestConfiguration(testDeviceIds: AdsConfig.testDeviceIds),
+      );
+    }
+    // 2. Demande de consentement UMP (Europe / RGPD) en arrière-plan
+    ConsentManager.instance.requestConsent().catchError((e) {
+      debugPrint('[Main] Erreur consentement: $e');
+      return true;
+    });
+  } catch (e) {
+    debugPrint('[Main] Initialisation AdMob ignorée/échouée: $e');
+  }
 
   // Barre d'état transparente pour un rendu plein écran cinéma
   SystemChrome.setSystemUIOverlayStyle(

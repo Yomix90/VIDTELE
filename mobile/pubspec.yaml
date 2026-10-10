@@ -41,6 +41,7 @@ dependencies:
   audio_session: ^0.2.4
   google_fonts: ^9.0.0
   shimmer: ^4.0.0
+  google_mobile_ads: ^9.1.0
 
 dev_dependencies:
   flutter_test:
