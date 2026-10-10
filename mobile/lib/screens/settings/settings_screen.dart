@@ -7,8 +7,10 @@ import '../../providers/auth_provider.dart';
 import '../../providers/locale_provider.dart';
 import '../admin/admin_screen.dart';
 import '../auth/login_screen.dart';
+import '../debug/ads_debug_screen.dart';
 import '../library/history_screen.dart';
 import '../../core/services/update_service.dart';
+import 'package:flutter/foundation.dart';
 
 /// Écran des Paramètres et Profil avec support trilingue FR / EN / AR (RTL)
 class SettingsScreen extends ConsumerWidget {
@@ -192,10 +194,10 @@ class SettingsScreen extends ConsumerWidget {
           ),
           const SizedBox(height: 24),
 
-          // Section Administration (visible si admin)
-          if (user?.isAdmin == true) ...[
+          // Section Administration & Développeur (visible si admin ou en debug)
+          if (user?.isAdmin == true || kDebugMode) ...[
             Text(
-              l10n.adminPanelHeader,
+              user?.isAdmin == true ? l10n.adminPanelHeader : 'Outils Développeur',
               style: const TextStyle(
                 color: Colors.white70,
                 fontSize: 13,
@@ -204,23 +206,46 @@ class SettingsScreen extends ConsumerWidget {
               ),
             ),
             const SizedBox(height: 10),
+            if (user?.isAdmin == true) ...[
+              ListTile(
+                tileColor: AppTheme.netflixCard,
+                shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(8)),
+                leading: const Icon(Icons.admin_panel_settings, color: Colors.amber),
+                title: Text(
+                  l10n.adminServerAndSync,
+                  style: const TextStyle(color: Colors.white, fontWeight: FontWeight.bold),
+                ),
+                subtitle: Text(
+                  l10n.adminServerAndSyncDesc,
+                  style: const TextStyle(color: Colors.white60, fontSize: 12),
+                ),
+                trailing: const Icon(Icons.chevron_right, color: Colors.white38),
+                onTap: () {
+                  Navigator.push(
+                    context,
+                    MaterialPageRoute(builder: (_) => const AdminScreen()),
+                  );
+                },
+              ),
+              const SizedBox(height: 10),
+            ],
             ListTile(
               tileColor: AppTheme.netflixCard,
               shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(8)),
-              leading: const Icon(Icons.admin_panel_settings, color: Colors.amber),
-              title: Text(
-                l10n.adminServerAndSync,
-                style: const TextStyle(color: Colors.white, fontWeight: FontWeight.bold),
+              leading: const Icon(Icons.monetization_on_outlined, color: Colors.greenAccent),
+              title: const Text(
+                'Diagnostic Publicités AdMob',
+                style: TextStyle(color: Colors.white, fontWeight: FontWeight.bold),
               ),
-              subtitle: Text(
-                l10n.adminServerAndSyncDesc,
-                style: const TextStyle(color: Colors.white60, fontSize: 12),
+              subtitle: const Text(
+                'Tester les annonces vidéo avec récompense et l\'état UMP',
+                style: TextStyle(color: Colors.white60, fontSize: 12),
               ),
               trailing: const Icon(Icons.chevron_right, color: Colors.white38),
               onTap: () {
                 Navigator.push(
                   context,
-                  MaterialPageRoute(builder: (_) => const AdminScreen()),
+                  MaterialPageRoute(builder: (_) => const AdsDebugScreen()),
                 );
               },
             ),
