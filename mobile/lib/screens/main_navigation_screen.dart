@@ -5,6 +5,7 @@ import '../core/theme/app_theme.dart';
 import 'home/home_screen.dart';
 import 'library/favorites_screen.dart';
 import 'library/history_screen.dart';
+import 'player/reels_screen.dart';
 import 'settings/settings_screen.dart';
 import '../core/services/update_service.dart';
 
@@ -21,6 +22,7 @@ class _MainNavigationScreenState extends ConsumerState<MainNavigationScreen> {
 
   final List<Widget> _screens = const [
     HomeScreen(),
+    ReelsScreen(),
     FavoritesScreen(),
     HistoryScreen(),
     SettingsScreen(),
@@ -58,6 +60,11 @@ class _MainNavigationScreenState extends ConsumerState<MainNavigationScreen> {
             icon: const Icon(Icons.home_outlined),
             activeIcon: const Icon(Icons.home_filled),
             label: l10n.navHome,
+          ),
+          BottomNavigationBarItem(
+            icon: const Icon(Icons.movie_filter_outlined),
+            activeIcon: const Icon(Icons.movie_filter),
+            label: l10n.navReels,
           ),
           BottomNavigationBarItem(
             icon: const Icon(Icons.bookmark_border),

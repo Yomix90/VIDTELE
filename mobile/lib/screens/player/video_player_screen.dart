@@ -5,6 +5,7 @@ import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:video_player/video_player.dart';
 import 'package:chewie/chewie.dart';
 import 'package:dio/dio.dart';
+import 'package:wakelock_plus/wakelock_plus.dart';
 
 import '../../core/api/api_client.dart';
 import '../../core/constants/api_constants.dart';
@@ -15,20 +16,30 @@ import '../../models/video_model.dart';
 import '../../providers/library_provider.dart';
 
 /// Lecteur vidéo immersif Netflix-style avec streaming HTTP 206 partiel,
-/// reprise automatique de lecture, et synchronisation de la progression.
+/// reprise automatique de lecture, synchronisation de l'historique,
+/// maintien de l'écran allumé (Wakelock), coupure audio en arrière-plan,
+/// et enchaînement automatique des épisodes (Auto-play next).
 class VideoPlayerScreen extends ConsumerStatefulWidget {
   final VideoModel video;
+  final List<VideoModel>? playlist;
+  final int? initialIndex;
 
   const VideoPlayerScreen({
     super.key,
     required this.video,
+    this.playlist,
+    this.initialIndex,
   });
 
   @override
   ConsumerState<VideoPlayerScreen> createState() => _VideoPlayerScreenState();
 }
 
-class _VideoPlayerScreenState extends ConsumerState<VideoPlayerScreen> {
+class _VideoPlayerScreenState extends ConsumerState<VideoPlayerScreen> with WidgetsBindingObserver {
+  late VideoModel _currentVideo;
+  late int _currentIndex;
+  late List<VideoModel> _playlist;
+
   VideoPlayerController? _videoPlayerController;
   ChewieController? _chewieController;
 
@@ -38,33 +49,64 @@ class _VideoPlayerScreenState extends ConsumerState<VideoPlayerScreen> {
   Timer? _progressTimer;
   bool _isDisposed = false;
 
+  // Enchaînement automatique des épisodes
+  Timer? _autoNextTimer;
+  int _countdownSeconds = 5;
+  bool _showingNextPrompt = false;
+
   @override
   void initState() {
     super.initState();
+    WidgetsBinding.instance.addObserver(this);
+
+    _currentVideo = widget.video;
+    _playlist = widget.playlist ?? [widget.video];
+    _currentIndex = widget.initialIndex ?? _playlist.indexWhere((v) => v.id == widget.video.id);
+    if (_currentIndex < 0) _currentIndex = 0;
+
     _initPlayer();
   }
 
+  @override
+  void didChangeAppLifecycleState(AppLifecycleState state) {
+    if (state == AppLifecycleState.paused || state == AppLifecycleState.inactive) {
+      // Coupure immédiate du son et pause quand l'application passe en arrière-plan
+      _videoPlayerController?.pause();
+      WakelockPlus.disable();
+    } else if (state == AppLifecycleState.resumed) {
+      if (_videoPlayerController?.value.isPlaying == true) {
+        WakelockPlus.enable();
+      }
+    }
+  }
+
+  bool get _hasNextVideo => _currentIndex + 1 < _playlist.length;
+  bool get _hasPreviousVideo => _currentIndex > 0;
+  VideoModel? get _nextVideo => _hasNextVideo ? _playlist[_currentIndex + 1] : null;
+
   /// Initialisation du contrôleur vidéo et du streaming sécurisé
   Future<void> _initPlayer() async {
+    _autoNextTimer?.cancel();
     setState(() {
       _isLoading = true;
       _errorCode = null;
       _customError = null;
+      _showingNextPrompt = false;
+      _countdownSeconds = 5;
     });
 
     try {
       final baseUrl = await storageService.getServerUrl();
       final accessToken = await storageService.getAccessToken();
 
-      // 1. Obtention d'un jeton de streaming dédié ou utilisation de l'access token
+      // 1. Obtention d'un jeton de streaming dédié ou fallback accessToken
       String? streamToken;
       try {
         final tokenRes = await apiClient.dio.post(
-          ApiConstants.videoStreamToken(widget.video.id),
+          ApiConstants.videoStreamToken(_currentVideo.id),
         );
         streamToken = tokenRes.data['stream_token'];
       } catch (e) {
-        // En cas de secours, utiliser le jeton d'authentification principal
         streamToken = accessToken;
       }
 
@@ -74,7 +116,7 @@ class _VideoPlayerScreenState extends ConsumerState<VideoPlayerScreen> {
 
       // 2. Construction de l'URL de streaming avec jeton
       final streamUri = Uri.parse(
-        '$baseUrl${ApiConstants.videoStream(widget.video.id)}?token=$streamToken',
+        '$baseUrl${ApiConstants.videoStream(_currentVideo.id)}?token=$streamToken',
       );
 
       // 3. Initialisation du contrôleur natif
@@ -92,9 +134,12 @@ class _VideoPlayerScreenState extends ConsumerState<VideoPlayerScreen> {
         return;
       }
 
+      // Activer l'écouteur de fin de vidéo et wakelock
+      controller.addListener(_onVideoControllerUpdate);
+
       // 4. Reprise automatique à la dernière position connue (si non terminée)
-      if (widget.video.watchProgressSeconds > 0 && !widget.video.isCompleted) {
-        final resumePosition = Duration(seconds: widget.video.watchProgressSeconds.toInt());
+      if (_currentVideo.watchProgressSeconds > 0 && !_currentVideo.isCompleted) {
+        final resumePosition = Duration(seconds: _currentVideo.watchProgressSeconds.toInt());
         if (resumePosition < controller.value.duration) {
           await controller.seekTo(resumePosition);
         }
@@ -161,6 +206,9 @@ class _VideoPlayerScreenState extends ConsumerState<VideoPlayerScreen> {
         _isLoading = false;
       });
 
+      // Maintien actif de l'écran pendant la lecture
+      WakelockPlus.enable();
+
       // 6. Démarrage du heartbeat périodique de progression (toutes les 10 secondes)
       _startProgressTimer();
     } on DioException catch (e) {
@@ -176,6 +224,70 @@ class _VideoPlayerScreenState extends ConsumerState<VideoPlayerScreen> {
         _customError = e.toString();
       });
     }
+  }
+
+  void _onVideoControllerUpdate() {
+    final controller = _videoPlayerController;
+    if (controller == null || !controller.value.isInitialized) return;
+
+    if (controller.value.isPlaying) {
+      WakelockPlus.enable();
+    }
+
+    // Détection de fin de vidéo pour auto-play next episode
+    final pos = controller.value.position;
+    final dur = controller.value.duration;
+    if (dur > Duration.zero && pos >= dur - const Duration(seconds: 1)) {
+      if (_hasNextVideo && !_showingNextPrompt) {
+        _startAutoNextCountdown();
+      }
+    }
+  }
+
+  /// Démarre le compte à rebours de passage à l'épisode suivant
+  void _startAutoNextCountdown() {
+    _showingNextPrompt = true;
+    _countdownSeconds = 5;
+    setState(() {});
+
+    _autoNextTimer?.cancel();
+    _autoNextTimer = Timer.periodic(const Duration(seconds: 1), (timer) {
+      if (_countdownSeconds > 1) {
+        setState(() => _countdownSeconds--);
+      } else {
+        timer.cancel();
+        _playNextEpisode();
+      }
+    });
+  }
+
+  void _cancelAutoNext() {
+    _autoNextTimer?.cancel();
+    setState(() {
+      _showingNextPrompt = false;
+    });
+  }
+
+  Future<void> _playNextEpisode() async {
+    if (!_hasNextVideo) return;
+    _autoNextTimer?.cancel();
+    await _cleanUpAndRelease();
+    setState(() {
+      _currentIndex++;
+      _currentVideo = _playlist[_currentIndex];
+    });
+    _initPlayer();
+  }
+
+  Future<void> _playPreviousEpisode() async {
+    if (!_hasPreviousVideo) return;
+    _autoNextTimer?.cancel();
+    await _cleanUpAndRelease();
+    setState(() {
+      _currentIndex--;
+      _currentVideo = _playlist[_currentIndex];
+    });
+    _initPlayer();
   }
 
   /// Démarre l'envoi de la progression toutes les 10 secondes
@@ -198,7 +310,7 @@ class _VideoPlayerScreenState extends ConsumerState<VideoPlayerScreen> {
     final completed = isCompletedCheck && (pos >= dur - 15 || pos / dur > 0.92);
 
     ref.read(historyProvider.notifier).updateProgress(
-          widget.video.id,
+          _currentVideo.id,
           pos,
           completed,
         );
@@ -207,22 +319,29 @@ class _VideoPlayerScreenState extends ConsumerState<VideoPlayerScreen> {
   /// Libère la session de stream sur le serveur et nettoie les contrôleurs
   Future<void> _cleanUpAndRelease() async {
     _progressTimer?.cancel();
+    _autoNextTimer?.cancel();
     _sendCurrentProgress(isCompletedCheck: true);
 
     try {
-      await apiClient.dio.post(ApiConstants.videoStop(widget.video.id));
+      await apiClient.dio.post(ApiConstants.videoStop(_currentVideo.id));
     } catch (_) {
       // Ignorer l'erreur réseau à la fermeture
     }
 
+    _videoPlayerController?.removeListener(_onVideoControllerUpdate);
     _chewieController?.dispose();
     _videoPlayerController?.dispose();
+    _chewieController = null;
+    _videoPlayerController = null;
   }
 
   @override
   void dispose() {
     _isDisposed = true;
+    WidgetsBinding.instance.removeObserver(this);
+    WakelockPlus.disable();
     _cleanUpAndRelease();
+
     // Rétablir l'orientation automatique et l'UI système
     SystemChrome.setPreferredOrientations([
       DeviceOrientation.portraitUp,
@@ -252,7 +371,7 @@ class _VideoPlayerScreenState extends ConsumerState<VideoPlayerScreen> {
       body: SafeArea(
         child: Stack(
           children: [
-            // Contenu principal du lecteur
+            // 1. Contenu principal du lecteur
             Center(
               child: _isLoading
                   ? Column(
@@ -298,7 +417,7 @@ class _VideoPlayerScreenState extends ConsumerState<VideoPlayerScreen> {
                           : const SizedBox.shrink(),
             ),
 
-            // Bouton retour flottant
+            // 2. Bouton retour flottant
             Positioned(
               top: 12,
               left: 12,
@@ -314,39 +433,62 @@ class _VideoPlayerScreenState extends ConsumerState<VideoPlayerScreen> {
               ),
             ),
 
-            // Titre de la vidéo en haut au centre
+            // 3. Titre de la vidéo en haut au centre
             Positioned(
               top: 18,
               left: 70,
               right: 70,
               child: Container(
-                padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 6),
+                padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 6),
                 decoration: BoxDecoration(
-                  color: Colors.black.withValues(alpha: 0.5),
+                  color: Colors.black.withValues(alpha: 0.6),
                   borderRadius: BorderRadius.circular(20),
+                  border: Border.all(color: Colors.white10),
                 ),
-                child: Text(
-                  widget.video.title,
-                  textAlign: TextAlign.center,
-                  maxLines: 1,
-                  overflow: TextOverflow.ellipsis,
-                  style: const TextStyle(
-                    color: Colors.white,
-                    fontSize: 14,
-                    fontWeight: FontWeight.bold,
-                  ),
+                child: Row(
+                  mainAxisSize: MainAxisSize.min,
+                  mainAxisAlignment: MainAxisAlignment.center,
+                  children: [
+                    if (_currentVideo.episodeNumber != null) ...[
+                      Container(
+                        padding: const EdgeInsets.symmetric(horizontal: 6, vertical: 2),
+                        decoration: BoxDecoration(
+                          color: AppTheme.netflixRed,
+                          borderRadius: BorderRadius.circular(4),
+                        ),
+                        child: Text(
+                          'EP ${_currentVideo.episodeNumber}',
+                          style: const TextStyle(color: Colors.white, fontSize: 10, fontWeight: FontWeight.bold),
+                        ),
+                      ),
+                      const SizedBox(width: 8),
+                    ],
+                    Flexible(
+                      child: Text(
+                        _currentVideo.episodeTitle ?? _currentVideo.title,
+                        textAlign: TextAlign.center,
+                        maxLines: 1,
+                        overflow: TextOverflow.ellipsis,
+                        style: const TextStyle(
+                          color: Colors.white,
+                          fontSize: 13,
+                          fontWeight: FontWeight.bold,
+                        ),
+                      ),
+                    ),
+                  ],
                 ),
               ),
             ),
 
-            // Bouton Favori en haut à droite
+            // 4. Bouton Favori en haut à droite
             Positioned(
               top: 12,
               right: 12,
               child: Consumer(
                 builder: (context, ref, _) {
                   final favorites = ref.watch(favoritesProvider).value ?? [];
-                  final isFav = favorites.any((v) => v.id == widget.video.id);
+                  final isFav = favorites.any((v) => v.id == _currentVideo.id);
 
                   return Container(
                     decoration: BoxDecoration(
@@ -359,13 +501,122 @@ class _VideoPlayerScreenState extends ConsumerState<VideoPlayerScreen> {
                         color: isFav ? AppTheme.netflixRed : Colors.white,
                       ),
                       onPressed: () {
-                        ref.read(favoritesProvider.notifier).toggleFavorite(widget.video);
+                        ref.read(favoritesProvider.notifier).toggleFavorite(_currentVideo);
                       },
                     ),
                   );
                 },
               ),
             ),
+
+            // 5a. Bouton épisode précédent (si disponible dans la playlist)
+            if (_hasPreviousVideo && !_showingNextPrompt)
+              Positioned(
+                bottom: 24,
+                left: 20,
+                child: FloatingActionButton.extended(
+                  heroTag: 'prev_ep_fab',
+                  onPressed: _playPreviousEpisode,
+                  backgroundColor: Colors.black.withValues(alpha: 0.6),
+                  icon: const Icon(Icons.skip_previous, color: Colors.white),
+                  label: const Text(
+                    'Précédent',
+                    style: TextStyle(color: Colors.white, fontWeight: FontWeight.bold),
+                  ),
+                ),
+              ),
+
+            // 5b. Bouton épisode suivant rapide (si disponible dans la playlist)
+            if (_hasNextVideo && !_showingNextPrompt)
+              Positioned(
+                bottom: 24,
+                right: 20,
+                child: FloatingActionButton.extended(
+                  heroTag: 'next_ep_fab',
+                  onPressed: _playNextEpisode,
+                  backgroundColor: AppTheme.netflixRed.withValues(alpha: 0.85),
+                  icon: const Icon(Icons.skip_next, color: Colors.white),
+                  label: const Text(
+                    'Suivant',
+                    style: TextStyle(color: Colors.white, fontWeight: FontWeight.bold),
+                  ),
+                ),
+              ),
+
+            // 6. Overlay Compte à rebours Auto-Play Next Episode (Style Netflix)
+            if (_showingNextPrompt && _nextVideo != null)
+              Positioned(
+                bottom: 30,
+                left: 20,
+                right: 20,
+                child: Container(
+                  padding: const EdgeInsets.all(16),
+                  decoration: BoxDecoration(
+                    color: const Color(0xEE1E1E1E),
+                    borderRadius: BorderRadius.circular(12),
+                    border: Border.all(color: AppTheme.netflixRed.withValues(alpha: 0.6)),
+                    boxShadow: [
+                      BoxShadow(
+                        color: Colors.black.withValues(alpha: 0.8),
+                        blurRadius: 16,
+                      ),
+                    ],
+                  ),
+                  child: Row(
+                    children: [
+                      Stack(
+                        alignment: Alignment.center,
+                        children: [
+                          CircularProgressIndicator(
+                            value: _countdownSeconds / 5.0,
+                            color: AppTheme.netflixRed,
+                            backgroundColor: Colors.white12,
+                          ),
+                          Text(
+                            '$_countdownSeconds',
+                            style: const TextStyle(color: Colors.white, fontWeight: FontWeight.bold, fontSize: 16),
+                          ),
+                        ],
+                      ),
+                      const SizedBox(width: 16),
+                      Expanded(
+                        child: Column(
+                          crossAxisAlignment: CrossAxisAlignment.start,
+                          mainAxisSize: MainAxisSize.min,
+                          children: [
+                            const Text(
+                              'Prochain épisode dans quelques secondes...',
+                              style: TextStyle(color: Colors.white70, fontSize: 11),
+                            ),
+                            const SizedBox(height: 2),
+                            Text(
+                              _nextVideo!.episodeTitle ?? _nextVideo!.title,
+                              maxLines: 1,
+                              overflow: TextOverflow.ellipsis,
+                              style: const TextStyle(color: Colors.white, fontWeight: FontWeight.bold, fontSize: 14),
+                            ),
+                          ],
+                        ),
+                      ),
+                      TextButton(
+                        onPressed: _cancelAutoNext,
+                        child: const Text('Annuler', style: TextStyle(color: Colors.white54)),
+                      ),
+                      const SizedBox(width: 6),
+                      ElevatedButton.icon(
+                        onPressed: _playNextEpisode,
+                        style: ElevatedButton.styleFrom(
+                          backgroundColor: AppTheme.netflixRed,
+                          foregroundColor: Colors.white,
+                          padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 8),
+                        ),
+                        icon: const Icon(Icons.play_arrow, size: 18),
+                        label: const Text('Lire', style: TextStyle(fontWeight: FontWeight.bold)),
+                      ),
+                    ],
+                  ),
+                ),
+              ),
           ],
         ),
       ),

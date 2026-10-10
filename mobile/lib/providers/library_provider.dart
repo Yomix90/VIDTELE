@@ -18,7 +18,12 @@ class FavoritesNotifier extends StateNotifier<AsyncValue<List<VideoModel>>> {
     try {
       final response = await apiClient.dio.get(ApiConstants.favorites);
       final List<dynamic> data = response.data;
-      final favorites = data.map((item) => VideoModel.fromJson(item)).toList();
+      final favorites = data.map((item) {
+        if (item is Map<String, dynamic> && item['video'] != null) {
+          return VideoModel.fromJson(item['video']);
+        }
+        return VideoModel.fromJson(item);
+      }).toList();
       state = AsyncValue.data(favorites);
     } catch (e, st) {
       state = AsyncValue.error(e, st);
@@ -76,12 +81,25 @@ class HistoryItem {
   });
 
   factory HistoryItem.fromJson(Map<String, dynamic> json) {
+    final VideoModel vid = json['video'] != null && json['video'] is Map<String, dynamic>
+        ? VideoModel.fromJson(json['video'])
+        : VideoModel.fromJson(json);
+
+    final double lastPos = (json['last_position_seconds'] as num?)?.toDouble() ??
+        (json['position_seconds'] as num?)?.toDouble() ??
+        (json['progress_seconds'] as num?)?.toDouble() ??
+        0.0;
+    final double progSec = (json['progress_seconds'] as num?)?.toDouble() ??
+        (json['position_seconds'] as num?)?.toDouble() ??
+        lastPos;
+    final bool comp = json['is_completed'] ?? json['completed'] ?? false;
+
     return HistoryItem(
-      video: VideoModel.fromJson(json['video']),
-      progressSeconds: (json['progress_seconds'] as num?)?.toDouble() ?? 0.0,
-      lastPositionSeconds: (json['last_position_seconds'] as num?)?.toDouble() ?? 0.0,
-      isCompleted: json['is_completed'] ?? false,
-      updatedAt: DateTime.tryParse(json['updated_at'] ?? '') ?? DateTime.now(),
+      video: vid,
+      progressSeconds: progSec,
+      lastPositionSeconds: lastPos,
+      isCompleted: comp,
+      updatedAt: DateTime.tryParse(json['updated_at'] ?? json['last_watched_at'] ?? '') ?? DateTime.now(),
     );
   }
 
@@ -117,6 +135,7 @@ class HistoryNotifier extends StateNotifier<AsyncValue<List<HistoryItem>>> {
       await apiClient.dio.put(
         ApiConstants.videoProgress(videoId),
         data: {
+          'position_seconds': progressSeconds,
           'progress_seconds': progressSeconds,
           'completed': completed,
         },

@@ -236,8 +236,16 @@ class SyncStatusResponse(BaseModel):
 # -------------------------------------------------------------
 
 class ProgressUpdateRequest(BaseModel):
-    position_seconds: float = Field(..., ge=0.0, description="Position de lecture en secondes")
+    position_seconds: Optional[float] = Field(None, ge=0.0, description="Position de lecture en secondes")
+    progress_seconds: Optional[float] = Field(None, ge=0.0, description="Position alternative")
     completed: bool = Field(default=False, description="Indique si la vidéo est terminée")
+
+    def get_position(self) -> float:
+        if self.position_seconds is not None:
+            return self.position_seconds
+        if self.progress_seconds is not None:
+            return self.progress_seconds
+        return 0.0
 
 
 class WatchHistoryItem(BaseModel):
@@ -247,8 +255,13 @@ class WatchHistoryItem(BaseModel):
     video_thumbnail: Optional[str] = None
     duration_seconds: int
     position_seconds: float
+    progress_seconds: Optional[float] = None
+    last_position_seconds: Optional[float] = None
     completed: bool
+    is_completed: Optional[bool] = None
     last_watched_at: datetime
+    updated_at: Optional[datetime] = None
+    video: Optional[VideoResponse] = None
 
 
 class FavoriteItem(BaseModel):
@@ -258,6 +271,7 @@ class FavoriteItem(BaseModel):
     video_thumbnail: Optional[str] = None
     duration_seconds: int
     created_at: datetime
+    video: Optional[VideoResponse] = None
 
 
 # -------------------------------------------------------------

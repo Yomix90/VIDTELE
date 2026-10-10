@@ -5,6 +5,7 @@ import '../../core/constants/api_constants.dart';
 import '../../core/localization/app_localizations.dart';
 import '../../core/storage/storage_service.dart';
 import '../../core/theme/app_theme.dart';
+import '../../core/utils/image_utils.dart';
 import '../../providers/library_provider.dart';
 import '../player/video_player_screen.dart';
 
@@ -116,9 +117,7 @@ class HistoryScreen extends ConsumerWidget {
                   itemBuilder: (context, index) {
                     final item = items[index];
                     final video = item.video;
-                    final thumbUrl = video.thumbnailPath != null
-                        ? '$baseUrl${video.thumbnailPath}'
-                        : null;
+                    final thumbUrl = ImageUtils.resolveUrl(video.thumbnailPath, baseUrl);
 
                     return InkWell(
                       onTap: () {

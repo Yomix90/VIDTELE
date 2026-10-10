@@ -5,6 +5,7 @@ import '../../core/constants/api_constants.dart';
 import '../../core/localization/app_localizations.dart';
 import '../../core/storage/storage_service.dart';
 import '../../core/theme/app_theme.dart';
+import '../../core/utils/image_utils.dart';
 import '../../models/video_model.dart';
 import '../../providers/video_provider.dart';
 import '../../widgets/top_number_card.dart';
@@ -29,11 +30,15 @@ class _HomeScreenState extends ConsumerState<HomeScreen> {
     super.dispose();
   }
 
-  void _onVideoSelected(VideoModel video) {
+  void _onVideoSelected(VideoModel video, [List<VideoModel>? playlist]) {
     Navigator.push(
       context,
       MaterialPageRoute(
-        builder: (_) => VideoPlayerScreen(video: video),
+        builder: (_) => VideoPlayerScreen(
+          video: video,
+          playlist: playlist,
+          initialIndex: playlist?.indexOf(video),
+        ),
       ),
     );
   }
@@ -231,6 +236,9 @@ class _HomeScreenState extends ConsumerState<HomeScreen> {
                   children: [
                     const SizedBox(height: 18),
 
+                    // 0. Slider / Carousel des Dernières Séries Ajoutées
+                    _buildLatestSeriesSlider(l10n),
+
                     // A. Rangée "Continuer la lecture" (si historique en cours)
                     if (continueWatching.isNotEmpty) ...[
                       _buildSectionHeader(l10n.continueWatching),
@@ -247,7 +255,7 @@ class _HomeScreenState extends ConsumerState<HomeScreen> {
                               showProgress: true,
                               width: 135,
                               height: 190,
-                              onTap: () => _onVideoSelected(vid),
+                              onTap: () => _onVideoSelected(vid, continueWatching),
                             );
                           },
                         ),
@@ -269,7 +277,7 @@ class _HomeScreenState extends ConsumerState<HomeScreen> {
                             return TopNumberCard(
                               rank: index + 1,
                               video: vid,
-                              onTap: () => _onVideoSelected(vid),
+                              onTap: () => _onVideoSelected(vid, top5Videos),
                             );
                           },
                         ),
@@ -303,7 +311,7 @@ class _HomeScreenState extends ConsumerState<HomeScreen> {
                                             video: vid,
                                             width: 135,
                                             height: 190,
-                                            onTap: () => _onVideoSelected(vid),
+                                            onTap: () => _onVideoSelected(vid, catVideos),
                                           );
                                         },
                                       ),
@@ -323,6 +331,7 @@ class _HomeScreenState extends ConsumerState<HomeScreen> {
                   ],
                 ),
               ),
+
             ],
           ],
         ),
@@ -346,13 +355,193 @@ class _HomeScreenState extends ConsumerState<HomeScreen> {
     );
   }
 
+  /// Section Slider / Carousel des Dernières Séries Ajoutées
+  Widget _buildLatestSeriesSlider(AppLocalizations l10n) {
+    final latestSeriesAsync = ref.watch(latestSeriesProvider);
+    final videoList = ref.watch(videoListProvider).value ?? [];
+
+    return latestSeriesAsync.when(
+      data: (seriesList) {
+        if (seriesList.isEmpty) return const SizedBox.shrink();
+
+        return Column(
+          crossAxisAlignment: CrossAxisAlignment.start,
+          children: [
+            _buildSectionHeader(l10n.latestSeriesTitle),
+            SizedBox(
+              height: 220,
+              child: FutureBuilder<String>(
+                future: storageService.getServerUrl(),
+                builder: (context, snapshot) {
+                  final baseUrl = snapshot.data ?? ApiConstants.defaultBaseUrl;
+
+                  return ListView.builder(
+                    scrollDirection: Axis.horizontal,
+                    padding: const EdgeInsets.symmetric(horizontal: 16),
+                    itemCount: seriesList.length,
+                    itemBuilder: (context, index) {
+                      final s = seriesList[index];
+                      final posterUrl = ImageUtils.resolveUrl(s.posterPath ?? s.bannerPath, baseUrl);
+
+                      return GestureDetector(
+                        onTap: () {
+                          if (s.firstVideoId != null) {
+                            final targetVid = videoList.firstWhere(
+                              (v) => v.id == s.firstVideoId,
+                              orElse: () => VideoModel(
+                                id: s.firstVideoId!,
+                                telegramMessageId: 0,
+                                title: s.title,
+                                category: 'Série',
+                                durationSeconds: 0,
+                                fileSizeBytes: 0,
+                                mimeType: 'video/mp4',
+                                thumbnailPath: s.posterPath,
+                                viewsCount: 0,
+                                isFavorite: false,
+                                watchProgressSeconds: 0.0,
+                                isCompleted: false,
+                              ),
+                            );
+                            _onVideoSelected(targetVid, videoList);
+                          }
+                        },
+                        child: Container(
+                          width: 145,
+                          margin: const EdgeInsets.only(right: 12),
+                          decoration: BoxDecoration(
+                            color: AppTheme.netflixCard,
+                            borderRadius: BorderRadius.circular(8),
+                            boxShadow: [
+                              BoxShadow(
+                                color: Colors.black.withValues(alpha: 0.5),
+                                blurRadius: 6,
+                                offset: const Offset(0, 3),
+                              ),
+                            ],
+                          ),
+                          child: ClipRRect(
+                            borderRadius: BorderRadius.circular(8),
+                            child: Stack(
+                              fit: StackFit.expand,
+                              children: [
+                                posterUrl != null
+                                    ? CachedNetworkImage(
+                                        imageUrl: posterUrl,
+                                        fit: BoxFit.cover,
+                                        placeholder: (context, url) => Container(
+                                          color: const Color(0xFF1F1F1F),
+                                          child: const Center(
+                                            child: CircularProgressIndicator(
+                                              strokeWidth: 2,
+                                              color: AppTheme.netflixRed,
+                                            ),
+                                          ),
+                                        ),
+                                        errorWidget: (context, url, error) => Container(
+                                          color: const Color(0xFF1F1F1F),
+                                          child: const Icon(Icons.tv, size: 40, color: Colors.white24),
+                                        ),
+                                      )
+                                    : Container(
+                                        color: const Color(0xFF1F1F1F),
+                                        child: const Icon(Icons.tv, size: 40, color: Colors.white24),
+                                      ),
+                                Positioned.fill(
+                                  child: Container(
+                                    decoration: const BoxDecoration(
+                                      gradient: LinearGradient(
+                                        colors: [
+                                          Colors.transparent,
+                                          Colors.transparent,
+                                          Color(0xCC000000),
+                                          Colors.black,
+                                        ],
+                                        begin: Alignment.topCenter,
+                                        end: Alignment.bottomCenter,
+                                      ),
+                                    ),
+                                  ),
+                                ),
+                                if (s.rating != null)
+                                  Positioned(
+                                    top: 6,
+                                    right: 6,
+                                    child: Container(
+                                      padding: const EdgeInsets.symmetric(horizontal: 5, vertical: 2),
+                                      decoration: BoxDecoration(
+                                        color: Colors.black.withValues(alpha: 0.75),
+                                        borderRadius: BorderRadius.circular(4),
+                                      ),
+                                      child: Row(
+                                        mainAxisSize: MainAxisSize.min,
+                                        children: [
+                                          const Icon(Icons.star, color: Colors.amber, size: 12),
+                                          const SizedBox(width: 2),
+                                          Text(
+                                            s.rating!.toStringAsFixed(1),
+                                            style: const TextStyle(
+                                              color: Colors.white,
+                                              fontSize: 10,
+                                              fontWeight: FontWeight.bold,
+                                            ),
+                                          ),
+                                        ],
+                                      ),
+                                    ),
+                                  ),
+                                Positioned(
+                                  left: 8,
+                                  right: 8,
+                                  bottom: 8,
+                                  child: Column(
+                                    crossAxisAlignment: CrossAxisAlignment.start,
+                                    mainAxisSize: MainAxisSize.min,
+                                    children: [
+                                      Text(
+                                        s.title,
+                                        maxLines: 1,
+                                        overflow: TextOverflow.ellipsis,
+                                        style: const TextStyle(
+                                          color: Colors.white,
+                                          fontSize: 12,
+                                          fontWeight: FontWeight.bold,
+                                        ),
+                                      ),
+                                      if (s.year != null)
+                                        Text(
+                                          '${s.year}',
+                                          style: const TextStyle(color: Colors.white54, fontSize: 10),
+                                        ),
+                                    ],
+                                  ),
+                                ),
+                              ],
+                            ),
+                          ),
+                        ),
+                      );
+                    },
+                  );
+                },
+              ),
+            ),
+            const SizedBox(height: 24),
+          ],
+        );
+      },
+      loading: () => const SizedBox.shrink(),
+      error: (_, __) => const SizedBox.shrink(),
+    );
+  }
+
   /// Affiche principale Hero Banner
   Widget _buildHeroBanner(VideoModel video, AppLocalizations l10n) {
     return FutureBuilder<String>(
       future: storageService.getServerUrl(),
       builder: (context, snapshot) {
         final baseUrl = snapshot.data ?? ApiConstants.defaultBaseUrl;
-        final thumbUrl = video.thumbnailPath != null ? '$baseUrl${video.thumbnailPath}' : null;
+        final thumbUrl = ImageUtils.resolveUrl(video.thumbnailPath, baseUrl);
 
         return Stack(
           alignment: Alignment.bottomCenter,
@@ -443,7 +632,10 @@ class _HomeScreenState extends ConsumerState<HomeScreen> {
                     children: [
                       // Bouton Lecture blanc (Style Netflix)
                       ElevatedButton.icon(
-                        onPressed: () => _onVideoSelected(video),
+                        onPressed: () {
+                          final allVids = ref.read(videoListProvider).value ?? [];
+                          _onVideoSelected(video, allVids);
+                        },
                         style: ElevatedButton.styleFrom(
                           backgroundColor: Colors.white,
                           foregroundColor: Colors.black,
@@ -460,7 +652,10 @@ class _HomeScreenState extends ConsumerState<HomeScreen> {
 
                       // Bouton Info / Détails
                       OutlinedButton.icon(
-                        onPressed: () => _onVideoSelected(video),
+                        onPressed: () {
+                          final allVids = ref.read(videoListProvider).value ?? [];
+                          _onVideoSelected(video, allVids);
+                        },
                         style: OutlinedButton.styleFrom(
                           foregroundColor: Colors.white,
                           side: const BorderSide(color: Colors.white54),

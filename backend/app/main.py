@@ -188,11 +188,14 @@ async def check_app_version(
     res = await db.execute(select(SystemSetting).where(SystemSetting.key.in_(settings_keys)))
     settings_dict = {row.key: row.value for row in res.scalars().all()}
 
-    latest_ver = settings_dict.get("app_latest_version", "1.0.0")
+    apk_fallback = Path(__file__).resolve().parent / "static" / "uploads" / "apk" / "atlas-play.apk"
+    fallback_url = "/static/uploads/apk/atlas-play.apk" if apk_fallback.exists() else ""
+
+    latest_ver = settings_dict.get("app_latest_version", "1.2.0")
     min_ver = settings_dict.get("app_min_version", "1.0.0")
-    download_url = settings_dict.get("app_update_url", "")
-    title = settings_dict.get("app_update_title", "Nouvelle version disponible")
-    notes = settings_dict.get("app_update_notes", "")
+    download_url = settings_dict.get("app_update_url") or fallback_url
+    title = settings_dict.get("app_update_title", "Nouvelle version Atlas Play disponible")
+    notes = settings_dict.get("app_update_notes", "Améliorations des posters, zapping TikTok, enchaînement automatique des épisodes et veille d'écran.")
     force_update = settings_dict.get("app_update_force", "false").lower() == "true"
 
     has_update = False

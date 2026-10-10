@@ -3,6 +3,7 @@ import 'package:flutter/material.dart';
 import '../core/constants/api_constants.dart';
 import '../core/storage/storage_service.dart';
 import '../core/theme/app_theme.dart';
+import '../core/utils/image_utils.dart';
 import '../models/video_model.dart';
 
 /// Carte vidéo moderne inspirée des vignettes Netflix.
@@ -28,7 +29,7 @@ class VideoCard extends StatelessWidget {
       future: storageService.getServerUrl(),
       builder: (context, snapshot) {
         final baseUrl = snapshot.data ?? ApiConstants.defaultBaseUrl;
-        final thumbUrl = video.thumbnailPath != null ? '$baseUrl${video.thumbnailPath}' : null;
+        final thumbUrl = ImageUtils.resolveUrl(video.thumbnailPath, baseUrl);
 
         return GestureDetector(
           onTap: onTap,

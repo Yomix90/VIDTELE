@@ -5,13 +5,13 @@ import math
 from pathlib import Path
 from typing import List, Optional
 from fastapi import APIRouter, Depends, HTTPException, Query, Request, status
-from fastapi.responses import FileResponse, Response
+from fastapi.responses import FileResponse, Response, RedirectResponse
 from sqlalchemy import desc, func, or_, select
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.config import settings
 from app.database import get_db
-from app.models import Favorite, User, Video, WatchHistory
+from app.models import Favorite, User, Video, WatchHistory, Episode, Season, Series, Movie
 from app.schemas import CategoryItem, VideoListResponse, VideoResponse
 from app.security import create_stream_token, decode_token, get_client_ip, get_current_active_user
 from app.services.stream_manager import stream_manager
@@ -96,10 +96,33 @@ async def get_videos(
         for h in hist_res.scalars().all():
             user_history_map[h.video_id] = (h.position_seconds, h.completed)
 
+    # Récupérer les affiches/posters des séries et films pour les vidéos sans miniature directe
+    poster_map = {}
+    if video_ids:
+        ep_stmt = (
+            select(Episode.telegram_video_id, Episode.thumbnail_path, Series.poster_path)
+            .join(Season, Episode.season_id == Season.id)
+            .join(Series, Season.series_id == Series.id)
+            .where(Episode.telegram_video_id.in_(video_ids))
+        )
+        ep_res = await db.execute(ep_stmt)
+        for vid_id, ep_thumb, series_poster in ep_res.all():
+            if vid_id and (ep_thumb or series_poster):
+                poster_map[vid_id] = ep_thumb or series_poster
+
+        mv_stmt = select(Movie.telegram_video_id, Movie.poster_path).where(
+            Movie.telegram_video_id.in_(video_ids)
+        )
+        mv_res = await db.execute(mv_stmt)
+        for vid_id, mv_poster in mv_res.all():
+            if vid_id and mv_poster:
+                poster_map[vid_id] = mv_poster
+
     # Construction de la réponse enrichie
     items: List[VideoResponse] = []
     for v in videos:
         pos, completed = user_history_map.get(v.id, (0.0, False))
+        effective_thumb = v.thumbnail_path or poster_map.get(v.id) or f"/api/videos/{v.id}/thumbnail"
         items.append(
             VideoResponse(
                 id=v.id,
@@ -110,7 +133,7 @@ async def get_videos(
                 duration_seconds=v.duration_seconds,
                 file_size_bytes=v.file_size_bytes,
                 mime_type=v.mime_type,
-                thumbnail_path=v.thumbnail_path,
+                thumbnail_path=effective_thumb,
                 file_name=v.file_name,
                 views_count=v.views_count,
                 telegram_date=v.telegram_date,
@@ -237,6 +260,17 @@ async def get_video_thumbnail(video_id: int, db: AsyncSession = Depends(get_db))
     disk_path = Path(settings.THUMBNAILS_DIR) / filename
 
     if not disk_path.exists():
+        if video.thumbnail_path:
+            clean_thumb = video.thumbnail_path.strip()
+            if clean_thumb.startswith("http://") or clean_thumb.startswith("https://"):
+                return RedirectResponse(url=clean_thumb)
+            if clean_thumb.startswith("/static/"):
+                disk_static = Path(__file__).resolve().parent.parent / clean_thumb.lstrip("/")
+                if disk_static.exists():
+                    return FileResponse(
+                        path=disk_static,
+                        headers={"Cache-Control": "public, max-age=86400"},
+                    )
         # Générer un placeholder SVG simple si la miniature n'existe pas encore sur disque
         svg_content = f"""<svg xmlns="http://www.w3.org/2000/svg" width="320" height="180" viewBox="0 0 320 180">
             <rect width="320" height="180" fill="#1e293b"/>
@@ -371,3 +405,54 @@ async def stop_stream(
     return {"status": "released", "video_id": video_id}
 
 
+
+
+@router.get("/series/latest")
+async def get_latest_series_slider(
+    limit: int = Query(10, ge=1, le=50),
+    current_user: User = Depends(get_current_active_user),
+    db: AsyncSession = Depends(get_db),
+):
+    """
+    Récupère la liste des dernières séries ajoutées pour le carousel/slider d'accueil mobile.
+    """
+    stmt = (
+        select(Series)
+        .where(Series.visibility == "published")
+        .order_by(desc(Series.created_at))
+        .limit(limit)
+    )
+    res = await db.execute(stmt)
+    series_list = res.scalars().all()
+
+    if not series_list:
+        stmt2 = select(Series).order_by(desc(Series.created_at)).limit(limit)
+        series_list = (await db.execute(stmt2)).scalars().all()
+
+    out = []
+    for s in series_list:
+        first_ep_stmt = (
+            select(Episode, Video)
+            .join(Season, Episode.season_id == Season.id)
+            .outerjoin(Video, Episode.telegram_video_id == Video.id)
+            .where(Season.series_id == s.id)
+            .order_by(Season.number, Episode.number)
+            .limit(1)
+        )
+        ep_row = (await db.execute(first_ep_stmt)).first()
+        first_video_id = ep_row[1].id if ep_row and ep_row[1] else None
+
+        out.append({
+            "id": s.id,
+            "title": s.title_fr or s.title_en or s.title_ar,
+            "title_fr": s.title_fr,
+            "title_ar": s.title_ar,
+            "title_en": s.title_en,
+            "synopsis": s.synopsis_fr or s.synopsis_ar or s.synopsis_en or "",
+            "poster_path": s.poster_path,
+            "banner_path": s.banner_path or s.poster_path,
+            "year": s.year_start,
+            "rating": s.rating,
+            "first_video_id": first_video_id,
+        })
+    return out

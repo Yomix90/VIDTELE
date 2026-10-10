@@ -91,3 +91,60 @@ final searchResultsProvider = Provider.autoDispose<List<VideoModel>>((ref) {
     error: (_, __) => [],
   );
 });
+
+/// Modèle pour les séries dans le slider d'accueil
+class SeriesItemModel {
+  final int id;
+  final String title;
+  final String? titleFr;
+  final String? titleAr;
+  final String? titleEn;
+  final String? synopsis;
+  final String? posterPath;
+  final String? bannerPath;
+  final int? year;
+  final double? rating;
+  final int? firstVideoId;
+
+  SeriesItemModel({
+    required this.id,
+    required this.title,
+    this.titleFr,
+    this.titleAr,
+    this.titleEn,
+    this.synopsis,
+    this.posterPath,
+    this.bannerPath,
+    this.year,
+    this.rating,
+    this.firstVideoId,
+  });
+
+  factory SeriesItemModel.fromJson(Map<String, dynamic> json) {
+    return SeriesItemModel(
+      id: json['id'] ?? 0,
+      title: json['title'] ?? json['title_fr'] ?? 'Série',
+      titleFr: json['title_fr'],
+      titleAr: json['title_ar'],
+      titleEn: json['title_en'],
+      synopsis: json['synopsis'],
+      posterPath: json['poster_path'],
+      bannerPath: json['banner_path'],
+      year: json['year'],
+      rating: (json['rating'] as num?)?.toDouble(),
+      firstVideoId: json['first_video_id'],
+    );
+  }
+}
+
+/// Dernières séries ajoutées pour le carousel/slider d'accueil
+final latestSeriesProvider = FutureProvider.autoDispose<List<SeriesItemModel>>((ref) async {
+  try {
+    final res = await apiClient.dio.get('/api/videos/series/latest');
+    if (res.statusCode == 200 && res.data is List) {
+      return (res.data as List).map((e) => SeriesItemModel.fromJson(e)).toList();
+    }
+  } catch (_) {}
+  return [];
+});
+

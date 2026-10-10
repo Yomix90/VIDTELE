@@ -9,7 +9,7 @@ from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.database import get_db
 from app.models import Favorite, User, Video, WatchHistory
-from app.schemas import FavoriteItem, MessageResponse, ProgressUpdateRequest, WatchHistoryItem
+from app.schemas import FavoriteItem, MessageResponse, ProgressUpdateRequest, WatchHistoryItem, VideoResponse
 from app.security import get_current_active_user
 
 router = APIRouter(tags=["Bibliothèque & Suivi"])
@@ -43,15 +43,16 @@ async def update_video_progress(
     )
     hist = (await db.execute(stmt_hist)).scalar_one_or_none()
 
+    target_pos = data.get_position()
     if hist:
-        hist.position_seconds = data.position_seconds
+        hist.position_seconds = target_pos
         hist.completed = data.completed
         hist.last_watched_at = now
     else:
         hist = WatchHistory(
             user_id=current_user.id,
             video_id=video_id,
-            position_seconds=data.position_seconds,
+            position_seconds=target_pos,
             completed=data.completed,
             last_watched_at=now,
         )
@@ -84,6 +85,28 @@ async def get_watch_history(
 
     items = []
     for hist, vid in rows:
+        vid_resp = VideoResponse(
+            id=vid.id,
+            telegram_message_id=vid.telegram_message_id,
+            title=vid.title,
+            caption=vid.caption,
+            category=vid.category,
+            duration_seconds=vid.duration_seconds,
+            file_size_bytes=vid.file_size_bytes,
+            mime_type=vid.mime_type,
+            thumbnail_path=vid.thumbnail_path,
+            file_name=vid.file_name,
+            views_count=vid.views_count,
+            telegram_date=vid.telegram_date,
+            is_published=vid.is_published,
+            media_item_id=vid.media_item_id,
+            season_number=vid.season_number,
+            episode_number=vid.episode_number,
+            episode_title=vid.episode_title,
+            is_favorite=False,
+            watch_progress_seconds=hist.position_seconds,
+            is_completed=hist.completed,
+        )
         items.append(
             WatchHistoryItem(
                 id=hist.id,
@@ -92,8 +115,13 @@ async def get_watch_history(
                 video_thumbnail=vid.thumbnail_path,
                 duration_seconds=vid.duration_seconds,
                 position_seconds=hist.position_seconds,
+                progress_seconds=hist.position_seconds,
+                last_position_seconds=hist.position_seconds,
                 completed=hist.completed,
+                is_completed=hist.completed,
                 last_watched_at=hist.last_watched_at,
+                updated_at=hist.last_watched_at,
+                video=vid_resp,
             )
         )
     return items
@@ -125,6 +153,28 @@ async def get_favorites(
 
     items = []
     for fav, vid in rows:
+        vid_resp = VideoResponse(
+            id=vid.id,
+            telegram_message_id=vid.telegram_message_id,
+            title=vid.title,
+            caption=vid.caption,
+            category=vid.category,
+            duration_seconds=vid.duration_seconds,
+            file_size_bytes=vid.file_size_bytes,
+            mime_type=vid.mime_type,
+            thumbnail_path=vid.thumbnail_path,
+            file_name=vid.file_name,
+            views_count=vid.views_count,
+            telegram_date=vid.telegram_date,
+            is_published=vid.is_published,
+            media_item_id=vid.media_item_id,
+            season_number=vid.season_number,
+            episode_number=vid.episode_number,
+            episode_title=vid.episode_title,
+            is_favorite=True,
+            watch_progress_seconds=0.0,
+            is_completed=False,
+        )
         items.append(
             FavoriteItem(
                 id=fav.id,
@@ -133,6 +183,7 @@ async def get_favorites(
                 video_thumbnail=vid.thumbnail_path,
                 duration_seconds=vid.duration_seconds,
                 created_at=fav.created_at,
+                video=vid_resp,
             )
         )
     return items

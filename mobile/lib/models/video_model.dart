@@ -13,6 +13,12 @@ class VideoModel {
   final bool isFavorite;
   final double watchProgressSeconds;
   final bool isCompleted;
+  final int? seasonNumber;
+  final int? episodeNumber;
+  final String? episodeTitle;
+  final String? fileName;
+  final DateTime? telegramDate;
+  final bool isPublished;
 
   VideoModel({
     required this.id,
@@ -28,6 +34,12 @@ class VideoModel {
     required this.isFavorite,
     required this.watchProgressSeconds,
     required this.isCompleted,
+    this.seasonNumber,
+    this.episodeNumber,
+    this.episodeTitle,
+    this.fileName,
+    this.telegramDate,
+    this.isPublished = true,
   });
 
   /// Durée formatée par défaut (ex: "1h 12m" ou "3m 45s")
@@ -77,19 +89,27 @@ class VideoModel {
 
   factory VideoModel.fromJson(Map<String, dynamic> json) {
     return VideoModel(
-      id: json['id'] ?? 0,
+      id: json['id'] ?? json['video_id'] ?? 0,
       telegramMessageId: json['telegram_message_id'] ?? 0,
-      title: json['title'] ?? 'Sans titre',
+      title: json['title'] ?? json['video_title'] ?? 'Sans titre',
       caption: json['caption'],
       category: json['category'] ?? 'Général',
       durationSeconds: json['duration_seconds'] ?? 0,
       fileSizeBytes: json['file_size_bytes'] ?? 0,
       mimeType: json['mime_type'] ?? 'video/mp4',
-      thumbnailPath: json['thumbnail_path'],
+      thumbnailPath: json['thumbnail_path'] ?? json['video_thumbnail'],
       viewsCount: json['views_count'] ?? 0,
       isFavorite: json['is_favorite'] ?? false,
-      watchProgressSeconds: (json['watch_progress_seconds'] as num?)?.toDouble() ?? 0.0,
-      isCompleted: json['is_completed'] ?? false,
+      watchProgressSeconds: (json['watch_progress_seconds'] as num?)?.toDouble() ??
+          (json['position_seconds'] as num?)?.toDouble() ??
+          0.0,
+      isCompleted: json['is_completed'] ?? json['completed'] ?? false,
+      seasonNumber: json['season_number'],
+      episodeNumber: json['episode_number'],
+      episodeTitle: json['episode_title'],
+      fileName: json['file_name'],
+      telegramDate: json['telegram_date'] != null ? DateTime.tryParse(json['telegram_date']) : null,
+      isPublished: json['is_published'] ?? true,
     );
   }
 
@@ -98,6 +118,9 @@ class VideoModel {
     double? watchProgressSeconds,
     bool? isCompleted,
     int? viewsCount,
+    int? seasonNumber,
+    int? episodeNumber,
+    String? episodeTitle,
   }) {
     return VideoModel(
       id: id,
@@ -113,6 +136,12 @@ class VideoModel {
       isFavorite: isFavorite ?? this.isFavorite,
       watchProgressSeconds: watchProgressSeconds ?? this.watchProgressSeconds,
       isCompleted: isCompleted ?? this.isCompleted,
+      seasonNumber: seasonNumber ?? this.seasonNumber,
+      episodeNumber: episodeNumber ?? this.episodeNumber,
+      episodeTitle: episodeTitle ?? this.episodeTitle,
+      fileName: fileName,
+      telegramDate: telegramDate,
+      isPublished: isPublished,
     );
   }
 }

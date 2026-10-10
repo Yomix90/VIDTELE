@@ -8,7 +8,7 @@ import '../theme/app_theme.dart';
 
 /// Service gérant la détection et l'affichage des mises à jour de l'application Atlas Play.
 class UpdateService {
-  static const String currentAppVersion = '1.1.0';
+  static const String currentAppVersion = '1.2.0';
 
   /// Vérifie la version auprès du backend et affiche une boîte de dialogue si nécessaire.
   static Future<void> checkForUpdates(BuildContext context, {bool silentOnNoUpdate = true}) async {
@@ -135,14 +135,25 @@ class UpdateService {
             ElevatedButton(
               onPressed: () async {
                 if (downloadUrl != null && downloadUrl.isNotEmpty) {
-                  String fullUrl = downloadUrl;
+                  String fullUrl = downloadUrl.trim();
                   if (!fullUrl.startsWith('http://') && !fullUrl.startsWith('https://')) {
                     final baseUrl = await storageService.getServerUrl();
-                    fullUrl = '$baseUrl${fullUrl.startsWith('/') ? '' : '/'}$fullUrl';
+                    final base = baseUrl.endsWith('/') ? baseUrl.substring(0, baseUrl.length - 1) : baseUrl;
+                    final rel = fullUrl.startsWith('/') ? fullUrl : '/$fullUrl';
+                    fullUrl = '$base$rel';
                   }
                   final uri = Uri.tryParse(fullUrl);
-                  if (uri != null && await canLaunchUrl(uri)) {
-                    await launchUrl(uri, mode: LaunchMode.externalApplication);
+                  if (uri != null) {
+                    try {
+                      final launched = await launchUrl(uri, mode: LaunchMode.externalApplication);
+                      if (!launched) {
+                        await launchUrl(uri, mode: LaunchMode.platformDefault);
+                      }
+                    } catch (_) {
+                      try {
+                        await launchUrl(uri, mode: LaunchMode.platformDefault);
+                      } catch (_) {}
+                    }
                   }
                 }
               },

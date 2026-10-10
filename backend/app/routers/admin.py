@@ -1694,6 +1694,7 @@ async def upload_image_to_vps(
 async def upload_apk_to_vps(
     file: UploadFile = File(...),
     current_admin: User = Depends(get_current_admin),
+    db: AsyncSession = Depends(get_db),
 ):
     """
     Sauvegarde un fichier d'application Android (.apk) sur le serveur VPS dans /static/uploads/apk/.
@@ -1717,11 +1718,25 @@ async def upload_apk_to_vps(
     try:
         with open(dest_path, "wb") as buffer:
             shutil.copyfileobj(file.file, buffer)
+        # Conserver une copie à chemin fixe pour le téléchargement direct
+        shutil.copyfile(dest_path, upload_dir / "atlas-play.apk")
     except Exception as e:
         raise HTTPException(status_code=500, detail=f"Erreur lors de l'enregistrement de l'APK : {str(e)}")
 
     download_url = f"/static/uploads/apk/{filename}"
     size_mb = round(os.path.getsize(dest_path) / (1024 * 1024), 2)
+
+    # Mettre à jour automatiquement le paramètre système app_update_url
+    try:
+        stmt_set = select(SystemSetting).where(SystemSetting.key == "app_update_url")
+        setting = (await db.execute(stmt_set)).scalar_one_or_none()
+        if setting:
+            setting.value = download_url
+        else:
+            db.add(SystemSetting(key="app_update_url", value=download_url))
+        await db.commit()
+    except Exception as e:
+        logger.warning(f"Impossible de mettre à jour app_update_url en base: {e}")
 
     return {
         "success": True,
