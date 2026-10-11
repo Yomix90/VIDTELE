@@ -5,7 +5,6 @@ import asyncio
 import logging
 import secrets
 from contextlib import asynccontextmanager
-from datetime import datetime, timezone
 from typing import Optional
 from fastapi import Depends, FastAPI, status
 from fastapi.middleware.cors import CORSMiddleware
@@ -25,7 +24,7 @@ from app.core.journalisation import configurer_journalisation
 from app.core.requetes import MiddlewareContexteRequete
 from app.database import AsyncSessionLocal, get_db, init_db
 from app.models import InviteCode, User
-from app.routers import admin, admin_web, ads, auth, library, videos
+from app.routers import admin, admin_web, ads, auth, library, sante, videos
 from app.schemas import FeedResponse, HomeScreenResponse, TopSeriesItem
 from app.security import get_current_active_user, hash_password, verify_password
 from app.services.sync_service import sync_service
@@ -228,6 +227,7 @@ app.mount("/static/uploads", StaticFiles(directory=str(persistent_uploads)), nam
 app.mount("/static", StaticFiles(directory=str(static_dir)), name="static")
 
 # Inclusion des routeurs
+app.include_router(sante.router)
 app.include_router(auth.router)
 app.include_router(videos.router)
 app.include_router(library.router)
@@ -235,15 +235,6 @@ app.include_router(admin.router)
 app.include_router(admin_web.router)
 app.include_router(ads.router)
 
-
-@app.get("/api/health", tags=["Système"])
-async def health_check():
-    """Vérification de santé de l'API."""
-    return {
-        "status": "ok",
-        "app": "Atlas Play",
-        "timestamp": datetime.now(timezone.utc).isoformat(),
-    }
 
 
 @app.get("/api/home", response_model=HomeScreenResponse, tags=["Accueil"])

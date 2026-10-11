@@ -46,6 +46,11 @@ class Settings(BaseSettings):
     MAX_CONCURRENT_STREAMS_PER_USER: int = 4
     MAX_CONCURRENT_STREAMS_GLOBAL: int = 30
 
+    # Version du serveur affichée par /api/health/ready (ex. définie par le pipeline de déploiement)
+    APP_VERSION: str = "dev"
+    # Espace disque libre minimal (Go) : en dessous, /api/health/ready passe en « ko »
+    DISK_MIN_FREE_GB: float = 2.0
+
     # Journalisation : LOG_FORMAT=texte (lisible dans Dokploy) ou json (collecte automatisée)
     LOG_LEVEL: str = "INFO"
     LOG_FORMAT: str = "texte"
