@@ -1,3 +1,4 @@
+import '../core/erreurs/suivi_erreurs.dart';
 import 'package:dio/dio.dart';
 import 'package:flutter_riverpod/legacy.dart';
 import '../core/api/api_client.dart';
@@ -38,6 +39,20 @@ class AuthState {
 class AuthNotifier extends StateNotifier<AuthState> {
   AuthNotifier() : super(const AuthState()) {
     checkInitialAuth();
+  }
+
+  String? _utilisateurSuivi;
+
+  /// Associe les rapports de plantage à l'identifiant technique de l'utilisateur
+  /// (jamais le nom ni l'e-mail), une seule fois par changement d'utilisateur.
+  @override
+  set state(AuthState valeur) {
+    super.state = valeur;
+    final identifiant = valeur.isAuthenticated ? valeur.user?.id.toString() : null;
+    if (identifiant != _utilisateurSuivi) {
+      _utilisateurSuivi = identifiant;
+      SuiviErreurs.definirUtilisateur(identifiant);
+    }
   }
 
   /// Vérifie si un token valide existe au démarrage de l'app

@@ -4,6 +4,14 @@ plugins {
     id("dev.flutter.flutter-gradle-plugin")
 }
 
+// Firebase Crashlytics : activé seulement si android/app/google-services.json est présent.
+// Ce fichier n'est PAS dans le dépôt public (.gitignore) : les builds sans lui (CI, contributeurs)
+// fonctionnent normalement, simplement sans remontée des plantages.
+if (file("google-services.json").exists()) {
+    apply(plugin = "com.google.gms.google-services")
+    apply(plugin = "com.google.firebase.crashlytics")
+}
+
 android {
     namespace = "com.vidtele.app"
     compileSdk = flutter.compileSdkVersion

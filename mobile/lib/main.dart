@@ -7,6 +7,7 @@ import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:google_mobile_ads/google_mobile_ads.dart';
 
 import 'core/ads/ads_config.dart';
+import 'core/erreurs/rapporteur_crashlytics.dart';
 import 'core/erreurs/suivi_erreurs.dart';
 import 'core/version/mise_a_jour_requise.dart';
 import 'core/version/version_app.dart';
@@ -27,8 +28,9 @@ Duration? sansNouvelleTentativeAutomatique(int tentative, Object erreur) => null
 void main() async {
   WidgetsFlutterBinding.ensureInitialized();
 
-  // Capture globale des erreurs (console aujourd'hui, Crashlytics une fois Firebase configuré)
-  SuiviErreurs.installer();
+  // Capture globale des erreurs : Firebase Crashlytics si configuré (google-services.json),
+  // sinon journal console. Aucune donnée personnelle n'est envoyée.
+  SuiviErreurs.installer(rapporteur: await RapporteurCrashlytics.initialiser());
 
   // Version réelle de l'app (vérification des mises à jour, en-tête X-App-Version)
   await VersionApp.charger();
