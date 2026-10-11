@@ -1,5 +1,5 @@
 import 'package:dio/dio.dart';
-import 'package:flutter_riverpod/flutter_riverpod.dart';
+import 'package:flutter_riverpod/legacy.dart';
 import '../core/api/api_client.dart';
 import '../core/constants/api_constants.dart';
 import '../core/storage/storage_service.dart';

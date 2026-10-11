@@ -17,6 +17,10 @@ import 'core/theme/app_theme.dart';
 import 'providers/locale_provider.dart';
 import 'screens/splash/splash_screen.dart';
 
+/// Riverpod 3 relance automatiquement un provider en erreur. Désactivé pour garder le
+/// comportement de la version 1.2 (les écrans gèrent eux-mêmes « Réessayer »).
+Duration? sansNouvelleTentativeAutomatique(int tentative, Object erreur) => null;
+
 void main() async {
   WidgetsFlutterBinding.ensureInitialized();
 
@@ -56,6 +60,7 @@ void main() async {
 
   runApp(
     const ProviderScope(
+      retry: sansNouvelleTentativeAutomatique,
       child: VidTeleApp(),
     ),
   );
