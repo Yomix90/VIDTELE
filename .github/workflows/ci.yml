@@ -39,6 +39,8 @@ jobs:
         run: python -m ruff check app migrations tests
       - name: Tests
         run: python -m pytest -q
+      - name: Vulnérabilités connues des dépendances (pip-audit)
+        run: python -m pip_audit -r requirements.lock --no-deps --disable-pip --progress-spinner off
       - name: Chaque dépendance directe est figée à la même version dans requirements.lock
         run: |
           for dep in $(grep -E '^[a-zA-Z]' requirements.txt | sed -E 's/\[[^]]*\]//'); do
