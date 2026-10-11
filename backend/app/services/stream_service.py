@@ -320,10 +320,10 @@ class StreamService:
             self._prewarming_ids.discard(video.id)
 
     def enqueue_prewarm(self, video: Video) -> None:
-        """Planifie le préchauffage en tâche de fond (non bloquant)."""
-        if cache_service.is_cached(video.telegram_message_id) or video.id in self._prewarming_ids:
-            return
-        asyncio.create_task(self.prewarm_video(video))
+        """Ajoute la vidéo à la file de préchauffage (une à la fois, sans doublon)."""
+        from app.services.prechauffage import file_prechauffage
+
+        file_prechauffage.ajouter(video)
 
     async def prewarm_next_episodes_in_series(
         self,

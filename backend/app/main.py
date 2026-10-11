@@ -35,6 +35,7 @@ from app.routers import (
     videos,
 )
 from app.security import hash_password, verify_password
+from app.services.prechauffage import boucle_prechauffage
 from app.services.sync_service import sync_service
 from app.services.telechargement_progressif import nettoyer_fichiers_incomplets
 from app.telegram_client import telegram_manager
@@ -180,10 +181,12 @@ async def lifespan(app: FastAPI):
 
     # Démarrage du client Telegram MTProto
     periodic_task = None
+    prechauffage_task = None
     telegram_started = await telegram_manager.start()
     if telegram_started:
         sync_service.register_realtime_listener()
         periodic_task = asyncio.create_task(sync_service.start_periodic_sync())
+        prechauffage_task = asyncio.create_task(boucle_prechauffage())
         logger.info("Service de synchronisation Telegram activé (temps réel + périodique).")
     else:
         logger.info("L'application démarre sans connexion Telegram active (mode local / en attente de configuration).")
@@ -193,6 +196,8 @@ async def lifespan(app: FastAPI):
     # Arrêt propre
     if periodic_task:
         periodic_task.cancel()
+    if prechauffage_task:
+        prechauffage_task.cancel()
     await telegram_manager.stop()
     logger.info("Arrêt de l'application VidTele.")
 
