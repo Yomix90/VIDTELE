@@ -9,12 +9,34 @@ document.addEventListener("DOMContentLoaded", function () {
   const toggleBtn = document.getElementById("sidebarToggle");
 
   if (toggleBtn && shell) {
-    // Restaurer l'état précédent
-    if (localStorage.getItem("streamadmin_sidebar_collapsed") === "true") {
+    // Petit écran (< 992 px) : la barre latérale est un tiroir ouvert/fermé par le bouton ☰.
+    // Grand écran : le bouton réduit/étend la barre (état mémorisé).
+    const petitEcran = () => window.matchMedia("(max-width: 991.98px)").matches;
+
+    let fond = shell.querySelector(".sidebar-backdrop");
+    if (!fond) {
+      fond = document.createElement("div");
+      fond.className = "sidebar-backdrop";
+      shell.appendChild(fond);
+    }
+    const fermerTiroir = () => shell.classList.remove("sidebar-open");
+    fond.addEventListener("click", fermerTiroir);
+    shell.querySelectorAll(".sidebar .nav-link").forEach((lien) =>
+      lien.addEventListener("click", () => { if (petitEcran()) fermerTiroir(); })
+    );
+    document.addEventListener("keydown", (e) => { if (e.key === "Escape") fermerTiroir(); });
+
+    // Restaurer l'état précédent (grand écran uniquement)
+    if (!petitEcran() && localStorage.getItem("streamadmin_sidebar_collapsed") === "true") {
       shell.classList.add("sidebar-collapsed");
     }
 
     toggleBtn.addEventListener("click", function () {
+      if (petitEcran()) {
+        shell.classList.toggle("sidebar-open");
+        toggleBtn.setAttribute("aria-expanded", shell.classList.contains("sidebar-open"));
+        return;
+      }
       shell.classList.toggle("sidebar-collapsed");
       const isCollapsed = shell.classList.contains("sidebar-collapsed");
       localStorage.setItem("streamadmin_sidebar_collapsed", isCollapsed);

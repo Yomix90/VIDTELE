@@ -32,7 +32,7 @@ mobile/android/local.properties
 **/.gradle/
 mobile/.pub-cache/
 mobile/.pub/
-mobile/*.lock
+# (pubspec.lock est versionné : builds reproductibles)
 
 # OS & IDE
 .vscode/
@@ -40,3 +40,17 @@ mobile/*.lock
 *.DS_Store
 Thumbs.db
 *.log
+
+# Tests
+.pytest_cache/
+
+# Secrets locaux : ne JAMAIS publier (dépôt public)
+ssh/
+*.pem
+*id_rsa*
+*.keystore
+*.jks
+key.properties
+# Configuration Firebase (fournie localement, hors dépôt public)
+google-services.json
+GoogleService-Info.plist

@@ -10,6 +10,8 @@ class ManagedPlayerEntry {
   final String id;
   final VideoPlayerController controller;
   final VoidCallback? onPauseRequested;
+  /// Écouteur d'état (lecture/pause) posé par le gestionnaire pour l'écran allumé
+  VoidCallback? ecouteurEtat;
 
   ManagedPlayerEntry({
     required this.id,
@@ -116,20 +118,40 @@ class VideoPlayerManager with WidgetsBindingObserver {
     required VideoPlayerController controller,
     VoidCallback? onPauseRequested,
   }) {
-    _players[id] = ManagedPlayerEntry(
+    _retirerEcouteur(_players[id]);
+    final entree = ManagedPlayerEntry(
       id: id,
       controller: controller,
       onPauseRequested: onPauseRequested,
     );
+    // Correctif « le téléphone se verrouille pendant la lecture » : l'écran n'était
+    // maintenu allumé que si la lecture passait par ce gestionnaire. Les lectures lancées
+    // directement (rejouer, reprise du watchdog, après une annonce...) n'étaient pas vues.
+    // On écoute désormais chaque lecteur : écran allumé dès que l'un d'eux joue.
+    entree.ecouteurEtat = _updateWakelockState;
+    controller.addListener(entree.ecouteurEtat!);
+    _players[id] = entree;
+    _updateWakelockState();
+  }
+
+  void _retirerEcouteur(ManagedPlayerEntry? entree) {
+    final ecouteur = entree?.ecouteurEtat;
+    if (entree == null || ecouteur == null) return;
+    try {
+      entree.controller.removeListener(ecouteur);
+    } catch (_) {
+      // Contrôleur déjà libéré : rien à retirer
+    }
+    entree.ecouteurEtat = null;
   }
 
   /// Dé-référence un lecteur vidéo lorsqu'il est libéré (dispose)
   void unregisterPlayer(String id) {
     if (_activePlayerId == id) {
       _activePlayerId = null;
-      _updateWakelockState();
     }
-    _players.remove(id);
+    _retirerEcouteur(_players.remove(id));
+    _updateWakelockState();
   }
 
   /// Démarre ou reprend la lecture d'un contrôleur spécifique.
@@ -191,11 +213,23 @@ class VideoPlayerManager with WidgetsBindingObserver {
   }
 
   /// Ajuste l'état du wakelock selon qu'une vidéo est en train de jouer ou non
-  void _updateWakelockState() {
-    final anyPlaying = _players.values.any(
-      (p) => p.controller.value.isInitialized && p.controller.value.isPlaying,
-    );
+  bool? _ecranMaintenuAllume;
 
+  /// Vrai si l'écran est actuellement maintenu allumé par le gestionnaire.
+  bool get ecranMaintenuAllume => _ecranMaintenuAllume ?? false;
+
+  void _updateWakelockState() {
+    final anyPlaying = _players.values.any((p) {
+      try {
+        return p.controller.value.isInitialized && p.controller.value.isPlaying;
+      } catch (_) {
+        return false; // contrôleur libéré entre-temps
+      }
+    });
+    // Appelé à chaque mise à jour de position : on n'agit que si l'état change
+    if (anyPlaying == _ecranMaintenuAllume) return;
+    _ecranMaintenuAllume = anyPlaying;
+    debugPrint('[Écran] maintenu allumé : ${anyPlaying ? 'oui' : 'non'}');
     if (anyPlaying) {
       WakelockPlus.enable().catchError((_) {});
     } else {
@@ -209,8 +243,12 @@ class VideoPlayerManager with WidgetsBindingObserver {
     WidgetsBinding.instance.removeObserver(this);
     _interruptionSub?.cancel();
     _becomingNoisySub?.cancel();
+    for (final entree in _players.values) {
+      _retirerEcouteur(entree);
+    }
     _players.clear();
     _activePlayerId = null;
+    _ecranMaintenuAllume = false;
     WakelockPlus.disable().catchError((_) {});
   }
 }

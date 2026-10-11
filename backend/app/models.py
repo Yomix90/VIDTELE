@@ -427,3 +427,26 @@ class TelegramAccount(Base):
     created_at: Mapped[datetime] = mapped_column(DateTime, default=utc_now, nullable=False)
     last_tested_at: Mapped[Optional[datetime]] = mapped_column(DateTime, nullable=True)
 
+
+
+class PlaybackEvent(Base):
+    """
+    Mesures de lecture envoyées par l'application (Phase 2) : temps jusqu'à la première
+    image, blocages, erreurs. Alimente le tableau de bord de lecture de l'administration.
+    """
+    __tablename__ = "playback_events"
+
+    id: Mapped[int] = mapped_column(Integer, primary_key=True)
+    user_id: Mapped[Optional[int]] = mapped_column(Integer, ForeignKey("users.id", ondelete="SET NULL"), nullable=True, index=True)
+    video_id: Mapped[Optional[int]] = mapped_column(Integer, ForeignKey("videos.id", ondelete="SET NULL"), nullable=True, index=True)
+    # "demarrage", "blocage", "erreur", "reprise", "fin"
+    event_type: Mapped[str] = mapped_column(String(32), nullable=False, index=True)
+    ttff_ms: Mapped[Optional[int]] = mapped_column(Integer, nullable=True)  # temps jusqu'à la première image
+    stall_ms: Mapped[Optional[int]] = mapped_column(Integer, nullable=True)  # durée d'un blocage
+    position_s: Mapped[Optional[float]] = mapped_column(Float, nullable=True)
+    preloaded: Mapped[Optional[bool]] = mapped_column(Boolean, nullable=True)  # épisode préchargé ?
+    network: Mapped[Optional[str]] = mapped_column(String(16), nullable=True)  # wifi, mobile, aucun
+    error_code: Mapped[Optional[str]] = mapped_column(String(64), nullable=True)
+    app_version: Mapped[Optional[str]] = mapped_column(String(32), nullable=True)
+    device_model: Mapped[Optional[str]] = mapped_column(String(64), nullable=True)
+    created_at: Mapped[datetime] = mapped_column(DateTime, default=utc_now, nullable=False, index=True)

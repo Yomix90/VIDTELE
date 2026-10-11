@@ -1,30 +1,44 @@
+# ==============================================================
+# Dépendances directes du serveur (versions figées et testées).
+# Le fichier requirements.lock (généré) fige AUSSI les dépendances
+# indirectes pour Linux : c'est lui qu'utilise l'image Docker.
+#
+# Mise à jour (une famille à la fois, puis lancer pytest) :
+#   1. modifier la version ici
+#   2. python -m uv pip compile requirements.txt --python-platform x86_64-manylinux_2_28 \
+#        --python-version 3.14 --generate-hashes -o requirements.lock
+# ==============================================================
+
 # Framework API & Serveur ASGI
-fastapi>=0.115.0
-uvicorn[standard]>=0.30.0
-python-multipart>=0.0.12
+fastapi==0.143.0
+uvicorn[standard]==0.54.0
+python-multipart==0.0.32
 
 # Base de données asynchrone
-sqlalchemy[asyncio]>=2.0.30
-greenlet>=3.1.0
-aiosqlite>=0.20.0
+sqlalchemy[asyncio]==2.1.4
+greenlet==3.5.6
+aiosqlite==0.22.1
+
+# Migrations versionnées du schéma (appliquées au démarrage)
+alembic==1.20.0
 
 # Configuration & Validation
-pydantic>=2.9.0
-pydantic-settings>=2.5.0
+pydantic==2.14.0
+pydantic-settings==2.15.0
 
 # Sécurité & Authentification
-pyjwt[crypto]>=2.9.0
-bcrypt>=4.2.0
+pyjwt[crypto]==2.15.1
+bcrypt==5.0.0
 
-# Client Telegram MTProto
-telethon>=1.36.0
-cryptg>=0.4.0
+# Client Telegram MTProto (cryptg accélère le chiffrement des téléchargements)
+telethon==1.45.0
+cryptg==0.6.0
 
 # Gestion asynchrone des fichiers & Cache
-aiofiles>=24.1.0
+aiofiles==25.1.0
 
 # Templates pour le Dashboard Web Admin
-jinja2>=3.1.4
+jinja2==3.1.6
 
 # Client HTTP asynchrone (tests & requêtes)
-httpx>=0.28.0
+httpx==0.28.1

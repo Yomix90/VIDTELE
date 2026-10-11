@@ -8,7 +8,7 @@ import platform
 import shutil
 import time
 from pathlib import Path
-from typing import Any, Dict, List, Optional
+from typing import Any, Dict, List
 import aiofiles
 
 from app.config import settings

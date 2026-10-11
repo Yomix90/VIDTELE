@@ -4,7 +4,7 @@ Détecte les séries (S01E02, etc.), films, années, résolutions et génère le
 """
 import re
 import unicodedata
-from typing import Any, Dict, Optional
+from typing import Any, Dict
 
 
 def slugify(text: str) -> str:

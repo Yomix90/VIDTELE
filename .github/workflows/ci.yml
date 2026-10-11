@@ -1,0 +1,101 @@
+# Intégration continue : à chaque push et pull request.
+# - serveur : tests pytest (mêmes versions que l'image Docker)
+# - docker  : construction des deux images + démarrage et vérification de santé
+# - mobile  : analyse statique, tests et construction d'un APK
+name: CI
+
+on:
+  push:
+    branches: [main, master, mise-a-jour-totale]
+  pull_request:
+
+concurrency:
+  group: ci-${{ github.ref }}
+  cancel-in-progress: true
+
+permissions:
+  contents: read
+
+jobs:
+  serveur:
+    name: Serveur (pytest)
+    runs-on: ubuntu-latest
+    timeout-minutes: 15
+    defaults:
+      run:
+        working-directory: backend
+    steps:
+      - uses: actions/checkout@v5
+      - uses: actions/setup-python@v6
+        with:
+          python-version: "3.14"
+          cache: pip
+          cache-dependency-path: backend/requirements.lock
+      - name: ffmpeg (tests du remuxage faststart)
+        run: sudo apt-get update -qq && sudo apt-get install -y -qq ffmpeg
+      - name: Dépendances (figées, vérifiées par empreinte)
+        run: |
+          pip install --require-hashes -r requirements.lock
+          pip install -r requirements-dev.txt
+      - name: Analyse statique (noms non définis, imports inutilisés)
+        run: python -m ruff check app migrations tests
+      - name: Tests
+        run: python -m pytest -q
+      - name: Vulnérabilités connues des dépendances (pip-audit)
+        run: python -m pip_audit -r requirements.lock --no-deps --disable-pip --progress-spinner off
+      - name: Chaque dépendance directe est figée à la même version dans requirements.lock
+        run: |
+          for dep in $(grep -E '^[a-zA-Z]' requirements.txt | sed -E 's/\[[^]]*\]//'); do
+            grep -qiE "^${dep} " requirements.lock || { echo "::error::${dep} absent ou différent dans requirements.lock"; exit 1; }
+          done
+
+  docker:
+    name: Images Docker
+    runs-on: ubuntu-latest
+    timeout-minutes: 20
+    steps:
+      - uses: actions/checkout@v5
+      - name: Image (contexte racine, utilisée par docker-compose)
+        run: docker build -f Dockerfile -t vidtele-racine .
+      - name: Image (contexte backend/)
+        run: docker build -f backend/Dockerfile -t vidtele-backend backend
+      - name: Démarrage et vérification de santé
+        run: |
+          docker run -d --name vidtele -p 8000:8000 -e SECRET_KEY=$(openssl rand -hex 32) vidtele-racine
+          for i in $(seq 1 30); do
+            if curl -fsS http://localhost:8000/api/health; then break; fi
+            sleep 2
+          done
+          curl -fsS http://localhost:8000/api/health
+          curl -sS http://localhost:8000/api/health/ready
+          docker logs vidtele 2>&1 | tail -30
+          # Le mot de passe admin généré ne doit jamais apparaître dans les journaux
+          docker exec vidtele cat /app/data/admin_initial_password.txt > /tmp/mdp
+          ! docker logs vidtele 2>&1 | grep -qF "$(cat /tmp/mdp)"
+
+  mobile:
+    name: Application (analyse, tests, APK)
+    runs-on: ubuntu-latest
+    timeout-minutes: 30
+    defaults:
+      run:
+        working-directory: mobile
+    steps:
+      - uses: actions/checkout@v5
+      - uses: actions/setup-java@v5
+        with:
+          distribution: temurin
+          java-version: "17"
+      - uses: subosito/flutter-action@v2
+        with:
+          flutter-version: "3.47.7"
+          channel: stable
+          cache: true
+      - name: Dépendances (pubspec.lock respecté)
+        run: flutter pub get --enforce-lockfile
+      - name: Analyse statique
+        run: flutter analyze
+      - name: Tests
+        run: flutter test
+      - name: APK (debug, vérifie la chaîne de compilation Android)
+        run: flutter build apk --debug

@@ -3,29 +3,45 @@ Point d'entrée principal de l'application VidTele (FastAPI).
 """
 import asyncio
 import logging
+import secrets
 from contextlib import asynccontextmanager
-from datetime import datetime, timezone
-from typing import Optional
-from fastapi import Depends, FastAPI, status
+from fastapi import FastAPI
 from fastapi.middleware.cors import CORSMiddleware
 from sqlalchemy import select
-from sqlalchemy.ext.asyncio import AsyncSession
 
-from typing import List, Optional
-from app.config import settings
-from app.database import AsyncSessionLocal, get_db, init_db
+from app.config import (
+    PUBLIC_DEFAULT_ADMIN_PASSWORDS,
+    SECRET_KEY_SOURCE,
+    get_data_dir,
+    settings,
+    write_private_file,
+)
+from app.core.erreurs import installer_gestionnaires_erreurs
+from app.core.journalisation import configurer_journalisation
+from app.core.requetes import MiddlewareContexteRequete
+from app.core.version_minimale import MiddlewareVersionMinimale
+from app.database import AsyncSessionLocal, init_db
 from app.models import InviteCode, User
-from app.routers import admin, admin_web, ads, auth, library, videos
-from app.schemas import FeedResponse, HomeScreenResponse, TopSeriesItem
-from app.security import get_current_active_user, hash_password
+from app.routers import (
+    admin,
+    admin_web,
+    ads,
+    alias,
+    analytique_lecture,
+    application_mobile,
+    auth,
+    library,
+    sante,
+    videos,
+)
+from app.security import hash_password, verify_password
+from app.services.prechauffage import boucle_prechauffage
 from app.services.sync_service import sync_service
+from app.services.telechargement_progressif import nettoyer_fichiers_incomplets
 from app.telegram_client import telegram_manager
 
 # Configuration des logs
-logging.basicConfig(
-    level=logging.INFO,
-    format="%(asctime)s [%(levelname)s] %(name)s: %(message)s",
-)
+configurer_journalisation(settings.LOG_LEVEL, settings.LOG_FORMAT)
 logger = logging.getLogger("vidtele")
 
 
@@ -37,11 +53,25 @@ async def bootstrap_admin_and_invites():
         result_admin = await db.execute(stmt_admin)
         admin = result_admin.scalar_one_or_none()
 
+        env_password = (settings.ADMIN_DEFAULT_PASSWORD or "").strip()
+        env_password_is_public = env_password in PUBLIC_DEFAULT_ADMIN_PASSWORDS
+
         if not admin:
-            logger.info("Aucun compte administrateur trouvé. Création de l'administrateur par défaut...")
+            logger.info("Aucun compte administrateur trouvé. Création de l'administrateur initial...")
+            if env_password_is_public:
+                # Jamais de mot de passe public : on en génère un, écrit dans un fichier privé (pas dans les logs)
+                initial_password = secrets.token_urlsafe(18)
+                password_file = get_data_dir() / "admin_initial_password.txt"
+                write_private_file(password_file, initial_password + "\n")
+                logger.warning(
+                    f"ADMIN_DEFAULT_PASSWORD absent ou public : mot de passe généré dans {password_file} "
+                    "(à changer puis supprimer le fichier)."
+                )
+            else:
+                initial_password = env_password
             admin = User(
                 username=settings.ADMIN_DEFAULT_USERNAME,
-                hashed_password=hash_password(settings.ADMIN_DEFAULT_PASSWORD),
+                hashed_password=hash_password(initial_password),
                 role="admin",
                 is_active=True,
                 max_concurrent_streams=5,
@@ -49,10 +79,27 @@ async def bootstrap_admin_and_invites():
             db.add(admin)
             await db.flush()
             logger.info(f"==> Administrateur créé: '{settings.ADMIN_DEFAULT_USERNAME}'")
-        else:
-            admin.hashed_password = hash_password(settings.ADMIN_DEFAULT_PASSWORD)
-            admin.is_active = True
-            logger.info(f"==> Mot de passe administrateur synchronisé pour '{admin.username}'")
+        elif settings.ADMIN_RESET_PASSWORD:
+            # Procédure de secours explicite : réinitialisation depuis la variable d'environnement
+            if env_password_is_public:
+                logger.error("ADMIN_RESET_PASSWORD=true ignoré : ADMIN_DEFAULT_PASSWORD est vide ou public.")
+            else:
+                admin.hashed_password = hash_password(env_password)
+                admin.is_active = True
+                logger.warning(
+                    f"==> Mot de passe de '{admin.username}' réinitialisé (ADMIN_RESET_PASSWORD=true). "
+                    "Retirez cette variable puis redémarrez."
+                )
+        # Sinon : le mot de passe en base est conservé (les changements faits depuis l'admin persistent)
+
+        # Alerte si un compte admin utilise encore un mot de passe publié dans le dépôt
+        res_admins = await db.execute(select(User).where(User.role == "admin"))
+        for adm in res_admins.scalars().all():
+            if any(verify_password(p, adm.hashed_password) for p in PUBLIC_DEFAULT_ADMIN_PASSWORDS if p):
+                logger.critical(
+                    f"Le compte admin '{adm.username}' utilise un mot de passe PUBLIC (présent dans le dépôt). "
+                    "Changez-le immédiatement."
+                )
 
 
         # 2. Vérifier si le code de bienvenue existe déjà (qu'il soit utilisé ou non)
@@ -77,6 +124,12 @@ async def bootstrap_admin_and_invites():
 async def lifespan(app: FastAPI):
     """Cycle de vie de l'application FastAPI."""
     logger.info("Démarrage de l'application VidTele...")
+    if SECRET_KEY_SOURCE == "generated":
+        logger.critical("SECRET_KEY non définie (ou publique) : clé générée et stockée dans le dossier de données.")
+    # Fichiers vidéo .tmp laissés par un arrêt brutal pendant un téléchargement
+    nettoyes = nettoyer_fichiers_incomplets()
+    if nettoyes:
+        logger.info(f"{nettoyes} fichier(s) vidéo incomplet(s) supprimé(s) du cache")
     # Initialisation de la base SQLite
     await init_db()
     # Amorçage admin et invitations
@@ -128,10 +181,12 @@ async def lifespan(app: FastAPI):
 
     # Démarrage du client Telegram MTProto
     periodic_task = None
+    prechauffage_task = None
     telegram_started = await telegram_manager.start()
     if telegram_started:
         sync_service.register_realtime_listener()
         periodic_task = asyncio.create_task(sync_service.start_periodic_sync())
+        prechauffage_task = asyncio.create_task(boucle_prechauffage())
         logger.info("Service de synchronisation Telegram activé (temps réel + périodique).")
     else:
         logger.info("L'application démarre sans connexion Telegram active (mode local / en attente de configuration).")
@@ -141,6 +196,8 @@ async def lifespan(app: FastAPI):
     # Arrêt propre
     if periodic_task:
         periodic_task.cancel()
+    if prechauffage_task:
+        prechauffage_task.cancel()
     await telegram_manager.stop()
     logger.info("Arrêt de l'application VidTele.")
 
@@ -153,6 +210,10 @@ app = FastAPI(
     lifespan=lifespan,
 )
 
+# Version minimale de l'app (en-tête X-App-Version) : ajouté avant CORS pour que
+# la réponse 426 reçoive aussi les en-têtes CORS et le request_id
+app.add_middleware(MiddlewareVersionMinimale)
+
 # Configuration CORS pour autoriser l'app Flutter (Web/Mobile/Émulateur)
 app.add_middleware(
     CORSMiddleware,
@@ -160,7 +221,14 @@ app.add_middleware(
     allow_credentials=True,
     allow_methods=["*"],
     allow_headers=["*"],
+    expose_headers=["X-Request-ID"],
 )
+
+# Contexte de requête (request_id + journal d'accès) : ajouté en dernier = exécuté en premier
+app.add_middleware(MiddlewareContexteRequete)
+
+# Format d'erreur uniforme {"detail", "code", "request_id"} sur /api
+installer_gestionnaires_erreurs(app)
 
 # Fichiers statiques et uploads persistants
 from pathlib import Path
@@ -181,146 +249,13 @@ app.mount("/static/uploads", StaticFiles(directory=str(persistent_uploads)), nam
 app.mount("/static", StaticFiles(directory=str(static_dir)), name="static")
 
 # Inclusion des routeurs
+app.include_router(sante.router)
 app.include_router(auth.router)
 app.include_router(videos.router)
 app.include_router(library.router)
 app.include_router(admin.router)
 app.include_router(admin_web.router)
 app.include_router(ads.router)
-
-
-@app.get("/api/health", tags=["Système"])
-async def health_check():
-    """Vérification de santé de l'API."""
-    return {
-        "status": "ok",
-        "app": "Atlas Play",
-        "timestamp": datetime.now(timezone.utc).isoformat(),
-    }
-
-
-@app.get("/api/home", response_model=HomeScreenResponse, tags=["Accueil"])
-async def get_home_alias(
-    current_user: User = Depends(get_current_active_user),
-    db: AsyncSession = Depends(get_db),
-):
-    """Alias racine pour le chargement complet de l'écran d'accueil."""
-    return await videos.get_home_content(current_user=current_user, db=db)
-
-
-@app.get("/api/series/top", response_model=List[TopSeriesItem], tags=["Séries"])
-async def get_series_top_alias(
-    period: str = "7d",
-    limit: int = 5,
-    current_user: User = Depends(get_current_active_user),
-    db: AsyncSession = Depends(get_db),
-):
-    """Alias racine pour le classement Top des séries."""
-    return await videos.get_top_series(period=period, limit=limit, current_user=current_user, db=db)
-
-
-@app.get("/api/feed", response_model=FeedResponse, tags=["Feed Vertical"])
-async def get_feed_alias(
-    cursor: Optional[int] = None,
-    limit: int = 15,
-    series_id: Optional[int] = None,
-    current_user: User = Depends(get_current_active_user),
-    db: AsyncSession = Depends(get_db),
-):
-    """Alias racine pour le flux vertical d'épisodes et de vidéos."""
-    return await videos.get_vertical_feed(
-        cursor=cursor,
-        limit=limit,
-        series_id=series_id,
-        current_user=current_user,
-        db=db,
-    )
-
-
-@app.get("/api/series/{series_id}", tags=["Séries"])
-async def get_series_detail_alias(
-    series_id: int,
-    current_user: User = Depends(get_current_active_user),
-    db: AsyncSession = Depends(get_db),
-):
-    """Alias racine pour le détail d'une série avec épisodes et séries similaires."""
-    return await videos.get_public_series_detail(series_id=series_id, current_user=current_user, db=db)
-
-
-@app.post("/api/series/{series_id}/favorite", tags=["Séries"])
-async def toggle_series_favorite_alias(
-    series_id: int,
-    current_user: User = Depends(get_current_active_user),
-    db: AsyncSession = Depends(get_db),
-):
-    """Alias racine pour basculer le statut favori d'une série."""
-    return await videos.toggle_series_favorite(series_id=series_id, current_user=current_user, db=db)
-
-
-@app.get("/api/app/version", tags=["Application Mobile"])
-async def check_app_version(
-    current_version: Optional[str] = None,
-    db: AsyncSession = Depends(get_db),
-):
-    """
-    Endpoint public consulté au lancement de l'application mobile Atlas Play.
-    Vérifie si une mise à jour est disponible ou obligatoire.
-    """
-    from app.models import SystemSetting
-
-    def parse_semver(v: str) -> tuple:
-        parts = []
-        for x in str(v).strip().split("."):
-            try:
-                parts.append(int(x))
-            except ValueError:
-                parts.append(0)
-        while len(parts) < 3:
-            parts.append(0)
-        return tuple(parts[:3])
-
-    # Récupérer les paramètres système de mise à jour
-    settings_keys = [
-        "app_latest_version",
-        "app_min_version",
-        "app_update_url",
-        "app_update_title",
-        "app_update_notes",
-        "app_update_force",
-    ]
-    res = await db.execute(select(SystemSetting).where(SystemSetting.key.in_(settings_keys)))
-    settings_dict = {row.key: row.value for row in res.scalars().all()}
-
-    apk_fallback = Path(__file__).resolve().parent / "static" / "uploads" / "apk" / "atlas-play.apk"
-    fallback_url = "/static/uploads/apk/atlas-play.apk" if apk_fallback.exists() else ""
-
-    latest_ver = settings_dict.get("app_latest_version", "1.2.0")
-    min_ver = settings_dict.get("app_min_version", "1.0.0")
-    download_url = settings_dict.get("app_update_url") or fallback_url
-    title = settings_dict.get("app_update_title", "Nouvelle version Atlas Play disponible")
-    notes = settings_dict.get("app_update_notes", "Améliorations des posters, zapping TikTok, enchaînement automatique des épisodes et veille d'écran.")
-    force_update = settings_dict.get("app_update_force", "false").lower() == "true"
-
-    has_update = False
-    is_forced = force_update
-
-    if current_version:
-        try:
-            cur_v = parse_semver(current_version)
-            lat_v = parse_semver(latest_ver)
-            min_v = parse_semver(min_ver)
-            has_update = cur_v < lat_v
-            if cur_v < min_v:
-                is_forced = True
-        except Exception:
-            has_update = current_version != latest_ver
-
-    return {
-        "latest_version": latest_ver,
-        "min_version": min_ver,
-        "download_url": download_url,
-        "title": title,
-        "release_notes": notes,
-        "force_update": is_forced,
-        "has_update": has_update,
-    }
+app.include_router(alias.router)
+app.include_router(application_mobile.router)
+app.include_router(analytique_lecture.router)

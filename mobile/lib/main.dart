@@ -7,6 +7,10 @@ import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:google_mobile_ads/google_mobile_ads.dart';
 
 import 'core/ads/ads_config.dart';
+import 'core/erreurs/rapporteur_crashlytics.dart';
+import 'core/erreurs/suivi_erreurs.dart';
+import 'core/version/mise_a_jour_requise.dart';
+import 'core/version/version_app.dart';
 import 'core/ads/consent_manager.dart';
 import 'core/ads/rewarded_ad_service.dart';
 import 'core/ads/watch_gate_controller.dart';
@@ -15,9 +19,21 @@ import 'core/navigation/app_route_observer.dart';
 import 'core/theme/app_theme.dart';
 import 'providers/locale_provider.dart';
 import 'screens/splash/splash_screen.dart';
+import 'widgets/ecran_mise_a_jour_requise.dart';
+
+/// Riverpod 3 relance automatiquement un provider en erreur. Désactivé pour garder le
+/// comportement de la version 1.2 (les écrans gèrent eux-mêmes « Réessayer »).
+Duration? sansNouvelleTentativeAutomatique(int tentative, Object erreur) => null;
 
 void main() async {
   WidgetsFlutterBinding.ensureInitialized();
+
+  // Capture globale des erreurs : Firebase Crashlytics si configuré (google-services.json),
+  // sinon journal console. Aucune donnée personnelle n'est envoyée.
+  SuiviErreurs.installer(rapporteur: await RapporteurCrashlytics.initialiser());
+
+  // Version réelle de l'app (vérification des mises à jour, en-tête X-App-Version)
+  await VersionApp.charger();
 
   // Initialisations AdMob réservées aux plateformes mobiles (Android/iOS)
   if (!kIsWeb) {
@@ -52,6 +68,7 @@ void main() async {
 
   runApp(
     const ProviderScope(
+      retry: sansNouvelleTentativeAutomatique,
       child: VidTeleApp(),
     ),
   );
@@ -72,6 +89,19 @@ class VidTeleApp extends ConsumerWidget {
       theme: AppTheme.getDarkTheme(currentLocale),
       locale: currentLocale,
       navigatorObservers: [appRouteObserver],
+      // Écran bloquant « Mise à jour requise » par-dessus toute l'application (réponse 426)
+      builder: (context, enfant) => ValueListenableBuilder<InfoMiseAJourRequise?>(
+        valueListenable: miseAJourRequise,
+        // Structure stable (Stack permanent) : afficher l'écran ne recrée pas la navigation.
+        // ExcludeSemantics : TalkBack ne lit que l'écran bloquant quand il est affiché.
+        builder: (context, info, _) => Stack(
+          fit: StackFit.expand,
+          children: [
+            ExcludeSemantics(excluding: info != null, child: enfant ?? const SizedBox.shrink()),
+            if (info != null) EcranMiseAJourRequise(info: info),
+          ],
+        ),
+      ),
       localizationsDelegates: const [
         AppLocalizations.delegate,
         GlobalMaterialLocalizations.delegate,

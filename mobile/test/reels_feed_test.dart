@@ -1,5 +1,6 @@
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
+import 'package:flutter_riverpod/legacy.dart';
 import 'package:flutter_test/flutter_test.dart';
 import 'package:vidtele_mobile/core/services/video_player_manager.dart';
 import 'package:vidtele_mobile/models/feed_model.dart';

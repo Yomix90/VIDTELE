@@ -13,20 +13,20 @@ dependencies:
     sdk: flutter
 
   # Gestion d'état moderne
-  flutter_riverpod: ^2.5.1
+  flutter_riverpod: ^3.4.3
 
   # Réseau HTTP & Intercepteurs JWT
   dio: ^5.4.3+1
 
   # Stockage sécurisé des tokens & préférences
-  flutter_secure_storage: ^9.2.2
+  flutter_secure_storage: ^10.3.1  # v10 migre les données 9.x ; ne PAS passer directement en 11 (perte des sessions)
   shared_preferences: ^2.2.3
 
   # Lecteur vidéo & Contrôles personnalisés
   video_player: ^2.8.6
 
   # Cache d'images pour les miniatures
-  cached_network_image: ^3.3.1
+  cached_network_image: ^4.0.4
 
   # Internationalisation & Dates
   intl: ^0.20.3
@@ -35,17 +35,20 @@ dependencies:
   url_launcher: ^6.3.0
 
   # Icônes modernes
-  cupertino_icons: ^1.0.8
-  wakelock_plus: ^1.5.2
+  cupertino_icons: ^2.0.0
+  wakelock_plus: ^1.8.1
   audio_session: ^0.2.4
   google_fonts: ^9.0.0
   shimmer: ^4.0.0
   google_mobile_ads: ^9.1.0
+  package_info_plus: ^10.2.2
+  firebase_core: 4.15.0
+  firebase_crashlytics: 5.4.0
 
 dev_dependencies:
   flutter_test:
     sdk: flutter
-  flutter_lints: ^3.0.0
+  flutter_lints: ^6.0.0
 
 flutter:
   uses-material-design: true

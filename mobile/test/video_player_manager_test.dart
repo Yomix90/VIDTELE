@@ -187,4 +187,22 @@ void main() {
       expect(manager.activePlayerId, isNull);
     });
   });
+
+  test("écran maintenu allumé même si la lecture est lancée directement (sans le gestionnaire)", () async {
+    // Reproduit le bug « le téléphone se verrouille pendant la lecture »
+    final manager = VideoPlayerManager();
+    final controleur = FakeVideoPlayerController();
+    manager.registerPlayer(id: 'direct', controller: controleur);
+    expect(manager.ecranMaintenuAllume, isFalse);
+
+    await controleur.play(); // ex. « rejouer » ou reprise du watchdog
+    expect(manager.ecranMaintenuAllume, isTrue);
+
+    await controleur.pause();
+    expect(manager.ecranMaintenuAllume, isFalse);
+
+    await controleur.play();
+    manager.unregisterPlayer('direct'); // lecteur libéré : plus besoin de l'écran allumé
+    expect(manager.ecranMaintenuAllume, isFalse);
+  });
 }

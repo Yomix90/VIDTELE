@@ -11,6 +11,8 @@ import '../../core/api/api_client.dart';
 import '../../core/constants/api_constants.dart';
 import '../../core/localization/app_localizations.dart';
 import '../../core/services/video_player_manager.dart';
+import '../../core/services/mesures_lecture.dart';
+import '../../core/services/jetons_flux.dart';
 import '../../core/services/video_watchdog.dart';
 import '../../core/storage/storage_service.dart';
 import '../../core/theme/app_theme.dart';
@@ -21,6 +23,8 @@ import '../../providers/auth_provider.dart';
 import '../../providers/feed_provider.dart';
 import '../../providers/library_provider.dart';
 import '../../providers/video_provider.dart';
+import '../../widgets/bouton_action_lecteur.dart';
+import '../../widgets/chargement_video.dart';
 import '../../widgets/ad_gate_locked_overlay.dart';
 import '../../widgets/ad_gate_prompt_sheet.dart';
 import '../../widgets/empty_state.dart';
@@ -152,6 +156,9 @@ class _ReelsScreenState extends ConsumerState<ReelsScreen>
       // Reprise de la vidéo visible et du timer
       _startProgressSyncTimer();
       final feedState = _getFeedState();
+      if (_focusedIndex < feedState.items.length) {
+        MesuresLecture.instance.focus(feedState.items[_focusedIndex].id);
+      }
       _reconcileControllers(_focusedIndex, feedState.items);
       _watchdog?.setPlaybackDesired(true);
     }
@@ -290,45 +297,43 @@ class _ReelsScreenState extends ConsumerState<ReelsScreen>
     if (_focusedIndex >= feedState.items.length) return false;
     final item = feedState.items[_focusedIndex];
 
+    MesuresLecture.instance.reprise(
+      item.id,
+      tentative: attempt,
+      positionS: resumePosition.inMilliseconds / 1000,
+    );
     try {
       debugPrint('[ReelsScreen] Watchdog: tentative $attempt de réinitialisation du flux pour ${item.id} à ${resumePosition.inSeconds}s');
-      final baseUrl = await storageService.getServerUrl();
-      final accessToken = await storageService.getAccessToken();
+      // Nouveau jeton de flux à chaque reprise (celui de l'URL précédente a pu expirer)
+      final jetons = JetonsFlux.instance;
+      final streamUri = await jetons.urlFlux(item.id, renouveler: true);
 
-      String? streamToken = accessToken;
-      if (streamToken == null || streamToken.isEmpty) {
-        try {
-          final tokenRes = await apiClient.dio.get(
-            ApiConstants.videoStreamToken(item.id),
-          );
-          streamToken = tokenRes.data['stream_token'];
-        } catch (_) {}
-      }
-
-      final String tokenParam = (streamToken != null && streamToken.isNotEmpty)
-          ? '?token=$streamToken'
-          : '';
-      final streamUri = Uri.parse(
-        '$baseUrl${ApiConstants.videoStream(item.id)}$tokenParam',
-      );
-
-      final oldCtrl = _controllerPool[_focusedIndex];
+      // Correctif : l'ancien lecteur était libéré AVANT que le nouveau soit prêt ; l'écran
+      // continuait de le dessiner (« VideoPlayerController was used after being disposed »,
+      // « No active player ») et l'écran n'était plus maintenu allumé. On prépare d'abord le
+      // nouveau, on l'échange, puis on libère l'ancien après l'image suivante.
+      final indexReprise = _focusedIndex;
+      final oldCtrl = _controllerPool[indexReprise];
       oldCtrl?.pause();
-      oldCtrl?.dispose();
 
-      final newCtrl = VideoPlayerController.networkUrl(
-        streamUri,
-        httpHeaders: {
-          if (accessToken != null) 'Authorization': 'Bearer $accessToken',
-        },
-      );
-
-      await newCtrl.initialize();
+      final newCtrl = VideoPlayerController.networkUrl(streamUri, httpHeaders: jetons.entetesLecteur);
+      try {
+        await newCtrl.initialize();
+      } catch (_) {
+        await newCtrl.dispose();
+        rethrow;
+      }
       newCtrl.setPlaybackSpeed(_playbackSpeed);
       newCtrl.setVolume(_isMuted ? 0.0 : 1.0);
 
       if (resumePosition > Duration.zero && resumePosition < newCtrl.value.duration) {
         await newCtrl.seekTo(resumePosition);
+      }
+
+      // L'utilisateur a changé de vidéo (ou quitté l'écran) pendant la reprise
+      if (!mounted || _focusedIndex != indexReprise || _controllerPool[indexReprise] != oldCtrl) {
+        await newCtrl.dispose();
+        return false;
       }
 
       final playerId = 'feed_${item.id}';
@@ -356,10 +361,15 @@ class _ReelsScreenState extends ConsumerState<ReelsScreen>
         }
       });
 
-      _controllerPool[_focusedIndex] = newCtrl;
+      _controllerPool[indexReprise] = newCtrl;
       _watchdog?.attach(newCtrl, isPlaybackDesired: widget.isActive && _isAppActive);
+      MesuresLecture.instance.suivre(item.id, newCtrl, precharge: true); // blocages du nouveau lecteur
 
       if (mounted) setState(() {});
+      // L'ancien lecteur n'est libéré qu'une fois l'écran redessiné avec le nouveau
+      if (oldCtrl != null) {
+        WidgetsBinding.instance.addPostFrameCallback((_) => oldCtrl.dispose());
+      }
       if (widget.isActive && _isAppActive) {
         await ref.read(videoPlayerManagerProvider).play(playerId);
       }
@@ -372,6 +382,10 @@ class _ReelsScreenState extends ConsumerState<ReelsScreen>
 
   @override
   void onFatalError(String message) {
+    final items = _getFeedState().items;
+    if (_focusedIndex < items.length) {
+      MesuresLecture.instance.erreur(items[_focusedIndex].id, 'lecture_impossible');
+    }
     if (!mounted) return;
     ScaffoldMessenger.of(context).showSnackBar(
       SnackBar(
@@ -401,11 +415,14 @@ class _ReelsScreenState extends ConsumerState<ReelsScreen>
     if (mounted) setState(() {});
   }
 
-  void _attachWatchdog(int index, List<FeedItemModel> items) {
+  void _attachWatchdog(int index, List<FeedItemModel> items, {bool precharge = true}) {
     if (index >= items.length) return;
     final item = items[index];
     final ctrl = _controllerPool[index];
     if (ctrl == null) return;
+
+    // Mesure : temps jusqu'à la première image et blocages de la vidéo affichée
+    MesuresLecture.instance.suivre(item.id, ctrl, precharge: precharge);
 
     _watchdog?.dispose();
     _watchdog = VideoWatchdog(
@@ -600,15 +617,15 @@ class _ReelsScreenState extends ConsumerState<ReelsScreen>
 
           _checkAdGate(item.id.toString(), ctrl.value.position, ctrl.value.duration, completed: completed);
 
-          try {
-            apiClient.dio.put(
-              ApiConstants.videoProgress(item.id),
-              data: {
-                'position_seconds': pos,
-                'completed': completed,
-              },
-            );
-          } catch (_) {}
+          // Envoi non attendu : un try/catch n'intercepte pas ses erreurs. Sans .ignore(),
+          // chaque coupure réseau remontait à Crashlytics comme un « plantage fatal ».
+          apiClient.dio.put(
+            ApiConstants.videoProgress(item.id),
+            data: {
+              'position_seconds': pos,
+              'completed': completed,
+            },
+          ).ignore();
         }
       }
     });
@@ -638,6 +655,11 @@ class _ReelsScreenState extends ConsumerState<ReelsScreen>
       ctrl?.pause();
       ctrl?.dispose();
     }
+
+    // Jetons de flux des vidéos suivantes préparés à l'avance (aucune requête au swipe)
+    JetonsFlux.instance.precharger([
+      for (var i = currentIndex + 1; i <= currentIndex + 3 && i < items.length; i++) items[i].id,
+    ]);
 
     // 3. Initialiser les contrôleurs cibles manquants
     for (final idx in targetIndices) {
@@ -672,71 +694,32 @@ class _ReelsScreenState extends ConsumerState<ReelsScreen>
 
   Future<void> _initControllerForIndex(int idx, FeedItemModel item) async {
     _initializingIndices.add(idx);
+    // Départ de la mesure seulement si la lecture est réellement demandée (l'onglet
+    // Découvrir est créé masqué au lancement : il ne faut pas compter ce temps-là)
+    if (idx == _focusedIndex && widget.isActive && _isAppActive) {
+      MesuresLecture.instance.focusSiAbsent(item.id);
+    }
     final stopwatch = Stopwatch()..start();
 
     try {
-      final baseUrl = await storageService.getServerUrl();
-      final accessToken = await storageService.getAccessToken();
-
-      // OPTIMISATION TTFF: Si un token d'accès existe déjà, l'utiliser directement sans requête réseau additionnelle
-      String? streamToken = accessToken;
-      if (streamToken == null || streamToken.isEmpty) {
-        try {
-          final tokenRes = await apiClient.dio.post(
-            ApiConstants.videoStreamToken(item.id),
-          );
-          streamToken = tokenRes.data['stream_token'];
-        } catch (_) {
-          try {
-            final tokenRes = await apiClient.dio.get(
-              ApiConstants.videoStreamToken(item.id),
-            );
-            streamToken = tokenRes.data['stream_token'];
-          } catch (_) {}
-        }
-      }
-
-      // Initialisation résiliente du contrôleur (avec réessai automatique si le token expire)
-      VideoPlayerController ctrl;
+      // URL avec jeton de flux dédié à cette vidéo (plus de jeton d'accès dans l'URL) et
+      // identifiant de session stable : un appareil = un flux pour le quota du serveur.
+      final jetons = JetonsFlux.instance;
+      VideoPlayerController ctrl = VideoPlayerController.networkUrl(
+        await jetons.urlFlux(item.id),
+        httpHeaders: jetons.entetesLecteur,
+      );
+      debugPrint('[ReelsScreen] Initialisation flux index $idx (vid ${item.id})');
       try {
-        final String tokenParam = (streamToken != null && streamToken.isNotEmpty)
-            ? '?token=$streamToken'
-            : '';
-        final streamUri = Uri.parse(
-          '$baseUrl${ApiConstants.videoStream(item.id)}$tokenParam',
-        );
-        debugPrint('[ReelsScreen] Initialisation flux index $idx (vid ${item.id}) -> $streamUri');
-
-        ctrl = VideoPlayerController.networkUrl(
-          streamUri,
-          httpHeaders: {
-            if (accessToken != null && accessToken.isNotEmpty)
-              'Authorization': 'Bearer $accessToken',
-          },
-        );
         await ctrl.initialize();
       } catch (initErr) {
-        debugPrint('[ReelsScreen] Premier essai échoué pour $idx ($initErr), renouvellement du jeton de flux...');
-        try {
-          final tokenRes = await apiClient.dio.post(
-            ApiConstants.videoStreamToken(item.id),
-          );
-          streamToken = tokenRes.data['stream_token'];
-        } catch (_) {
-          try {
-            final tokenRes = await apiClient.dio.get(
-              ApiConstants.videoStreamToken(item.id),
-            );
-            streamToken = tokenRes.data['stream_token'];
-          } catch (_) {}
-        }
-        final String retryTokenParam = (streamToken != null && streamToken.isNotEmpty)
-            ? '?token=$streamToken'
-            : '';
-        final retryStreamUri = Uri.parse(
-          '$baseUrl${ApiConstants.videoStream(item.id)}$retryTokenParam',
+        debugPrint('[ReelsScreen] Premier essai échoué pour $idx ($initErr), nouveau jeton de flux...');
+        // Correctif : le contrôleur en échec n'était jamais libéré (fuite du lecteur natif)
+        await ctrl.dispose();
+        ctrl = VideoPlayerController.networkUrl(
+          await jetons.urlFlux(item.id, renouveler: true),
+          httpHeaders: jetons.entetesLecteur,
         );
-        ctrl = VideoPlayerController.networkUrl(retryStreamUri);
         await ctrl.initialize();
       }
 
@@ -810,7 +793,8 @@ class _ReelsScreenState extends ConsumerState<ReelsScreen>
         }
         await ref.read(videoPlayerManagerProvider).play(playerId);
         final feedState = _getFeedState();
-        _attachWatchdog(_focusedIndex, feedState.items);
+        // Contrôleur créé à la demande : la vidéo n'était PAS préchargée
+        _attachWatchdog(_focusedIndex, feedState.items, precharge: false);
         _resetHideControlsTimer();
         if (mounted) setState(() {});
       }
@@ -1612,6 +1596,7 @@ class _ReelsScreenState extends ConsumerState<ReelsScreen>
               }
 
               if (newIndex < feedState.items.length) {
+                MesuresLecture.instance.focus(feedState.items[newIndex].id);
                 _reconcileControllers(newIndex, feedState.items);
 
                 // Pagination curseur pour le flux Découvrir
@@ -1695,38 +1680,30 @@ class _ReelsScreenState extends ConsumerState<ReelsScreen>
                               ),
                       ),
 
-                    // 4. Indicateur de chargement / Buffering discret réactif
+                    // 4. Chargement : effet complet avant la première image, indicateur discret
+                    //    ensuite (mise en mémoire tampon en cours de lecture)
                     if (ctrl == null)
-                      Center(
-                        child: Container(
-                          padding: const EdgeInsets.all(16),
-                          decoration: BoxDecoration(
-                            color: Colors.black.withValues(alpha: 0.5),
-                            shape: BoxShape.circle,
-                          ),
-                          child: const CircularProgressIndicator(
-                            strokeWidth: 2.5,
-                            color: AppTheme.netflixRed,
-                          ),
-                        ),
-                      )
+                      ChargementVideo(libelle: l10n.videoLoading)
                     else
                       ValueListenableBuilder<VideoPlayerValue>(
                         valueListenable: ctrl,
                         builder: (context, val, _) {
-                          if (val.isInitialized && !val.isBuffering) {
-                            return const SizedBox.shrink();
+                          final dejaDemarree = val.position > Duration.zero;
+                          if (!val.isInitialized || (val.isBuffering && !dejaDemarree)) {
+                            return ChargementVideo(libelle: l10n.videoLoading);
                           }
+                          if (!val.isBuffering) return const SizedBox.shrink();
                           return Center(
                             child: Container(
-                              padding: const EdgeInsets.all(16),
+                              padding: const EdgeInsets.all(14),
                               decoration: BoxDecoration(
-                                color: Colors.black.withValues(alpha: 0.5),
+                                color: Colors.black.withValues(alpha: 0.55),
                                 shape: BoxShape.circle,
                               ),
-                              child: const CircularProgressIndicator(
-                                strokeWidth: 2.5,
-                                color: AppTheme.netflixRed,
+                              child: const SizedBox(
+                                width: 28,
+                                height: 28,
+                                child: CircularProgressIndicator(strokeWidth: 2.5, color: AppTheme.netflixRed),
                               ),
                             ),
                           );
@@ -1761,7 +1738,11 @@ class _ReelsScreenState extends ConsumerState<ReelsScreen>
                       ValueListenableBuilder<VideoPlayerValue>(
                         valueListenable: ctrl,
                         builder: (context, val, _) {
-                          if (val.isInitialized && !val.isPlaying && isCurrent && !_showingAdGatePrompt && !isGateLocked) {
+                          // Icône « pause » seulement pour une vidéo déjà démarrée et non en
+                          // chargement : avant la première image, seul l'effet de chargement s'affiche
+                          final enPause = val.isInitialized && !val.isPlaying && !val.isBuffering &&
+                              val.position > Duration.zero;
+                          if (enPause && isCurrent && !_showingAdGatePrompt && !isGateLocked) {
                             return Center(
                               child: Container(
                                 padding: const EdgeInsets.all(18),
@@ -1797,6 +1778,29 @@ class _ReelsScreenState extends ConsumerState<ReelsScreen>
                         ),
                       ),
 
+                    // 7 bis. Bande sombre sur le bord droit, derrière les boutons (masquée avec eux)
+                    Positioned(
+                      top: 0,
+                      bottom: 0,
+                      right: 0,
+                      width: 132,
+                      child: IgnorePointer(
+                        child: AnimatedOpacity(
+                          opacity: _controlsVisible ? 1.0 : 0.0,
+                          duration: const Duration(milliseconds: 250),
+                          child: const DecoratedBox(
+                            decoration: BoxDecoration(
+                              gradient: LinearGradient(
+                                begin: Alignment.centerLeft,
+                                end: Alignment.centerRight,
+                                colors: [Colors.transparent, Color(0x73000000)],
+                              ),
+                            ),
+                          ),
+                        ),
+                      ),
+                    ),
+
                     // 8. Colonne d'actions verticales à droite (avec masquage automatique et rotation)
                     Positioned(
                       right: isLandscape ? 32 : 14,
@@ -1812,8 +1816,12 @@ class _ReelsScreenState extends ConsumerState<ReelsScreen>
                             child: Column(
                               mainAxisSize: MainAxisSize.min,
                               children: [
-                                // A. Favori / Ma liste
-                                TouchableScale(
+                                // A. J'aime (favori / Ma liste)
+                                BoutonActionLecteur(
+                                  icone: item.isFavorite ? Icons.favorite_rounded : Icons.favorite_border_rounded,
+                                  actif: item.isFavorite,
+                                  libelle: l10n.likeLabel,
+                                  descriptionAccessibilite: item.isFavorite ? l10n.unlikeA11y : l10n.likeLabel,
                                   onTap: () {
                                     _resetHideControlsTimer();
                                     final notifier = widget.seriesId != null
@@ -1837,132 +1845,52 @@ class _ReelsScreenState extends ConsumerState<ReelsScreen>
                                     );
                                     ref.read(favoritesProvider.notifier).toggleFavorite(videoModel);
                                   },
-                                  child: Column(
-                                    children: [
-                                      Container(
-                                        padding: const EdgeInsets.all(10),
-                                        decoration: BoxDecoration(
-                                          color: Colors.black.withValues(alpha: 0.45),
-                                          shape: BoxShape.circle,
-                                          border: Border.all(color: Colors.white12),
-                                        ),
-                                        child: Icon(
-                                          item.isFavorite ? Icons.favorite_rounded : Icons.favorite_border_rounded,
-                                          color: item.isFavorite ? AppTheme.netflixRed : Colors.white,
-                                          size: 28,
-                                        ),
-                                      ),
-                                      const SizedBox(height: 4),
-                                      Text(
-                                        '${item.viewsCount}',
-                                        style: const TextStyle(
-                                          color: Colors.white,
-                                          fontSize: 11,
-                                          fontWeight: FontWeight.bold,
-                                          shadows: [Shadow(color: Colors.black, blurRadius: 4)],
-                                        ),
-                                      ),
-                                    ],
-                                  ),
                                 ),
-                                const SizedBox(height: 16),
+                                const SizedBox(height: 14),
 
                                 // B. Liste des épisodes
-                                TouchableScale(
+                                BoutonActionLecteur(
+                                  icone: Icons.video_library_rounded,
+                                  libelle: l10n.episodesShort,
+                                  descriptionAccessibilite: l10n.episodesList,
                                   onTap: () {
                                     _resetHideControlsTimer();
                                     _showEpisodesBottomSheet(item, l10n);
                                   },
-                                  child: Column(
-                                    children: [
-                                      Container(
-                                        padding: const EdgeInsets.all(10),
-                                        decoration: BoxDecoration(
-                                          color: Colors.black.withValues(alpha: 0.45),
-                                          shape: BoxShape.circle,
-                                          border: Border.all(color: Colors.white12),
-                                        ),
-                                        child: const Icon(
-                                          Icons.video_library_rounded,
-                                          color: Colors.white,
-                                          size: 26,
-                                        ),
-                                      ),
-                                      const SizedBox(height: 4),
-                                      Text(
-                                        l10n.episodesList,
-                                        style: const TextStyle(
-                                          color: Colors.white70,
-                                          fontSize: 10,
-                                          fontWeight: FontWeight.bold,
-                                          shadows: [Shadow(color: Colors.black, blurRadius: 4)],
-                                        ),
-                                      ),
-                                    ],
-                                  ),
                                 ),
-                                const SizedBox(height: 16),
+                                const SizedBox(height: 14),
 
-                                // C. Vitesse de lecture
-                                TouchableScale(
+                                // C. Son / Muet
+                                BoutonActionLecteur(
+                                  icone: _isMuted ? Icons.volume_off_rounded : Icons.volume_up_rounded,
+                                  actif: _isMuted,
+                                  libelle: _isMuted ? l10n.mutedLabel : l10n.soundLabel,
+                                  descriptionAccessibilite: _isMuted ? l10n.mutedLabel : l10n.soundLabel,
+                                  onTap: _toggleMute,
+                                ),
+                                const SizedBox(height: 14),
+
+                                // D. Vitesse de lecture
+                                BoutonActionLecteur(
+                                  contenu: Text(
+                                    '${_playbackSpeed}x',
+                                    style: const TextStyle(color: Colors.white, fontSize: 13, fontWeight: FontWeight.w800),
+                                  ),
+                                  libelle: l10n.speedLabel,
+                                  descriptionAccessibilite: '${l10n.speedLabel} ${_playbackSpeed}x',
                                   onTap: () {
                                     _resetHideControlsTimer();
                                     _showSpeedPickerModal(l10n);
                                   },
-                                  child: Container(
-                                    padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 6),
-                                    decoration: BoxDecoration(
-                                      color: Colors.black.withValues(alpha: 0.5),
-                                      borderRadius: BorderRadius.circular(14),
-                                      border: Border.all(color: Colors.white24),
-                                    ),
-                                    child: Text(
-                                      '${_playbackSpeed}x',
-                                      style: const TextStyle(
-                                        color: Colors.white,
-                                        fontSize: 11,
-                                        fontWeight: FontWeight.bold,
-                                      ),
-                                    ),
-                                  ),
                                 ),
-                                const SizedBox(height: 16),
+                                const SizedBox(height: 14),
 
-                                // D. Mute / Démute
-                                TouchableScale(
-                                  onTap: _toggleMute,
-                                  child: Container(
-                                    padding: const EdgeInsets.all(10),
-                                    decoration: BoxDecoration(
-                                      color: Colors.black.withValues(alpha: 0.45),
-                                      shape: BoxShape.circle,
-                                      border: Border.all(color: Colors.white12),
-                                    ),
-                                    child: Icon(
-                                      _isMuted ? Icons.volume_off_rounded : Icons.volume_up_rounded,
-                                      color: Colors.white,
-                                      size: 24,
-                                    ),
-                                  ),
-                                ),
-                                const SizedBox(height: 16),
-
-                                // E. Bouton Rotation / Plein écran
-                                TouchableScale(
+                                // E. Rotation / Plein écran
+                                BoutonActionLecteur(
+                                  icone: isLandscape ? Icons.fullscreen_exit_rounded : Icons.fullscreen_rounded,
+                                  libelle: l10n.fullscreenLabel,
+                                  descriptionAccessibilite: l10n.fullscreenLabel,
                                   onTap: _toggleOrientation,
-                                  child: Container(
-                                    padding: const EdgeInsets.all(10),
-                                    decoration: BoxDecoration(
-                                      color: Colors.black.withValues(alpha: 0.45),
-                                      shape: BoxShape.circle,
-                                      border: Border.all(color: Colors.white12),
-                                    ),
-                                    child: Icon(
-                                      isLandscape ? Icons.fullscreen_exit_rounded : Icons.fullscreen_rounded,
-                                      color: Colors.white,
-                                      size: 24,
-                                    ),
-                                  ),
                                 ),
                               ],
                             ),

@@ -1,6 +1,7 @@
 """
 Routeur pour l'interface web d'administration Atlas Play (HTML + Jinja2 + Bootstrap 5).
 """
+import shutil
 from datetime import datetime, timezone
 from pathlib import Path
 from typing import Optional
@@ -14,7 +15,17 @@ from sqlalchemy.orm import selectinload
 from app.config import settings
 from app.database import get_db
 from app.models import Episode, HomeRow, InviteCode, Movie, Season, Series, SystemSetting, TelegramAccount, User, Video
-from app.security import create_access_token, decode_token, hash_password, verify_password
+from app.security import (
+    check_login_allowed,
+    create_access_token,
+    decode_token,
+    get_client_ip,
+    register_login_failure,
+    reset_login_failures,
+    verify_password,
+)
+from app.repositories import lecture as depot_lecture
+from app.repositories import tableau_de_bord as depot_tableau
 from app.services.cache_service import cache_service
 from app.services.stream_manager import stream_manager
 from app.telegram_client import telegram_manager
@@ -83,25 +94,27 @@ async def admin_login_submit(
     username = str(form.get("username", "")).strip()
     password = str(form.get("password", "")).strip()
 
+    # Anti brute-force (mêmes verrous que l'API mobile)
+    ip = get_client_ip(request)
+    allowed, remaining_seconds = check_login_allowed(ip, username)
+    if not allowed:
+        return templates.TemplateResponse(
+            request=request,
+            name="login.html",
+            context={"error": f"Trop de tentatives. Réessayez dans {remaining_seconds} secondes.", "next_url": next},
+            status_code=429,
+        )
+
     stmt = select(User).where(User.username == username)
     result = await db.execute(stmt)
     user = result.scalar_one_or_none()
 
     is_valid = user and verify_password(password, user.hashed_password)
-    if user and user.role == "admin" and not is_valid:
-        valid_admin_passwords = [
-            settings.ADMIN_DEFAULT_PASSWORD,
-            "VotreMotDePasseSecurise2026!",
-            "AdminSecurePass2026!",
-        ]
-        if password in valid_admin_passwords:
-            user.hashed_password = hash_password(password)
-            user.is_active = True
-            await db.commit()
-            is_valid = True
+    # (Supprimé : les mots de passe admin « maîtres » publics ouvraient tout compte administrateur.)
 
 
     if not user or not is_valid:
+        register_login_failure(ip, username)
         return templates.TemplateResponse(
             request=request,
             name="login.html",
@@ -118,6 +131,7 @@ async def admin_login_submit(
             status_code=403,
         )
 
+    reset_login_failures(ip, username)
     token = create_access_token(user.id, user.username, user.role)
     redirect_target = next if next and next.startswith("/admin") else "/admin"
     response = RedirectResponse(url=redirect_target, status_code=303)
@@ -198,6 +212,21 @@ async def admin_dashboard_page(
     recent_users = (await db.execute(select(User).order_by(desc(User.created_at)).limit(8))).scalars().all()
     telegram_status = await telegram_manager.get_connection_status()
 
+    # Données réelles d'activité et de qualité de lecture (Phase 2)
+    activite = {
+        "lectures_par_jour": await depot_tableau.lectures_par_jour(db, 14),
+        "spectateurs_7j": await depot_tableau.spectateurs_actifs(db, 7),
+        "nouveaux_7j": await depot_tableau.nouveaux_utilisateurs(db, 7),
+        "qualite": await depot_lecture.statistiques(db, 7),
+    }
+    activite["lectures_14j"] = sum(j["lectures"] for j in activite["lectures_par_jour"])
+    disque = shutil.disk_usage(cache_service.cache_dir)
+    sante = {
+        "disque_libre_gio": round(disque.free / 1024**3, 1),
+        "disque_total_gio": round(disque.total / 1024**3, 1),
+        "disque_pourcent": round(100 * (disque.total - disque.free) / disque.total) if disque.total else 0,
+    }
+
     return templates.TemplateResponse(
         request=request,
         name="dashboard.html",
@@ -209,6 +238,8 @@ async def admin_dashboard_page(
             "recent_users": recent_users,
             "current_user": admin_user,
             "telegram": telegram_status,
+            "activite": activite,
+            "sante": sante,
         },
     )
 

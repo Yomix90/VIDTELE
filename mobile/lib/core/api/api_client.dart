@@ -1,6 +1,8 @@
 import 'package:dio/dio.dart';
 import '../constants/api_constants.dart';
 import '../storage/storage_service.dart';
+import '../version/mise_a_jour_requise.dart';
+import '../version/version_app.dart';
 
 /// Client HTTP Dio configuré avec intercepteur d'authentification JWT
 /// et renouvellement automatique transparent en cas d'expiration de session (401).
@@ -31,6 +33,9 @@ class ApiClient {
           final baseUrl = await storageService.getServerUrl();
           options.baseUrl = baseUrl;
 
+          // Version de l'application : permet au serveur d'exiger une mise à jour (426)
+          options.headers['X-App-Version'] = VersionApp.actuelle;
+
           // 2. Ajout automatique du Bearer token si présent
           final token = await storageService.getAccessToken();
           if (token != null && !options.headers.containsKey('Authorization')) {
@@ -40,6 +45,12 @@ class ApiClient {
           return handler.next(options);
         },
         onError: (DioException error, handler) async {
+          // Version trop ancienne pour le serveur : écran bloquant de mise à jour
+          if (error.response?.statusCode == 426) {
+            miseAJourRequise.value = InfoMiseAJourRequise.depuisJson(error.response?.data);
+            return handler.next(error);
+          }
+
           // 3. Gestion du renouvellement automatique sur erreur 401
           if (error.response?.statusCode == 401 && !_isRefreshing) {
             final path = error.requestOptions.path;

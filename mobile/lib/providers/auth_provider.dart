@@ -1,5 +1,6 @@
+import '../core/erreurs/suivi_erreurs.dart';
 import 'package:dio/dio.dart';
-import 'package:flutter_riverpod/flutter_riverpod.dart';
+import 'package:flutter_riverpod/legacy.dart';
 import '../core/api/api_client.dart';
 import '../core/constants/api_constants.dart';
 import '../core/storage/storage_service.dart';
@@ -40,6 +41,20 @@ class AuthNotifier extends StateNotifier<AuthState> {
     checkInitialAuth();
   }
 
+  String? _utilisateurSuivi;
+
+  /// Associe les rapports de plantage à l'identifiant technique de l'utilisateur
+  /// (jamais le nom ni l'e-mail), une seule fois par changement d'utilisateur.
+  @override
+  set state(AuthState valeur) {
+    super.state = valeur;
+    final identifiant = valeur.isAuthenticated ? valeur.user?.id.toString() : null;
+    if (identifiant != _utilisateurSuivi) {
+      _utilisateurSuivi = identifiant;
+      SuiviErreurs.definirUtilisateur(identifiant);
+    }
+  }
+
   /// Vérifie si un token valide existe au démarrage de l'app
   Future<void> checkInitialAuth() async {
     state = state.copyWith(isLoading: true);
@@ -61,8 +76,19 @@ class AuthNotifier extends StateNotifier<AuthState> {
         );
         return;
       }
+    } on DioException catch (e) {
+      // Correctif : avant, TOUTE erreur effaçait la session. Un lancement sans réseau
+      // (métro, 4G faible) ou une réponse 426/5xx déconnectait donc l'utilisateur.
+      // On ne déconnecte plus que si le serveur refuse réellement le jeton (401,
+      // après échec du rafraîchissement automatique).
+      if (e.response?.statusCode != 401) {
+        state = state.copyWith(isAuthenticated: true, isLoading: false);
+        return;
+      }
     } catch (_) {
-      // Le token est expiré ou invalide
+      // Réponse illisible : on garde la session, les écrans afficheront l'erreur.
+      state = state.copyWith(isAuthenticated: true, isLoading: false);
+      return;
     }
 
     await storageService.clearAuthData();

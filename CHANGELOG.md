@@ -1,4 +1,82 @@
-# 📜 CHANGELOG - Branche `lecteur-vertical`
+# 📜 CHANGELOG
+
+## [Non publié] - Phase 2 : lecture vidéo (branche `mise-a-jour-totale`, en cours)
+
+### Serveur
+- **Streaming progressif depuis Telegram** : premier octet d'un épisode non en cache en ~0,3 s
+  (simulation, 20 Mo à 5 Mo/s) au lieu d'attendre le téléchargement complet (≥ 4 s) ; un seul
+  téléchargement partagé par tous les lecteurs ; lecture directe des plages lointaines (index MP4
+  en fin de fichier, déplacements) ; reprise après coupure.
+- File de préchauffage unique (une vidéo à la fois) + cycle périodique : premiers épisodes des
+  séries publiées et vidéos populaires (`PREWARM_POPULAR_COUNT`).
+- Faststart appliqué avant mise à disposition, jamais sur un fichier déjà lu.
+- Chemin chaud sans écriture SQLite par requête Range ; une vue par lecture ; HTTP Range conforme
+  (206/200/416).
+- Mesures de lecture : `POST /api/analytics/playback`, `GET /api/admin/stats/playback`,
+  table `playback_events` (migration 0002).
+- Correctif : passage d'une base existante au schéma de référence compatible avec les migrations futures.
+
+### Application
+- Jeton de flux dédié par vidéo (plus de jeton d'accès dans les URL), session de lecture stable
+  par appareil, jetons des vidéos suivantes préparés à l'avance.
+- Mesures envoyées au serveur : première image, blocages, reprises, erreurs.
+- Correctif : fuite d'un lecteur natif quand son initialisation échouait.
+
+---
+
+## [Non publié] - Phase 1 : fondations et stabilité (branche `mise-a-jour-totale`)
+
+### Corrections importantes
+- App : après une connexion réussie, l'écran restait sur le formulaire (il fallait relancer l'app).
+- App : lancer l'application sans réseau déconnectait l'utilisateur.
+- API : `/api/home` et `/api/feed` renvoyaient 500 dès qu'une vidéo publiée n'avait pas de catégorie.
+- Serveur : genres et rangées d'accueil par défaut jamais créés (insertion ignorée silencieusement).
+- Serveur : `NameError` latent dans l'erreur de téléversement d'APK.
+
+### Serveur
+- Dépendances figées (`requirements.lock` Linux avec empreintes), image Docker Python 3.14 sans compilateur.
+- Journaux structurés (texte ou JSON), identifiant de requête `X-Request-ID`, jetons masqués partout.
+- Erreurs uniformes `{detail, code, request_id}` (sans détail interne), `/api/health/ready` (base, Telegram, disque).
+- Migrations Alembic avec sauvegarde automatique et vérification du schéma avant marquage.
+- Architecture : `admin.py` découpé en 13 modules, `videos.py` en catalogue/lecture, `main.py` réduit à la
+  composition, première couche `repositories/`.
+- Version minimale : contrôle par en-tête `X-App-Version` (426 « Mise à jour requise »).
+
+### Application
+- `flutter_secure_storage` 10 (migration des sessions vérifiée sur émulateur), Riverpod 3, cached_network_image 4,
+  package_info_plus 10, wakelock_plus 1.8, flutter_lints 6. `pubspec.lock` versionné.
+- Version réelle lue dans l'APK, en-tête `X-App-Version`, écran bloquant « Mise à jour requise » (FR/AR/EN).
+- Suivi global des erreurs (`SuiviErreurs`), prêt pour Firebase Crashlytics.
+- Android : `minSdk 24` explicite, suppression d'une `MainActivity` en double.
+
+### Qualité
+- 57 tests serveur (contrat API des apps installées, inventaire des 124 routes, migrations, sécurité),
+  44 tests Flutter ; CI GitHub Actions (tests, ruff, pip-audit, images Docker, APK).
+
+---
+
+## [Non publié] - Phase 0.5 : correctifs urgents (branche `mise-a-jour-totale`)
+
+Serveur uniquement : aucune nouvelle version de l'application n'est nécessaire, et aucun endpoint n'a été retiré ni modifié de façon incompatible.
+
+### Sécurité
+- Suppression de la porte dérobée : des mots de passe admin « maîtres » publics ouvraient tout compte administrateur.
+- Le mot de passe admin n'est plus réécrit à chaque démarrage (secours : `ADMIN_RESET_PASSWORD=true`).
+- `SECRET_KEY` vide ou publique : remplacée par une clé aléatoire persistante (`/app/data/.jwt_secret`).
+- L'anti brute-force n'est plus contournable avec `X-Forwarded-For` (`TRUSTED_PROXIES`), il ajoute un verrou par compte et protège aussi `/admin/login`.
+- Le jeton de flux n'ouvre plus que la vidéo pour laquelle il a été émis.
+- Retrait des identifiants Telegram réels et des exemples de secrets de `DOKPLOY.md`.
+
+### Corrections
+- `/api/videos/series`, `/api/videos/home` et `/api/videos/feed` renvoyaient 422 : les listes de séries de l'app étaient vides.
+- Arrêts en cours de lecture à l'expiration du jeton présent dans l'URL : tolérance `STREAM_TOKEN_GRACE_MINUTES` (240 min) sur l'endpoint de flux uniquement.
+
+### Tests
+- Nouvelle suite pytest `backend/tests/` (26 tests, base jetable, sans Telegram) : `pytest` depuis `backend/`.
+
+---
+
+# Branche `lecteur-vertical`
 
 Toutes les modifications apportées pour l'unification du lecteur vertical, la fiabilisation du streaming et la suppression du partage.
 

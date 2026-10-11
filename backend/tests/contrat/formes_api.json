@@ -1,0 +1,808 @@
+{
+ "GET /api/admin/stats": {
+  "active_invites": "nombre",
+  "active_users": "nombre",
+  "cache": {
+   "file_count": "nombre",
+   "max_gb": "nombre",
+   "percent_used": "nombre",
+   "total_bytes": "nombre",
+   "total_gb": "nombre",
+   "total_mb": "nombre"
+  },
+  "streams": {
+   "current_active": "nombre",
+   "max_global": "nombre",
+   "max_per_user": "nombre"
+  },
+  "total_duration_seconds": "nombre",
+  "total_invites": "nombre",
+  "total_users": "nombre",
+  "total_videos": "nombre",
+  "total_views": "nombre",
+  "used_invites": "nombre"
+ },
+ "GET /api/app/version?[('current_version', '1.2.0')]": {
+  "download_url": "texte",
+  "force_update": "bool",
+  "has_update": "bool",
+  "latest_version": "texte",
+  "min_version": "texte",
+  "release_notes": "texte",
+  "title": "texte"
+ },
+ "GET /api/auth/me": {
+  "ads_free": "bool",
+  "created_at": "texte",
+  "id": "nombre",
+  "is_active": "bool",
+  "last_login_at": "texte",
+  "max_concurrent_streams": "nombre",
+  "role": "texte",
+  "username": "texte"
+ },
+ "GET /api/favorites": [
+  {
+   "created_at": "texte",
+   "duration_seconds": "nombre",
+   "id": "nombre",
+   "video": {
+    "caption": "texte",
+    "category": "texte",
+    "duration_seconds": "nombre",
+    "episode_number": "nombre",
+    "episode_title": "null",
+    "file_name": "texte",
+    "file_size_bytes": "nombre",
+    "id": "nombre",
+    "is_completed": "bool",
+    "is_favorite": "bool",
+    "is_published": "bool",
+    "media_item_id": "null",
+    "mime_type": "texte",
+    "season_number": "nombre",
+    "telegram_date": "texte",
+    "telegram_message_id": "nombre",
+    "thumbnail_path": "null",
+    "title": "texte",
+    "views_count": "nombre",
+    "watch_progress_seconds": "nombre"
+   },
+   "video_id": "nombre",
+   "video_thumbnail": "null",
+   "video_title": "texte"
+  }
+ ],
+ "GET /api/feed?[('limit', 15), ('series_id', {series_id})]": {
+  "has_more": "bool",
+  "items": [
+   {
+    "caption": "texte",
+    "category": "texte",
+    "duration_seconds": "nombre",
+    "episode_number": "nombre",
+    "episode_title": "texte",
+    "file_size_bytes": "nombre",
+    "id": "nombre",
+    "is_completed": "bool",
+    "is_favorite": "bool",
+    "mime_type": "texte",
+    "next_episode_video_id": "nombre",
+    "season_number": "nombre",
+    "series_id": "nombre",
+    "series_title": "texte",
+    "stream_url": "texte",
+    "telegram_message_id": "nombre",
+    "thumbnail_path": "texte",
+    "title": "texte",
+    "views_count": "nombre",
+    "watch_progress_seconds": "nombre"
+   }
+  ],
+  "next_cursor": "null"
+ },
+ "GET /api/feed?[('limit', 15)]": {
+  "has_more": "bool",
+  "items": [
+   {
+    "caption": "texte",
+    "category": "texte",
+    "duration_seconds": "nombre",
+    "episode_number": "nombre",
+    "episode_title": "texte",
+    "file_size_bytes": "nombre",
+    "id": "nombre",
+    "is_completed": "bool",
+    "is_favorite": "bool",
+    "mime_type": "texte",
+    "next_episode_video_id": "nombre",
+    "season_number": "nombre",
+    "series_id": "nombre",
+    "series_title": "texte",
+    "stream_url": "texte",
+    "telegram_message_id": "nombre",
+    "thumbnail_path": "texte",
+    "title": "texte",
+    "views_count": "nombre",
+    "watch_progress_seconds": "nombre"
+   }
+  ],
+  "next_cursor": "null"
+ },
+ "GET /api/history": [
+  {
+   "completed": "bool",
+   "duration_seconds": "nombre",
+   "id": "nombre",
+   "is_completed": "bool",
+   "last_position_seconds": "nombre",
+   "last_watched_at": "texte",
+   "position_seconds": "nombre",
+   "progress_seconds": "nombre",
+   "updated_at": "texte",
+   "video": {
+    "caption": "texte",
+    "category": "texte",
+    "duration_seconds": "nombre",
+    "episode_number": "nombre",
+    "episode_title": "null",
+    "file_name": "texte",
+    "file_size_bytes": "nombre",
+    "id": "nombre",
+    "is_completed": "bool",
+    "is_favorite": "bool",
+    "is_published": "bool",
+    "media_item_id": "null",
+    "mime_type": "texte",
+    "season_number": "nombre",
+    "telegram_date": "texte",
+    "telegram_message_id": "nombre",
+    "thumbnail_path": "null",
+    "title": "texte",
+    "views_count": "nombre",
+    "watch_progress_seconds": "nombre"
+   },
+   "video_id": "nombre",
+   "video_thumbnail": "null",
+   "video_title": "texte"
+  }
+ ],
+ "GET /api/home": {
+  "continue_watching": [
+   {
+    "caption": "texte",
+    "category": "texte",
+    "duration_seconds": "nombre",
+    "episode_number": "nombre",
+    "episode_title": "null",
+    "file_name": "texte",
+    "file_size_bytes": "nombre",
+    "id": "nombre",
+    "is_completed": "bool",
+    "is_favorite": "bool",
+    "is_published": "bool",
+    "media_item_id": "null",
+    "mime_type": "texte",
+    "season_number": "nombre",
+    "telegram_date": "texte",
+    "telegram_message_id": "nombre",
+    "thumbnail_path": "texte",
+    "title": "texte",
+    "views_count": "nombre",
+    "watch_progress_seconds": "nombre"
+   }
+  ],
+  "genres": [
+   {
+    "count": "nombre",
+    "items": [
+     {
+      "caption": "texte",
+      "category": "texte",
+      "duration_seconds": "nombre",
+      "episode_number": "nombre",
+      "episode_title": "null",
+      "file_name": "texte",
+      "file_size_bytes": "nombre",
+      "id": "nombre",
+      "is_completed": "bool",
+      "is_favorite": "bool",
+      "is_published": "bool",
+      "media_item_id": "null",
+      "mime_type": "texte",
+      "season_number": "nombre",
+      "telegram_date": "texte",
+      "telegram_message_id": "nombre",
+      "thumbnail_path": "texte",
+      "title": "texte",
+      "views_count": "nombre",
+      "watch_progress_seconds": "nombre"
+     }
+    ],
+    "name": "texte"
+   }
+  ],
+  "hero": [
+   {
+    "banner_path": "texte",
+    "category": "texte",
+    "episodes_count": "nombre",
+    "first_video_id": "nombre",
+    "id": "nombre",
+    "poster_path": "texte",
+    "rating": "nombre",
+    "synopsis": "texte",
+    "title": "texte",
+    "title_ar": "texte",
+    "title_en": "null",
+    "title_fr": "texte",
+    "year": "nombre"
+   }
+  ],
+  "new": [
+   {
+    "caption": "texte",
+    "category": "texte",
+    "duration_seconds": "nombre",
+    "episode_number": "nombre",
+    "episode_title": "null",
+    "file_name": "texte",
+    "file_size_bytes": "nombre",
+    "id": "nombre",
+    "is_completed": "bool",
+    "is_favorite": "bool",
+    "is_published": "bool",
+    "media_item_id": "null",
+    "mime_type": "texte",
+    "season_number": "nombre",
+    "telegram_date": "texte",
+    "telegram_message_id": "nombre",
+    "thumbnail_path": "texte",
+    "title": "texte",
+    "views_count": "nombre",
+    "watch_progress_seconds": "nombre"
+   }
+  ],
+  "new_releases": [
+   {
+    "caption": "texte",
+    "category": "texte",
+    "duration_seconds": "nombre",
+    "episode_number": "nombre",
+    "episode_title": "null",
+    "file_name": "texte",
+    "file_size_bytes": "nombre",
+    "id": "nombre",
+    "is_completed": "bool",
+    "is_favorite": "bool",
+    "is_published": "bool",
+    "media_item_id": "null",
+    "mime_type": "texte",
+    "season_number": "nombre",
+    "telegram_date": "texte",
+    "telegram_message_id": "nombre",
+    "thumbnail_path": "texte",
+    "title": "texte",
+    "views_count": "nombre",
+    "watch_progress_seconds": "nombre"
+   }
+  ],
+  "top5": [
+   {
+    "banner_path": "texte",
+    "episodes_count": "nombre",
+    "first_video_id": "nombre",
+    "id": "nombre",
+    "poster_path": "texte",
+    "rank": "nombre",
+    "rating": "nombre",
+    "seasons_count": "nombre",
+    "synopsis": "texte",
+    "title": "texte",
+    "title_ar": "texte",
+    "title_en": "null",
+    "title_fr": "texte",
+    "views_last_7d": "nombre",
+    "year": "nombre"
+   }
+  ],
+  "trending": [
+   {
+    "caption": "texte",
+    "category": "texte",
+    "duration_seconds": "nombre",
+    "episode_number": "nombre",
+    "episode_title": "null",
+    "file_name": "texte",
+    "file_size_bytes": "nombre",
+    "id": "nombre",
+    "is_completed": "bool",
+    "is_favorite": "bool",
+    "is_published": "bool",
+    "media_item_id": "null",
+    "mime_type": "texte",
+    "season_number": "nombre",
+    "telegram_date": "texte",
+    "telegram_message_id": "nombre",
+    "thumbnail_path": "texte",
+    "title": "texte",
+    "views_count": "nombre",
+    "watch_progress_seconds": "nombre"
+   }
+  ]
+ },
+ "GET /api/series/top?[('limit', 5), ('period', '7d')]": [
+  {
+   "banner_path": "texte",
+   "episodes_count": "nombre",
+   "first_video_id": "nombre",
+   "id": "nombre",
+   "poster_path": "texte",
+   "rank": "nombre",
+   "rating": "nombre",
+   "seasons_count": "nombre",
+   "synopsis": "texte",
+   "title": "texte",
+   "title_ar": "texte",
+   "title_en": "null",
+   "title_fr": "texte",
+   "views_last_7d": "nombre",
+   "year": "nombre"
+  }
+ ],
+ "GET /api/series/{series_id}": {
+  "banner_path": "texte",
+  "episodes_count": "nombre",
+  "genres": [
+   "texte"
+  ],
+  "id": "nombre",
+  "is_favorite": "bool",
+  "last_watched_episode_id": "nombre",
+  "poster_path": "texte",
+  "rating": "nombre",
+  "seasons": [
+   {
+    "episode_count": "nombre",
+    "episodes": [
+     {
+      "duration_sec": "nombre",
+      "id": "nombre",
+      "is_completed": "bool",
+      "number": "nombre",
+      "season_id": "nombre",
+      "season_number": "nombre",
+      "synopsis_ar": "null",
+      "synopsis_en": "null",
+      "synopsis_fr": "null",
+      "telegram_video_id": "nombre",
+      "thumbnail_path": "texte",
+      "title_ar": "null",
+      "title_en": "null",
+      "title_fr": "texte",
+      "video": {
+       "category": "texte",
+       "duration_seconds": "nombre",
+       "episode_number": "nombre",
+       "episode_title": "texte",
+       "file_name": "texte",
+       "file_size_bytes": "nombre",
+       "id": "nombre",
+       "is_completed": "bool",
+       "is_favorite": "bool",
+       "is_published": "bool",
+       "mime_type": "texte",
+       "season_number": "nombre",
+       "telegram_date": "texte",
+       "telegram_message_id": "nombre",
+       "thumbnail_path": "texte",
+       "title": "texte",
+       "views_count": "nombre",
+       "watch_progress_seconds": "nombre"
+      },
+      "watch_progress_seconds": "nombre"
+     }
+    ],
+    "id": "nombre",
+    "number": "nombre",
+    "poster_path": "null",
+    "title_ar": "null",
+    "title_fr": "texte"
+   }
+  ],
+  "seasons_count": "nombre",
+  "similar_series": [
+   {
+    "banner_path": "texte",
+    "episodes_count": "nombre",
+    "id": "nombre",
+    "poster_path": "texte",
+    "rating": "nombre",
+    "title_ar": "texte",
+    "title_en": "null",
+    "title_fr": "texte",
+    "year_start": "nombre"
+   }
+  ],
+  "slug": "texte",
+  "status": "texte",
+  "synopsis_ar": "null",
+  "synopsis_en": "null",
+  "synopsis_fr": "texte",
+  "title_ar": "texte",
+  "title_en": "null",
+  "title_fr": "texte",
+  "year_start": "nombre"
+ },
+ "GET /api/videos/categories": [
+  {
+   "count": "nombre",
+   "name": "texte"
+  }
+ ],
+ "GET /api/videos/home": {
+  "continue_watching": [
+   {
+    "caption": "texte",
+    "category": "texte",
+    "duration_seconds": "nombre",
+    "episode_number": "nombre",
+    "episode_title": "null",
+    "file_name": "texte",
+    "file_size_bytes": "nombre",
+    "id": "nombre",
+    "is_completed": "bool",
+    "is_favorite": "bool",
+    "is_published": "bool",
+    "media_item_id": "null",
+    "mime_type": "texte",
+    "season_number": "nombre",
+    "telegram_date": "texte",
+    "telegram_message_id": "nombre",
+    "thumbnail_path": "texte",
+    "title": "texte",
+    "views_count": "nombre",
+    "watch_progress_seconds": "nombre"
+   }
+  ],
+  "genres": [
+   {
+    "count": "nombre",
+    "items": [
+     {
+      "caption": "texte",
+      "category": "texte",
+      "duration_seconds": "nombre",
+      "episode_number": "nombre",
+      "episode_title": "null",
+      "file_name": "texte",
+      "file_size_bytes": "nombre",
+      "id": "nombre",
+      "is_completed": "bool",
+      "is_favorite": "bool",
+      "is_published": "bool",
+      "media_item_id": "null",
+      "mime_type": "texte",
+      "season_number": "nombre",
+      "telegram_date": "texte",
+      "telegram_message_id": "nombre",
+      "thumbnail_path": "texte",
+      "title": "texte",
+      "views_count": "nombre",
+      "watch_progress_seconds": "nombre"
+     }
+    ],
+    "name": "texte"
+   }
+  ],
+  "hero": [
+   {
+    "banner_path": "texte",
+    "category": "texte",
+    "episodes_count": "nombre",
+    "first_video_id": "nombre",
+    "id": "nombre",
+    "poster_path": "texte",
+    "rating": "nombre",
+    "synopsis": "texte",
+    "title": "texte",
+    "title_ar": "texte",
+    "title_en": "null",
+    "title_fr": "texte",
+    "year": "nombre"
+   }
+  ],
+  "new": [
+   {
+    "caption": "texte",
+    "category": "texte",
+    "duration_seconds": "nombre",
+    "episode_number": "nombre",
+    "episode_title": "null",
+    "file_name": "texte",
+    "file_size_bytes": "nombre",
+    "id": "nombre",
+    "is_completed": "bool",
+    "is_favorite": "bool",
+    "is_published": "bool",
+    "media_item_id": "null",
+    "mime_type": "texte",
+    "season_number": "nombre",
+    "telegram_date": "texte",
+    "telegram_message_id": "nombre",
+    "thumbnail_path": "texte",
+    "title": "texte",
+    "views_count": "nombre",
+    "watch_progress_seconds": "nombre"
+   }
+  ],
+  "new_releases": [
+   {
+    "caption": "texte",
+    "category": "texte",
+    "duration_seconds": "nombre",
+    "episode_number": "nombre",
+    "episode_title": "null",
+    "file_name": "texte",
+    "file_size_bytes": "nombre",
+    "id": "nombre",
+    "is_completed": "bool",
+    "is_favorite": "bool",
+    "is_published": "bool",
+    "media_item_id": "null",
+    "mime_type": "texte",
+    "season_number": "nombre",
+    "telegram_date": "texte",
+    "telegram_message_id": "nombre",
+    "thumbnail_path": "texte",
+    "title": "texte",
+    "views_count": "nombre",
+    "watch_progress_seconds": "nombre"
+   }
+  ],
+  "top5": [
+   {
+    "banner_path": "texte",
+    "episodes_count": "nombre",
+    "first_video_id": "nombre",
+    "id": "nombre",
+    "poster_path": "texte",
+    "rank": "nombre",
+    "rating": "nombre",
+    "seasons_count": "nombre",
+    "synopsis": "texte",
+    "title": "texte",
+    "title_ar": "texte",
+    "title_en": "null",
+    "title_fr": "texte",
+    "views_last_7d": "nombre",
+    "year": "nombre"
+   }
+  ],
+  "trending": [
+   {
+    "caption": "texte",
+    "category": "texte",
+    "duration_seconds": "nombre",
+    "episode_number": "nombre",
+    "episode_title": "null",
+    "file_name": "texte",
+    "file_size_bytes": "nombre",
+    "id": "nombre",
+    "is_completed": "bool",
+    "is_favorite": "bool",
+    "is_published": "bool",
+    "media_item_id": "null",
+    "mime_type": "texte",
+    "season_number": "nombre",
+    "telegram_date": "texte",
+    "telegram_message_id": "nombre",
+    "thumbnail_path": "texte",
+    "title": "texte",
+    "views_count": "nombre",
+    "watch_progress_seconds": "nombre"
+   }
+  ]
+ },
+ "GET /api/videos/series": [
+  {
+   "banner_path": "texte",
+   "created_at": "texte",
+   "episodes_count": "nombre",
+   "id": "nombre",
+   "poster_path": "texte",
+   "rating": "nombre",
+   "seasons_count": "nombre",
+   "slug": "texte",
+   "status": "texte",
+   "synopsis_ar": "null",
+   "synopsis_en": "null",
+   "synopsis_fr": "texte",
+   "title_ar": "texte",
+   "title_en": "null",
+   "title_fr": "texte",
+   "year_start": "nombre"
+  }
+ ],
+ "GET /api/videos/series/latest": [
+  {
+   "banner_path": "texte",
+   "first_video_id": "nombre",
+   "id": "nombre",
+   "poster_path": "texte",
+   "rating": "nombre",
+   "synopsis": "texte",
+   "title": "texte",
+   "title_ar": "texte",
+   "title_en": "null",
+   "title_fr": "texte",
+   "year": "nombre"
+  }
+ ],
+ "GET /api/videos/series/{series_id}": {
+  "banner_path": "texte",
+  "episodes_count": "nombre",
+  "genres": [
+   "texte"
+  ],
+  "id": "nombre",
+  "is_favorite": "bool",
+  "last_watched_episode_id": "nombre",
+  "poster_path": "texte",
+  "rating": "nombre",
+  "seasons": [
+   {
+    "episode_count": "nombre",
+    "episodes": [
+     {
+      "duration_sec": "nombre",
+      "id": "nombre",
+      "is_completed": "bool",
+      "number": "nombre",
+      "season_id": "nombre",
+      "season_number": "nombre",
+      "synopsis_ar": "null",
+      "synopsis_en": "null",
+      "synopsis_fr": "null",
+      "telegram_video_id": "nombre",
+      "thumbnail_path": "texte",
+      "title_ar": "null",
+      "title_en": "null",
+      "title_fr": "texte",
+      "video": {
+       "category": "texte",
+       "duration_seconds": "nombre",
+       "episode_number": "nombre",
+       "episode_title": "texte",
+       "file_name": "texte",
+       "file_size_bytes": "nombre",
+       "id": "nombre",
+       "is_completed": "bool",
+       "is_favorite": "bool",
+       "is_published": "bool",
+       "mime_type": "texte",
+       "season_number": "nombre",
+       "telegram_date": "texte",
+       "telegram_message_id": "nombre",
+       "thumbnail_path": "texte",
+       "title": "texte",
+       "views_count": "nombre",
+       "watch_progress_seconds": "nombre"
+      },
+      "watch_progress_seconds": "nombre"
+     }
+    ],
+    "id": "nombre",
+    "number": "nombre",
+    "poster_path": "null",
+    "title_ar": "null",
+    "title_fr": "texte"
+   }
+  ],
+  "seasons_count": "nombre",
+  "similar_series": [
+   {
+    "banner_path": "texte",
+    "episodes_count": "nombre",
+    "id": "nombre",
+    "poster_path": "texte",
+    "rating": "nombre",
+    "title_ar": "texte",
+    "title_en": "null",
+    "title_fr": "texte",
+    "year_start": "nombre"
+   }
+  ],
+  "slug": "texte",
+  "status": "texte",
+  "synopsis_ar": "null",
+  "synopsis_en": "null",
+  "synopsis_fr": "texte",
+  "title_ar": "texte",
+  "title_en": "null",
+  "title_fr": "texte",
+  "year_start": "nombre"
+ },
+ "GET /api/videos/{video_id}": {
+  "caption": "texte",
+  "category": "texte",
+  "duration_seconds": "nombre",
+  "episode_number": "nombre",
+  "episode_title": "null",
+  "file_name": "texte",
+  "file_size_bytes": "nombre",
+  "id": "nombre",
+  "is_completed": "bool",
+  "is_favorite": "bool",
+  "is_published": "bool",
+  "media_item_id": "null",
+  "mime_type": "texte",
+  "season_number": "nombre",
+  "telegram_date": "texte",
+  "telegram_message_id": "nombre",
+  "thumbnail_path": "null",
+  "title": "texte",
+  "views_count": "nombre",
+  "watch_progress_seconds": "nombre"
+ },
+ "GET /api/videos/{video_id}/stream-token": {
+  "stream_token": "texte",
+  "stream_url": "texte",
+  "video_id": "nombre"
+ },
+ "GET /api/videos?[('exclude_episodes', True), ('limit', 100)]": {
+  "items": [
+   {
+    "caption": "texte",
+    "category": "texte",
+    "duration_seconds": "nombre",
+    "episode_number": "nombre",
+    "episode_title": "null",
+    "file_name": "texte",
+    "file_size_bytes": "nombre",
+    "id": "nombre",
+    "is_completed": "bool",
+    "is_favorite": "bool",
+    "is_published": "bool",
+    "media_item_id": "null",
+    "mime_type": "texte",
+    "season_number": "nombre",
+    "telegram_date": "texte",
+    "telegram_message_id": "nombre",
+    "thumbnail_path": "texte",
+    "title": "texte",
+    "views_count": "nombre",
+    "watch_progress_seconds": "nombre"
+   }
+  ],
+  "limit": "nombre",
+  "page": "nombre",
+  "total": "nombre",
+  "total_pages": "nombre"
+ },
+ "POST /api/auth/refresh": {
+  "access_token": "texte",
+  "ads_free": "bool",
+  "expires_in": "nombre",
+  "refresh_token": "texte",
+  "role": "texte",
+  "token_type": "texte",
+  "user_id": "nombre",
+  "username": "texte"
+ },
+ "POST /api/auth/register": {
+  "access_token": "texte",
+  "ads_free": "bool",
+  "expires_in": "nombre",
+  "refresh_token": "texte",
+  "role": "texte",
+  "token_type": "texte",
+  "user_id": "nombre",
+  "username": "texte"
+ },
+ "POST /api/videos/{video_id}/stream-token": {
+  "stream_token": "texte",
+  "stream_url": "texte",
+  "video_id": "nombre"
+ }
+}

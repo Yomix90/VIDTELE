@@ -4,8 +4,14 @@ import '../constants/api_constants.dart';
 
 /// Service de persistance locale : tokens JWT sécurisés et préférences utilisateur.
 class StorageService {
+  // Les versions <= 1.2.0 stockaient les jetons avec EncryptedSharedPreferences (v9).
+  // La v10 détecte ces données et les migre au premier accès (migrateOnAlgorithmChange) :
+  // l'utilisateur reste connecté après la mise à jour.
+  // ATTENTION : ne PAS activer migrateWithBackup. Avec cette option, la v10.3.4 saute la
+  // migration depuis EncryptedSharedPreferences (vérifié sur émulateur : jetons perdus,
+  // utilisateur déconnecté).
   final FlutterSecureStorage _secureStorage = const FlutterSecureStorage(
-    aOptions: AndroidOptions(encryptedSharedPreferences: true),
+    aOptions: AndroidOptions(migrateOnAlgorithmChange: true),
   );
 
   // -------------------------------------------------------------

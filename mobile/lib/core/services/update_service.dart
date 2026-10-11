@@ -1,3 +1,4 @@
+import '../version/version_app.dart';
 import 'package:flutter/material.dart';
 import 'package:url_launcher/url_launcher.dart';
 import '../api/api_client.dart';
@@ -8,7 +9,8 @@ import '../theme/app_theme.dart';
 
 /// Service gérant la détection et l'affichage des mises à jour de l'application Atlas Play.
 class UpdateService {
-  static const String currentAppVersion = '1.2.0';
+  /// Version réelle de l'application (lue dans l'APK, voir VersionApp).
+  static String get currentAppVersion => VersionApp.actuelle;
 
   /// Vérifie la version auprès du backend et affiche une boîte de dialogue si nécessaire.
   static Future<void> checkForUpdates(BuildContext context, {bool silentOnNoUpdate = true}) async {
@@ -39,7 +41,7 @@ class UpdateService {
           );
         } else if (!silentOnNoUpdate && context.mounted) {
           ScaffoldMessenger.of(context).showSnackBar(
-            const SnackBar(
+            SnackBar(
               content: Text('Votre application Atlas Play est à jour ! (v$currentAppVersion)'),
               backgroundColor: Colors.green,
             ),
@@ -135,26 +137,7 @@ class UpdateService {
             ElevatedButton(
               onPressed: () async {
                 if (downloadUrl != null && downloadUrl.isNotEmpty) {
-                  String fullUrl = downloadUrl.trim();
-                  if (!fullUrl.startsWith('http://') && !fullUrl.startsWith('https://')) {
-                    final baseUrl = await storageService.getServerUrl();
-                    final base = baseUrl.endsWith('/') ? baseUrl.substring(0, baseUrl.length - 1) : baseUrl;
-                    final rel = fullUrl.startsWith('/') ? fullUrl : '/$fullUrl';
-                    fullUrl = '$base$rel';
-                  }
-                  final uri = Uri.tryParse(fullUrl);
-                  if (uri != null) {
-                    try {
-                      final launched = await launchUrl(uri, mode: LaunchMode.externalApplication);
-                      if (!launched) {
-                        await launchUrl(uri, mode: LaunchMode.platformDefault);
-                      }
-                    } catch (_) {
-                      try {
-                        await launchUrl(uri, mode: LaunchMode.platformDefault);
-                      } catch (_) {}
-                    }
-                  }
+                  await ouvrirLienTelechargement(downloadUrl);
                 }
               },
               style: ElevatedButton.styleFrom(
@@ -168,5 +151,26 @@ class UpdateService {
         ),
       ),
     );
+  }
+
+  /// Ouvre le lien de téléchargement de l'APK (URL absolue, ou relative au serveur).
+  static Future<void> ouvrirLienTelechargement(String lien) async {
+    var url = lien.trim();
+    if (!url.startsWith('http://') && !url.startsWith('https://')) {
+      final baseUrl = await storageService.getServerUrl();
+      final base = baseUrl.endsWith('/') ? baseUrl.substring(0, baseUrl.length - 1) : baseUrl;
+      url = '$base${url.startsWith('/') ? url : '/$url'}';
+    }
+    final uri = Uri.tryParse(url);
+    if (uri == null) return;
+    try {
+      if (!await launchUrl(uri, mode: LaunchMode.externalApplication)) {
+        await launchUrl(uri, mode: LaunchMode.platformDefault);
+      }
+    } catch (_) {
+      try {
+        await launchUrl(uri, mode: LaunchMode.platformDefault);
+      } catch (_) {}
+    }
   }
 }

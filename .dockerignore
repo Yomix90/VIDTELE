@@ -32,3 +32,9 @@ data/
 *.DS_Store
 Thumbs.db
 *.log
+
+# Tests et outils de développement (inutiles dans l'image)
+backend/tests/
+backend/test_*.py  # (anciens scripts, supprimés en Phase 1)
+backend/requirements-dev.txt
+backend/pytest.ini
