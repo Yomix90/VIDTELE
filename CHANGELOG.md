@@ -1,5 +1,29 @@
 # 📜 CHANGELOG
 
+## [Non publié] - Phase 2 : lecture vidéo (branche `mise-a-jour-totale`, en cours)
+
+### Serveur
+- **Streaming progressif depuis Telegram** : premier octet d'un épisode non en cache en ~0,3 s
+  (simulation, 20 Mo à 5 Mo/s) au lieu d'attendre le téléchargement complet (≥ 4 s) ; un seul
+  téléchargement partagé par tous les lecteurs ; lecture directe des plages lointaines (index MP4
+  en fin de fichier, déplacements) ; reprise après coupure.
+- File de préchauffage unique (une vidéo à la fois) + cycle périodique : premiers épisodes des
+  séries publiées et vidéos populaires (`PREWARM_POPULAR_COUNT`).
+- Faststart appliqué avant mise à disposition, jamais sur un fichier déjà lu.
+- Chemin chaud sans écriture SQLite par requête Range ; une vue par lecture ; HTTP Range conforme
+  (206/200/416).
+- Mesures de lecture : `POST /api/analytics/playback`, `GET /api/admin/stats/playback`,
+  table `playback_events` (migration 0002).
+- Correctif : passage d'une base existante au schéma de référence compatible avec les migrations futures.
+
+### Application
+- Jeton de flux dédié par vidéo (plus de jeton d'accès dans les URL), session de lecture stable
+  par appareil, jetons des vidéos suivantes préparés à l'avance.
+- Mesures envoyées au serveur : première image, blocages, reprises, erreurs.
+- Correctif : fuite d'un lecteur natif quand son initialisation échouait.
+
+---
+
 ## [Non publié] - Phase 1 : fondations et stabilité (branche `mise-a-jour-totale`)
 
 ### Corrections importantes

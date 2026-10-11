@@ -16,6 +16,7 @@
 | `STREAM_TOKEN_GRACE_MINUTES` | Non | `240` | Tolérance d'expiration du jeton sur l'URL de lecture (évite les coupures). |
 | `LOG_FORMAT` / `LOG_LEVEL` | Non | `texte` / `INFO` | `json` pour une collecte automatisée. |
 | `APP_VERSION` | Non | ex. `1.3.0` | Affichée par `/api/health/ready`. |
+| `PREWARM_POPULAR_COUNT` | Non | `20` | Vidéos préchauffées par cycle (premiers épisodes, populaires). `0` = désactivé. |
 | `DISK_MIN_FREE_GB` | Non | `2.0` | Seuil d'alerte disque de `/api/health/ready`. |
 
 ### 1.2 Tester la migration sur une copie de la base de production (obligatoire)
@@ -45,7 +46,7 @@ accès au compte).
 2. Fusionner `mise-a-jour-totale` dans `main` → Dokploy reconstruit l'image (Python 3.14).
 3. Surveiller les journaux au démarrage :
    - `Sauvegarde de la base avant migration : /app/data/sauvegardes/avant-migration-....db`
-   - `Base marquée à la révision de référence 0001.`
+   - `Base marquée à la révision de référence 0001.` puis `Migrations appliquées : base à la révision 0002.`
    - aucune ligne `CRITICAL` sur `SECRET_KEY` ; si `Le compte admin ... utilise un mot de passe PUBLIC` apparaît, **changer le mot de passe admin** immédiatement.
 4. Vérifier `https://<domaine>/api/health/ready` : `"status": "ok"` (ou `degrade` si Telegram est déconnecté).
 5. Ouvrir l'application installée : accueil, séries (désormais visibles), lecture d'un épisode.
