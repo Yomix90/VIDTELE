@@ -105,9 +105,44 @@ a {
   grid-template-columns: 86px minmax(0, 1fr);
 }
 
+/* Tablettes et téléphones : la barre latérale devient un tiroir (avant, elle occupait tout
+   l'écran en position collante et masquait le contenu de toutes les pages). */
 @media (max-width: 991.98px) {
-  .app-shell {
+  .app-shell,
+  .app-shell.sidebar-collapsed {
     grid-template-columns: 1fr;
+  }
+  .app-shell .sidebar {
+    position: fixed;
+    top: 0;
+    bottom: 0;
+    left: 0;
+    width: 280px;
+    max-width: 85vw;
+    transform: translateX(-105%);
+    transition: transform 0.25s cubic-bezier(0.16, 1, 0.3, 1);
+  }
+  [dir="rtl"] .app-shell .sidebar {
+    left: auto;
+    right: 0;
+    transform: translateX(105%);
+  }
+  .app-shell.sidebar-open .sidebar {
+    transform: none;
+    box-shadow: 0 0 48px rgba(0, 0, 0, 0.6);
+  }
+  .sidebar-backdrop {
+    position: fixed;
+    inset: 0;
+    z-index: 1019;
+    background: rgba(0, 0, 0, 0.55);
+    opacity: 0;
+    pointer-events: none;
+    transition: opacity 0.25s ease;
+  }
+  .app-shell.sidebar-open .sidebar-backdrop {
+    opacity: 1;
+    pointer-events: auto;
   }
 }
 

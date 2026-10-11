@@ -1,6 +1,7 @@
 """
 Routeur pour l'interface web d'administration Atlas Play (HTML + Jinja2 + Bootstrap 5).
 """
+import shutil
 from datetime import datetime, timezone
 from pathlib import Path
 from typing import Optional
@@ -23,6 +24,8 @@ from app.security import (
     reset_login_failures,
     verify_password,
 )
+from app.repositories import lecture as depot_lecture
+from app.repositories import tableau_de_bord as depot_tableau
 from app.services.cache_service import cache_service
 from app.services.stream_manager import stream_manager
 from app.telegram_client import telegram_manager
@@ -209,6 +212,21 @@ async def admin_dashboard_page(
     recent_users = (await db.execute(select(User).order_by(desc(User.created_at)).limit(8))).scalars().all()
     telegram_status = await telegram_manager.get_connection_status()
 
+    # Données réelles d'activité et de qualité de lecture (Phase 2)
+    activite = {
+        "lectures_par_jour": await depot_tableau.lectures_par_jour(db, 14),
+        "spectateurs_7j": await depot_tableau.spectateurs_actifs(db, 7),
+        "nouveaux_7j": await depot_tableau.nouveaux_utilisateurs(db, 7),
+        "qualite": await depot_lecture.statistiques(db, 7),
+    }
+    activite["lectures_14j"] = sum(j["lectures"] for j in activite["lectures_par_jour"])
+    disque = shutil.disk_usage(cache_service.cache_dir)
+    sante = {
+        "disque_libre_gio": round(disque.free / 1024**3, 1),
+        "disque_total_gio": round(disque.total / 1024**3, 1),
+        "disque_pourcent": round(100 * (disque.total - disque.free) / disque.total) if disque.total else 0,
+    }
+
     return templates.TemplateResponse(
         request=request,
         name="dashboard.html",
@@ -220,6 +238,8 @@ async def admin_dashboard_page(
             "recent_users": recent_users,
             "current_user": admin_user,
             "telegram": telegram_status,
+            "activite": activite,
+            "sante": sante,
         },
     )
 
