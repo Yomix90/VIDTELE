@@ -71,9 +71,37 @@ app/routers/
 
 ## 3. Application (`mobile/`)
 
-*(Section complétée au fil de la Phase 1 : organisation par fonctionnalités, Riverpod, go_router.)*
+### 3.1 État actuel (fin de Phase 1)
 
-### 3.1 Suivi des erreurs
+| Élément | Choix |
+|---|---|
+| Flutter / Dart | 3.47.7 / 3.12, `pubspec.lock` versionné |
+| État | Riverpod 3 (`StateNotifier` via `legacy.dart` en attendant la migration vers `Notifier`) |
+| Réseau | Dio, intercepteur : jeton, rafraîchissement sur 401, en-tête `X-App-Version`, écran bloquant sur 426 |
+| Stockage | `flutter_secure_storage` 10 (jetons), `shared_preferences` (préférences) |
+| Lecteur | `video_player` (ExoPlayer / AVPlayer), gestionnaire unique, pool de 3, watchdog |
+| Android | `minSdk 24`, `targetSdk 36` |
+
+```
+lib/
+├── core/
+│   ├── api/            client Dio et intercepteurs
+│   ├── erreurs/        SuiviErreurs (capture globale ; Crashlytics à brancher)
+│   ├── version/        version réelle de l'app, signal « Mise à jour requise »
+│   ├── services/       gestionnaire de lecteur, watchdog, mises à jour
+│   ├── ads/            AdMob : consentement, annonces avec récompense, compteur
+│   └── ...             thème, localisation, stockage, navigation
+├── providers/          état Riverpod par domaine
+├── screens/            écrans (accueil, lecteur vertical, recherche, bibliothèque, profil...)
+└── widgets/            composants réutilisables, écran bloquant de mise à jour
+```
+
+### 3.2 Cible (Phases 2 et 3)
+
+Organisation par fonctionnalité (`features/<domaine>/{donnees,domaine,presentation}`), `go_router`
+(navigation déclarative, liens profonds), `Notifier` Riverpod. Calendrier à valider : voir le résumé de Phase 1.
+
+### 3.3 Suivi des erreurs
 
 `lib/core/erreurs/suivi_erreurs.dart` capture les erreurs Flutter et asynchrones et les transmet à un
 `RapporteurErreurs` (console aujourd'hui, Firebase Crashlytics dès que le projet Firebase est créé).

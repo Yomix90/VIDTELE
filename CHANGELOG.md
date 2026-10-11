@@ -1,5 +1,36 @@
 # 📜 CHANGELOG
 
+## [Non publié] - Phase 1 : fondations et stabilité (branche `mise-a-jour-totale`)
+
+### Corrections importantes
+- App : après une connexion réussie, l'écran restait sur le formulaire (il fallait relancer l'app).
+- App : lancer l'application sans réseau déconnectait l'utilisateur.
+- API : `/api/home` et `/api/feed` renvoyaient 500 dès qu'une vidéo publiée n'avait pas de catégorie.
+- Serveur : genres et rangées d'accueil par défaut jamais créés (insertion ignorée silencieusement).
+- Serveur : `NameError` latent dans l'erreur de téléversement d'APK.
+
+### Serveur
+- Dépendances figées (`requirements.lock` Linux avec empreintes), image Docker Python 3.14 sans compilateur.
+- Journaux structurés (texte ou JSON), identifiant de requête `X-Request-ID`, jetons masqués partout.
+- Erreurs uniformes `{detail, code, request_id}` (sans détail interne), `/api/health/ready` (base, Telegram, disque).
+- Migrations Alembic avec sauvegarde automatique et vérification du schéma avant marquage.
+- Architecture : `admin.py` découpé en 13 modules, `videos.py` en catalogue/lecture, `main.py` réduit à la
+  composition, première couche `repositories/`.
+- Version minimale : contrôle par en-tête `X-App-Version` (426 « Mise à jour requise »).
+
+### Application
+- `flutter_secure_storage` 10 (migration des sessions vérifiée sur émulateur), Riverpod 3, cached_network_image 4,
+  package_info_plus 10, wakelock_plus 1.8, flutter_lints 6. `pubspec.lock` versionné.
+- Version réelle lue dans l'APK, en-tête `X-App-Version`, écran bloquant « Mise à jour requise » (FR/AR/EN).
+- Suivi global des erreurs (`SuiviErreurs`), prêt pour Firebase Crashlytics.
+- Android : `minSdk 24` explicite, suppression d'une `MainActivity` en double.
+
+### Qualité
+- 57 tests serveur (contrat API des apps installées, inventaire des 124 routes, migrations, sécurité),
+  44 tests Flutter ; CI GitHub Actions (tests, ruff, pip-audit, images Docker, APK).
+
+---
+
 ## [Non publié] - Phase 0.5 : correctifs urgents (branche `mise-a-jour-totale`)
 
 Serveur uniquement : aucune nouvelle version de l'application n'est nécessaire, et aucun endpoint n'a été retiré ni modifié de façon incompatible.
