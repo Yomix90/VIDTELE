@@ -115,6 +115,31 @@ class CacheService:
                 logger.error(f"Erreur lors de la purge du fichier {file}: {e}")
         return deleted_count
 
+    async def faststart_fichier(self, chemin: Path) -> None:
+        """
+        Remuxage faststart (index MP4 en tête, sans réencodage) d'un fichier quelconque, y
+        compris un .tmp en cours de mise en cache. Lève une exception en cas d'échec : le
+        fichier d'origine reste alors intact.
+        Le fichier intermédiaire se termine par « .tmp » : jamais pris pour une vidéo en cache.
+        """
+        intermediaire = chemin.with_name(chemin.name + ".remux.tmp")
+        processus = await asyncio.create_subprocess_exec(
+            "ffmpeg", "-y", "-v", "error", "-i", str(chemin), "-c", "copy", "-movflags", "+faststart",
+            "-f", "mp4", str(intermediaire),
+            stdout=asyncio.subprocess.DEVNULL,
+            stderr=asyncio.subprocess.PIPE,
+        )
+        try:
+            _, erreur = await asyncio.wait_for(processus.communicate(), timeout=120)
+        except asyncio.TimeoutError:
+            processus.kill()
+            intermediaire.unlink(missing_ok=True)
+            raise RuntimeError("ffmpeg : délai dépassé")
+        if processus.returncode != 0 or not intermediaire.exists() or intermediaire.stat().st_size == 0:
+            intermediaire.unlink(missing_ok=True)
+            raise RuntimeError(f"ffmpeg a échoué ({processus.returncode}) : {erreur.decode(errors='ignore')[:200]}")
+        os.replace(intermediaire, chemin)
+
     async def apply_faststart(self, file_path: Path) -> Path:
         """
         Remuxe le fichier vidéo MP4 en déplaçant le 'moov atom' au tout début du fichier

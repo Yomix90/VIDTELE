@@ -36,6 +36,7 @@ from app.routers import (
 )
 from app.security import hash_password, verify_password
 from app.services.sync_service import sync_service
+from app.services.telechargement_progressif import nettoyer_fichiers_incomplets
 from app.telegram_client import telegram_manager
 
 # Configuration des logs
@@ -124,6 +125,10 @@ async def lifespan(app: FastAPI):
     logger.info("Démarrage de l'application VidTele...")
     if SECRET_KEY_SOURCE == "generated":
         logger.critical("SECRET_KEY non définie (ou publique) : clé générée et stockée dans le dossier de données.")
+    # Fichiers vidéo .tmp laissés par un arrêt brutal pendant un téléchargement
+    nettoyes = nettoyer_fichiers_incomplets()
+    if nettoyes:
+        logger.info(f"{nettoyes} fichier(s) vidéo incomplet(s) supprimé(s) du cache")
     # Initialisation de la base SQLite
     await init_db()
     # Amorçage admin et invitations
