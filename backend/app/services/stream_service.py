@@ -4,11 +4,12 @@ Téléchargement par morceaux via Telethon MTProto, verrous de concurrence et st
 """
 import asyncio
 import logging
+import time
 from pathlib import Path
 from typing import AsyncGenerator, Dict, Optional, Set, Tuple
 import aiofiles
 from fastapi import HTTPException, status
-from fastapi.responses import StreamingResponse
+from fastapi.responses import Response, StreamingResponse
 from sqlalchemy import select
 from sqlalchemy.ext.asyncio import AsyncSession
 from telethon.errors import FloodWaitError
@@ -19,6 +20,14 @@ from app.services.cache_service import cache_service
 from app.telegram_client import telegram_manager
 
 logger = logging.getLogger("vidtele.stream")
+
+class PlageInsatisfiable(Exception):
+    """Plage demandée au-delà de la fin du fichier : réponse 416."""
+
+    def __init__(self, taille: int):
+        super().__init__(f"plage insatisfiable (taille {taille})")
+        self.taille = taille
+
 
 CHUNK_SIZE = int(settings.STREAM_CHUNK_SIZE_KB * 1024)  # 256 Ko par paquet pour un débit optimal et latence minimale
 
@@ -169,41 +178,39 @@ class StreamService:
                     detail="Impossible de récupérer la vidéo depuis Telegram pour le moment. Réessayez.",
                 )
 
-    def parse_range_header(self, range_header: Optional[str], file_size: int) -> Tuple[int, int, int]:
+    def parse_range_header(self, range_header: Optional[str], file_size: int) -> Optional[Tuple[int, int, int]]:
         """
-        Analyse l'en-tête HTTP 'Range: bytes=start-end'.
-        Retourne (start, end, content_length).
+        Analyse « Range: bytes=debut-fin » selon la RFC 9110.
+
+        Retourne (debut, fin, longueur), ou None si l'en-tête est absent, mal formé ou
+        multi-plages (on sert alors le fichier entier en 200, ce que la norme autorise).
+        Lève PlageInsatisfiable si la plage commence au-delà de la fin du fichier (416).
         """
-        if not range_header or not range_header.startswith("bytes="):
-            return 0, file_size - 1, file_size
-
-        range_val = range_header.replace("bytes=", "").strip()
-        parts = range_val.split("-")
-
+        if not range_header:
+            return None
+        valeur = range_header.strip()
+        if not valeur.lower().startswith("bytes=") or "," in valeur:
+            return None
+        debut_txt, _, fin_txt = valeur[6:].strip().partition("-")
         try:
-            if parts[0] and parts[1]:
-                # bytes=100-200
-                start = int(parts[0])
-                end = int(parts[1])
-            elif parts[0] and not parts[1]:
-                # bytes=100-
-                start = int(parts[0])
-                end = file_size - 1
-            elif not parts[0] and parts[1]:
-                # bytes=-100 (les 100 derniers octets)
-                end = file_size - 1
-                start = max(0, file_size - int(parts[1]))
+            if debut_txt:
+                debut = int(debut_txt)
+                fin = int(fin_txt) if fin_txt else file_size - 1
+                if debut < 0 or (fin_txt and fin < debut):
+                    return None
+            elif fin_txt:
+                suffixe = int(fin_txt)  # « bytes=-500 » : les 500 derniers octets
+                if suffixe <= 0:
+                    raise PlageInsatisfiable(file_size)
+                debut, fin = max(0, file_size - suffixe), file_size - 1
             else:
-                return 0, file_size - 1, file_size
+                return None
         except ValueError:
-            return 0, file_size - 1, file_size
-
-        # Bornage
-        start = max(0, min(start, file_size - 1))
-        end = max(start, min(end, file_size - 1))
-        content_length = (end - start) + 1
-
-        return start, end, content_length
+            return None
+        if debut >= file_size:
+            raise PlageInsatisfiable(file_size)
+        fin = min(fin, file_size - 1)
+        return debut, fin, fin - debut + 1
 
     async def stream_file_range(
         self,
@@ -235,11 +242,35 @@ class StreamService:
         Prépare et renvoie une réponse HTTP 206 Partial Content (ou 200 OK)
         parfaitement compatible avec les lecteurs vidéo mobiles et web.
         """
-        # Assurer la présence de la vidéo dans le cache local
+        # Assurer la présence de la vidéo dans le cache local (mesure du temps d'attente)
+        en_cache = cache_service.is_cached(video.telegram_message_id)
+        chrono = time.perf_counter()
         file_path = await self.ensure_video_in_cache(video)
+        attente_ms = round((time.perf_counter() - chrono) * 1000)
         file_size = file_path.stat().st_size
 
-        start, end, content_length = self.parse_range_header(range_header, file_size)
+        try:
+            plage = self.parse_range_header(range_header, file_size)
+        except PlageInsatisfiable:
+            logger.info("Flux vidéo %s : plage insatisfiable %r (taille %s)", video.id, range_header, file_size)
+            return Response(
+                status_code=status.HTTP_416_RANGE_NOT_SATISFIABLE,
+                headers={"Content-Range": f"bytes */{file_size}", "Accept-Ranges": "bytes"},
+            )
+        if plage is None:
+            start, end, content_length = 0, file_size - 1, file_size
+        else:
+            start, end, content_length = plage
+
+        logger.info(
+            "Flux vidéo %s : cache=%s attente=%s ms plage=%s-%s/%s",
+            video.id,
+            "oui" if en_cache else "non",
+            attente_ms,
+            start,
+            end,
+            file_size,
+        )
 
         # Déterminer le Content-Type le plus précis pour les lecteurs vidéo natifs (Android ExoPlayer / iOS AVPlayer)
         content_type = video.mime_type
@@ -253,7 +284,6 @@ class StreamService:
             content_type = "video/mp4"
 
         headers = {
-            "Content-Range": f"bytes {start}-{end}/{file_size}",
             "Accept-Ranges": "bytes",
             "Content-Length": str(content_length),
             "Content-Type": content_type,
@@ -261,8 +291,12 @@ class StreamService:
             "X-Content-Type-Options": "nosniff",
         }
 
-        # Status 206 si une plage spécifique a été demandée, 200 sinon
-        status_code = status.HTTP_206_PARTIAL_CONTENT if range_header else status.HTTP_200_OK
+        # 206 + Content-Range pour une plage valide ; 200 (fichier entier) sinon
+        if plage is not None:
+            headers["Content-Range"] = f"bytes {start}-{end}/{file_size}"
+            status_code = status.HTTP_206_PARTIAL_CONTENT
+        else:
+            status_code = status.HTTP_200_OK
 
         return StreamingResponse(
             self.stream_file_range(file_path, start, content_length),

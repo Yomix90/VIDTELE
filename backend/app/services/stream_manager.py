@@ -2,8 +2,9 @@
 Gestionnaire des sessions de streaming actives et respect des quotas de simultanéité.
 Garantit qu'aucun utilisateur ni le serveur ne dépasse les limites configurées.
 """
+import time
 from datetime import datetime, timedelta, timezone
-from typing import Optional
+from typing import Dict, Optional, Tuple
 from fastapi import HTTPException, status
 from sqlalchemy import delete, func, select
 from sqlalchemy.ext.asyncio import AsyncSession
@@ -20,6 +21,34 @@ class StreamManager:
     """Suivi et régulation des flux vidéo actifs."""
 
     SESSION_TIMEOUT_SECONDS = 120  # Une session inactive pendant 2 minutes est libérée
+    # Le lecteur envoie une requête Range par morceau et à chaque déplacement : on n'écrit en
+    # base (quota + battement de cœur) qu'une fois toutes les 30 s par session, au lieu de
+    # chaque requête. SQLite n'accepte qu'un écrivain à la fois : c'était un goulot.
+    INTERVALLE_ECRITURE_SECONDES = 30
+    # Une même vidéo regardée par le même utilisateur ne compte qu'une vue par demi-heure
+    # (avant : chaque requête « bytes=0- », reconnexions comprises, ajoutait une vue).
+    FENETRE_VUE_SECONDES = 30 * 60
+
+    def __init__(self):
+        self._sessions_recentes: Dict[str, float] = {}
+        self._vues_recentes: Dict[Tuple[int, int], float] = {}
+
+    def _purger(self, cache: dict, duree: float) -> None:
+        if len(cache) > 5000:
+            limite = time.monotonic() - duree
+            for cle in [c for c, t in cache.items() if t < limite]:
+                del cache[cle]
+
+    def nouvelle_vue(self, user_id: int, video_id: int) -> bool:
+        """Vrai si cette lecture doit compter comme une nouvelle vue (et lancer le préchauffage)."""
+        maintenant = time.monotonic()
+        cle = (user_id, video_id)
+        precedente = self._vues_recentes.get(cle)
+        if precedente is not None and maintenant - precedente < self.FENETRE_VUE_SECONDES:
+            return False
+        self._vues_recentes[cle] = maintenant
+        self._purger(self._vues_recentes, self.FENETRE_VUE_SECONDES)
+        return True
 
     async def cleanup_expired_sessions(self, db: AsyncSession) -> None:
         """Nettoie les sessions expirées en base."""
@@ -39,6 +68,11 @@ class StreamManager:
         Vérifie les quotas et met à jour la session de streaming active.
         Lève une exception HTTP 429 si le quota utilisateur ou global est dépassé.
         """
+        # Session déjà enregistrée récemment : aucune écriture en base
+        derniere = self._sessions_recentes.get(session_token)
+        if derniere is not None and time.monotonic() - derniere < self.INTERVALLE_ECRITURE_SECONDES:
+            return
+
         now = utc_now()
         # 1. Nettoyer d'abord les sessions obsolètes
         await self.cleanup_expired_sessions(db)
@@ -52,6 +86,7 @@ class StreamManager:
             curr_session.last_active_at = now
             curr_session.expires_at = now + timedelta(seconds=self.SESSION_TIMEOUT_SECONDS)
             await db.commit()
+            self._memoriser_session(session_token)
             return
 
         # 3. Nouvelle session : Vérifier le quota global du serveur
@@ -88,9 +123,15 @@ class StreamManager:
         )
         db.add(new_stream)
         await db.commit()
+        self._memoriser_session(session_token)
+
+    def _memoriser_session(self, session_token: str) -> None:
+        self._sessions_recentes[session_token] = time.monotonic()
+        self._purger(self._sessions_recentes, self.SESSION_TIMEOUT_SECONDS)
 
     async def release_stream_session(self, session_token: str, db: AsyncSession) -> None:
         """Libère explicitement une session lorsqu'un lecteur vidéo se ferme."""
+        self._sessions_recentes.pop(session_token, None)
         stmt = delete(ActiveStream).where(ActiveStream.session_token == session_token)
         await db.execute(stmt)
         await db.commit()

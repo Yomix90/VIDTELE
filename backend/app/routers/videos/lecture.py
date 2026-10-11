@@ -216,12 +216,12 @@ async def stream_video(
     await stream_manager.register_stream_access(user, video.id, session_id, client_ip, db)
 
 
-    # 4. Incrémentation des vues si la lecture démarre au début (start == 0)
+    # 4. Une vue par lecture (et non par requête Range) + préchauffage des épisodes suivants
     range_header = request.headers.get("Range")
-    if not range_header or range_header.startswith("bytes=0-"):
+    debut_de_fichier = not range_header or range_header.replace(" ", "").startswith("bytes=0-")
+    if debut_de_fichier and stream_manager.nouvelle_vue(user.id, video.id):
         video.views_count += 1
         await db.commit()
-        # Préchargement anticipé transparent des 2 épisodes suivants de la même série
         asyncio.create_task(stream_service.prewarm_next_episodes_in_series(video))
 
     # 5. Délégation au moteur de streaming Range 206
