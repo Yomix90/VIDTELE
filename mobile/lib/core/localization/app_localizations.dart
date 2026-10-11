@@ -261,6 +261,17 @@ class AppLocalizations {
   String get updateNowButton => isArabic
       ? 'تحديث الآن'
       : (isEnglish ? 'Update Now' : 'Mettre à jour');
+  String get updateRequiredTitle => isArabic
+      ? 'التحديث مطلوب'
+      : (isEnglish ? 'Update required' : 'Mise à jour requise');
+  String get updateRequiredMessage => isArabic
+      ? 'هذا الإصدار من التطبيق لم يعد مدعومًا. يرجى تثبيت الإصدار الجديد للمتابعة.'
+      : (isEnglish
+          ? 'This version of the app is no longer supported. Please install the new version to continue.'
+          : "Cette version de l'application n'est plus prise en charge. Installez la nouvelle version pour continuer.");
+  String minimumVersionLabel(String version) => isArabic
+      ? 'الإصدار الأدنى: $version'
+      : (isEnglish ? 'Minimum version: $version' : 'Version minimale : $version');
   String get laterButton => isArabic
       ? 'لاحقًا'
       : (isEnglish ? 'Later' : 'Plus tard');
