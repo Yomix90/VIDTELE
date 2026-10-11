@@ -19,6 +19,7 @@ from app.config import (
 from app.core.erreurs import installer_gestionnaires_erreurs
 from app.core.journalisation import configurer_journalisation
 from app.core.requetes import MiddlewareContexteRequete
+from app.core.version_minimale import MiddlewareVersionMinimale
 from app.database import AsyncSessionLocal, init_db
 from app.models import InviteCode, User
 from app.routers import admin, admin_web, ads, alias, application_mobile, auth, library, sante, videos
@@ -187,6 +188,10 @@ app = FastAPI(
     version="1.0.0",
     lifespan=lifespan,
 )
+
+# Version minimale de l'app (en-tête X-App-Version) : ajouté avant CORS pour que
+# la réponse 426 reçoive aussi les en-têtes CORS et le request_id
+app.add_middleware(MiddlewareVersionMinimale)
 
 # Configuration CORS pour autoriser l'app Flutter (Web/Mobile/Émulateur)
 app.add_middleware(

@@ -15,6 +15,8 @@ from app.schemas import (
 )
 from app.security import get_current_admin
 
+from app.services.version_app import invalider_cache
+
 router = APIRouter()
 
 # =============================================================
@@ -73,6 +75,7 @@ async def update_app_update_settings(
             db.add(SystemSetting(key=key, value=val))
 
     await db.commit()
+    invalider_cache()  # prise en compte immédiate par /api/app/version et le contrôle X-App-Version
     return MessageResponse(message="Configuration de mise à jour mobile enregistrée avec succès.")
 
 
