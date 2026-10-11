@@ -261,6 +261,15 @@ class AppLocalizations {
   String get updateNowButton => isArabic
       ? 'تحديث الآن'
       : (isEnglish ? 'Update Now' : 'Mettre à jour');
+  // Lecteur vertical : libellés des boutons et chargement
+  String get videoLoading => isArabic ? 'جارٍ التحميل…' : (isEnglish ? 'Loading…' : 'Chargement…');
+  String get episodesShort => isArabic ? 'الحلقات' : (isEnglish ? 'Episodes' : 'Épisodes');
+  String get likeLabel => isArabic ? 'أعجبني' : (isEnglish ? 'Like' : "J'aime");
+  String get unlikeA11y => isArabic ? 'إزالة الإعجاب' : (isEnglish ? 'Remove like' : "Retirer le j'aime");
+  String get soundLabel => isArabic ? 'الصوت' : (isEnglish ? 'Sound' : 'Son');
+  String get mutedLabel => isArabic ? 'صامت' : (isEnglish ? 'Muted' : 'Muet');
+  String get speedLabel => isArabic ? 'السرعة' : (isEnglish ? 'Speed' : 'Vitesse');
+  String get fullscreenLabel => isArabic ? 'ملء الشاشة' : (isEnglish ? 'Fullscreen' : 'Plein écran');
   String get updateRequiredTitle => isArabic
       ? 'التحديث مطلوب'
       : (isEnglish ? 'Update required' : 'Mise à jour requise');

@@ -57,39 +57,45 @@ class VideoCard extends StatelessWidget {
               child: Stack(
                 fit: StackFit.expand,
                 children: [
-                  // 1. Miniature vidéo mise en cache avec Hero optionnel
-                  Hero(
-                    tag: heroTag ?? 'video_poster_${video.id}',
-                    child: thumbUrl != null
-                        ? CachedNetworkImage(
-                          imageUrl: thumbUrl,
-                          fit: BoxFit.cover,
-                          placeholder: (context, url) => Container(
-                            color: const Color(0xFF1F1F1F),
-                            child: const Center(
-                              child: SizedBox(
-                                width: 24,
-                                height: 24,
-                                child: CircularProgressIndicator(
-                                  strokeWidth: 2,
-                                  color: AppTheme.netflixRed,
+                  // 1. Miniature vidéo mise en cache, animation Hero seulement avec un tag unique.
+                  // Correctif : la même vidéo apparaît dans plusieurs rangées de l'accueil ;
+                  // le tag par défaut « video_poster_<id> » était donc dupliqué et levait une
+                  // erreur à chaque transition d'écran (aucun écran de destination ne l'utilisait).
+                  HeroMode(
+                    enabled: heroTag != null,
+                    child: Hero(
+                      tag: heroTag ?? 'video_poster_${video.id}',
+                      child: thumbUrl != null
+                          ? CachedNetworkImage(
+                              imageUrl: thumbUrl,
+                              fit: BoxFit.cover,
+                              placeholder: (context, url) => Container(
+                                color: const Color(0xFF1F1F1F),
+                                child: const Center(
+                                  child: SizedBox(
+                                    width: 24,
+                                    height: 24,
+                                    child: CircularProgressIndicator(
+                                      strokeWidth: 2,
+                                      color: AppTheme.netflixRed,
+                                    ),
+                                  ),
                                 ),
                               ),
+                              errorWidget: (context, url, error) => Container(
+                                color: const Color(0xFF1F1F1F),
+                                child: const Center(
+                                  child: Icon(Icons.movie, size: 40, color: Colors.white24),
+                                ),
+                              ),
+                            )
+                          : Container(
+                              color: const Color(0xFF1F1F1F),
+                              child: const Center(
+                                child: Icon(Icons.play_circle_fill, size: 48, color: Colors.white30),
+                              ),
                             ),
-                          ),
-                          errorWidget: (context, url, error) => Container(
-                            color: const Color(0xFF1F1F1F),
-                            child: const Center(
-                              child: Icon(Icons.movie, size: 40, color: Colors.white24),
-                            ),
-                          ),
-                        )
-                      : Container(
-                          color: const Color(0xFF1F1F1F),
-                          child: const Center(
-                            child: Icon(Icons.play_circle_fill, size: 48, color: Colors.white30),
-                          ),
-                        ),
+                    ),
                   ),
 
                   // 2. Dégradé sombre en bas pour la lisibilité
