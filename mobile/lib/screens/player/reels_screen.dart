@@ -308,18 +308,32 @@ class _ReelsScreenState extends ConsumerState<ReelsScreen>
       final jetons = JetonsFlux.instance;
       final streamUri = await jetons.urlFlux(item.id, renouveler: true);
 
-      final oldCtrl = _controllerPool[_focusedIndex];
+      // Correctif : l'ancien lecteur était libéré AVANT que le nouveau soit prêt ; l'écran
+      // continuait de le dessiner (« VideoPlayerController was used after being disposed »,
+      // « No active player ») et l'écran n'était plus maintenu allumé. On prépare d'abord le
+      // nouveau, on l'échange, puis on libère l'ancien après l'image suivante.
+      final indexReprise = _focusedIndex;
+      final oldCtrl = _controllerPool[indexReprise];
       oldCtrl?.pause();
-      oldCtrl?.dispose();
 
       final newCtrl = VideoPlayerController.networkUrl(streamUri, httpHeaders: jetons.entetesLecteur);
-
-      await newCtrl.initialize();
+      try {
+        await newCtrl.initialize();
+      } catch (_) {
+        await newCtrl.dispose();
+        rethrow;
+      }
       newCtrl.setPlaybackSpeed(_playbackSpeed);
       newCtrl.setVolume(_isMuted ? 0.0 : 1.0);
 
       if (resumePosition > Duration.zero && resumePosition < newCtrl.value.duration) {
         await newCtrl.seekTo(resumePosition);
+      }
+
+      // L'utilisateur a changé de vidéo (ou quitté l'écran) pendant la reprise
+      if (!mounted || _focusedIndex != indexReprise || _controllerPool[indexReprise] != oldCtrl) {
+        await newCtrl.dispose();
+        return false;
       }
 
       final playerId = 'feed_${item.id}';
@@ -347,10 +361,15 @@ class _ReelsScreenState extends ConsumerState<ReelsScreen>
         }
       });
 
-      _controllerPool[_focusedIndex] = newCtrl;
+      _controllerPool[indexReprise] = newCtrl;
       _watchdog?.attach(newCtrl, isPlaybackDesired: widget.isActive && _isAppActive);
+      MesuresLecture.instance.suivre(item.id, newCtrl, precharge: true); // blocages du nouveau lecteur
 
       if (mounted) setState(() {});
+      // L'ancien lecteur n'est libéré qu'une fois l'écran redessiné avec le nouveau
+      if (oldCtrl != null) {
+        WidgetsBinding.instance.addPostFrameCallback((_) => oldCtrl.dispose());
+      }
       if (widget.isActive && _isAppActive) {
         await ref.read(videoPlayerManagerProvider).play(playerId);
       }
@@ -598,15 +617,15 @@ class _ReelsScreenState extends ConsumerState<ReelsScreen>
 
           _checkAdGate(item.id.toString(), ctrl.value.position, ctrl.value.duration, completed: completed);
 
-          try {
-            apiClient.dio.put(
-              ApiConstants.videoProgress(item.id),
-              data: {
-                'position_seconds': pos,
-                'completed': completed,
-              },
-            );
-          } catch (_) {}
+          // Envoi non attendu : un try/catch n'intercepte pas ses erreurs. Sans .ignore(),
+          // chaque coupure réseau remontait à Crashlytics comme un « plantage fatal ».
+          apiClient.dio.put(
+            ApiConstants.videoProgress(item.id),
+            data: {
+              'position_seconds': pos,
+              'completed': completed,
+            },
+          ).ignore();
         }
       }
     });
