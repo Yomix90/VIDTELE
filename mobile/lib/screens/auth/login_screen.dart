@@ -5,6 +5,7 @@ import '../../core/storage/storage_service.dart';
 import '../../core/theme/app_theme.dart';
 import '../../providers/auth_provider.dart';
 import '../../providers/locale_provider.dart';
+import '../main_navigation_screen.dart';
 
 /// Écran de connexion et inscription style Netflix avec configurateur d'URL serveur
 /// et sélecteur de langue trilingue FR / EN / AR.
@@ -105,9 +106,19 @@ class _LoginScreenState extends ConsumerState<LoginScreen> {
         );
         return;
       }
-      await ref.read(authProvider.notifier).register(username, password, inviteCode);
-    } else {
-      await ref.read(authProvider.notifier).login(username, password);
+    }
+
+    final reussi = _isSignUp
+        ? await ref.read(authProvider.notifier).register(username, password, inviteCode)
+        : await ref.read(authProvider.notifier).login(username, password);
+
+    // Correctif : avant, aucune navigation n'avait lieu après une connexion réussie ;
+    // l'utilisateur restait sur ce formulaire et devait relancer l'application.
+    if (reussi && mounted) {
+      Navigator.of(context).pushAndRemoveUntil(
+        MaterialPageRoute(builder: (_) => const MainNavigationScreen()),
+        (_) => false,
+      );
     }
   }
 
