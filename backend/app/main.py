@@ -20,6 +20,9 @@ from app.config import (
     settings,
     write_private_file,
 )
+from app.core.erreurs import installer_gestionnaires_erreurs
+from app.core.journalisation import configurer_journalisation
+from app.core.requetes import MiddlewareContexteRequete
 from app.database import AsyncSessionLocal, get_db, init_db
 from app.models import InviteCode, User
 from app.routers import admin, admin_web, ads, auth, library, videos
@@ -29,10 +32,7 @@ from app.services.sync_service import sync_service
 from app.telegram_client import telegram_manager
 
 # Configuration des logs
-logging.basicConfig(
-    level=logging.INFO,
-    format="%(asctime)s [%(levelname)s] %(name)s: %(message)s",
-)
+configurer_journalisation(settings.LOG_LEVEL, settings.LOG_FORMAT)
 logger = logging.getLogger("vidtele")
 
 
@@ -200,7 +200,14 @@ app.add_middleware(
     allow_credentials=True,
     allow_methods=["*"],
     allow_headers=["*"],
+    expose_headers=["X-Request-ID"],
 )
+
+# Contexte de requête (request_id + journal d'accès) : ajouté en dernier = exécuté en premier
+app.add_middleware(MiddlewareContexteRequete)
+
+# Format d'erreur uniforme {"detail", "code", "request_id"} sur /api
+installer_gestionnaires_erreurs(app)
 
 # Fichiers statiques et uploads persistants
 from pathlib import Path

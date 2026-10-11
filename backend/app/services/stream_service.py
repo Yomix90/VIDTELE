@@ -167,7 +167,8 @@ class StreamService:
                     raise e
                 raise HTTPException(
                     status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
-                    detail=f"Erreur lors du téléchargement de la vidéo depuis Telegram: {str(e)}",
+                    # Le détail technique reste dans les journaux (exc_info ci-dessus), pas chez le client
+                    detail="Impossible de récupérer la vidéo depuis Telegram pour le moment. Réessayez.",
                 )
 
     def parse_range_header(self, range_header: Optional[str], file_size: int) -> Tuple[int, int, int]:

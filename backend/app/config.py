@@ -46,6 +46,10 @@ class Settings(BaseSettings):
     MAX_CONCURRENT_STREAMS_PER_USER: int = 4
     MAX_CONCURRENT_STREAMS_GLOBAL: int = 30
 
+    # Journalisation : LOG_FORMAT=texte (lisible dans Dokploy) ou json (collecte automatisée)
+    LOG_LEVEL: str = "INFO"
+    LOG_FORMAT: str = "texte"
+
     # Tâches périodiques
     SYNC_INTERVAL_MINUTES: int = 15
 
