@@ -3,11 +3,10 @@ Migration 001 : Intégration du schéma relationnel StreamAdmin dans VidTele.
 Ajoute les tables pour Séries, Saisons, Épisodes, Films, Genres, Collections,
 Accueil mobile et journaux, sans toucher aux données existantes.
 """
-import os
 import shutil
 import sqlite3
 import sys
-from datetime import datetime, timezone
+from datetime import datetime
 from pathlib import Path
 
 

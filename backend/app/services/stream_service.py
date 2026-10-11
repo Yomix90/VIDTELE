@@ -4,8 +4,6 @@ Téléchargement par morceaux via Telethon MTProto, verrous de concurrence et st
 """
 import asyncio
 import logging
-import os
-import re
 from pathlib import Path
 from typing import AsyncGenerator, Dict, Optional, Set, Tuple
 import aiofiles

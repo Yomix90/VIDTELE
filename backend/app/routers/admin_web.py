@@ -19,7 +19,6 @@ from app.security import (
     create_access_token,
     decode_token,
     get_client_ip,
-    hash_password,
     register_login_failure,
     reset_login_failures,
     verify_password,

@@ -2,7 +2,7 @@ import asyncio
 import logging
 import time
 from pathlib import Path
-from typing import Any, Dict, List, Optional
+from typing import List, Optional
 from telethon import TelegramClient
 from telethon.sessions import StringSession
 from telethon.errors import (

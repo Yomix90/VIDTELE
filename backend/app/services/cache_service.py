@@ -6,7 +6,7 @@ import asyncio
 import logging
 import os
 from pathlib import Path
-from typing import Dict, List, Optional
+from typing import Dict, List
 from app.config import settings
 
 logger = logging.getLogger("vidtele.cache")

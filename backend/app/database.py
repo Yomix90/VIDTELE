@@ -68,7 +68,6 @@ async def _mise_a_niveau_ancienne(moteur=None) -> None:
     ANCIEN mécanisme (avant Alembic), conservé UNIQUEMENT pour amener une base existante
     au schéma de référence 0001. Ne plus y ajouter de colonne : créer une migration Alembic.
     """
-    import app.models  # Assure le chargement de toutes les classes filles de Base
     async with (moteur or engine).begin() as conn:
         await conn.run_sync(Base.metadata.create_all)
 

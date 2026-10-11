@@ -1,0 +1,7 @@
+# Analyse statique du serveur (ruff). Règles « F » (pyflakes) : noms non définis,
+# imports inutilisés, redéfinitions... Ce sont des erreurs réelles, pas du style.
+target-version = "py314"
+line-length = 120
+
+[lint]
+select = ["F"]

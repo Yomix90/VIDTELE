@@ -35,6 +35,8 @@ jobs:
         run: |
           pip install --require-hashes -r requirements.lock
           pip install -r requirements-dev.txt
+      - name: Analyse statique (noms non définis, imports inutilisés)
+        run: python -m ruff check app migrations tests
       - name: Tests
         run: python -m pytest -q
       - name: Chaque dépendance directe est figée à la même version dans requirements.lock

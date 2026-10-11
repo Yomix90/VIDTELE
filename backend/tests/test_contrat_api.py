@@ -20,7 +20,7 @@ from pathlib import Path
 import pytest
 
 from app.database import AsyncSessionLocal
-from app.models import Episode, Favorite, Movie, Season, Series, Video, WatchHistory
+from app.models import Episode, Movie, Season, Series, Video
 
 FICHIER_CONTRAT = Path(__file__).parent / "contrat" / "formes_api.json"
 

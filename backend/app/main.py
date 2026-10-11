@@ -6,12 +6,12 @@ import logging
 import secrets
 from contextlib import asynccontextmanager
 from typing import Optional
-from fastapi import Depends, FastAPI, status
+from fastapi import Depends, FastAPI
 from fastapi.middleware.cors import CORSMiddleware
 from sqlalchemy import select
 from sqlalchemy.ext.asyncio import AsyncSession
 
-from typing import List, Optional
+from typing import List
 from app.config import (
     PUBLIC_DEFAULT_ADMIN_PASSWORDS,
     SECRET_KEY_SOURCE,

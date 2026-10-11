@@ -18,8 +18,6 @@ from app.schemas import (
     CategoryItem,
     FeedItemResponse,
     FeedResponse,
-    HomeGenreSection,
-    HomeHeroItem,
     HomeScreenResponse,
     TopSeriesItem,
     VideoListResponse,
@@ -297,7 +295,7 @@ async def get_video_thumbnail(video_id: int, db: AsyncSession = Depends(get_db))
                         headers={"Cache-Control": "public, max-age=86400"},
                     )
         # Générer un placeholder SVG simple si la miniature n'existe pas encore sur disque
-        svg_content = f"""<svg xmlns="http://www.w3.org/2000/svg" width="320" height="180" viewBox="0 0 320 180">
+        svg_content = """<svg xmlns="http://www.w3.org/2000/svg" width="320" height="180" viewBox="0 0 320 180">
             <rect width="320" height="180" fill="#1e293b"/>
             <polygon points="135,65 195,90 135,115" fill="#38bdf8"/>
         </svg>"""
