@@ -43,3 +43,14 @@ Thumbs.db
 
 # Tests
 .pytest_cache/
+
+# Secrets locaux : ne JAMAIS publier (dépôt public)
+ssh/
+*.pem
+*id_rsa*
+*.keystore
+*.jks
+key.properties
+# Configuration Firebase (fournie localement, hors dépôt public)
+google-services.json
+GoogleService-Info.plist
