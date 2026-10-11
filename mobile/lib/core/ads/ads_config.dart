@@ -3,7 +3,7 @@ import 'package:flutter/foundation.dart';
 /// Configuration centralisée de la monétisation Google AdMob pour Atlas Play.
 ///
 /// Sécurisé contre les suspensions AdMob :
-/// - Utilise les IDs de test officiels Google en mode debug (`kDebugMode`)
+/// - Utilise les IDs de test officiels Google hors version publiée (`!kReleaseMode` : debug et profile)
 /// - Utilise les IDs réels AdMob de l'utilisateur uniquement en mode release
 /// - Permet d'enregistrer des identifiants d'appareils de test pour protéger le compte
 class AdsConfig {
@@ -24,7 +24,7 @@ class AdsConfig {
 
   /// Identifiant d'application AdMob actif
   static String get admobAppId {
-    if (kDebugMode) {
+    if (!kReleaseMode) {
       return admobAppIdAndroidTest;
     }
     return admobAppIdAndroidProd;
@@ -32,12 +32,14 @@ class AdsConfig {
 
   /// Identifiant du bloc vidéo avec récompense (Rewarded) actif
   static String get rewardedAdUnitId {
-    if (kDebugMode) {
+    if (!kReleaseMode) {
       return rewardedAdUnitIdAndroidTest;
     }
     return rewardedAdUnitIdAndroidProd;
   }
 
   /// Indique si les annonces fonctionnent avec les blocs de test
-  static bool get isTestMode => kDebugMode;
+  // Annonces de test hors version publiée (debug ET profile) : afficher de vraies annonces
+  // pendant des tests sur téléphone peut faire suspendre le compte AdMob (trafic invalide).
+  static bool get isTestMode => !kReleaseMode;
 }

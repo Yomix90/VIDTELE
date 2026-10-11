@@ -1,5 +1,6 @@
 import 'dart:async';
 
+import 'package:flutter/foundation.dart';
 import 'package:flutter/widgets.dart';
 import 'package:video_player/video_player.dart';
 
@@ -107,6 +108,8 @@ class MesuresLecture with WidgetsBindingObserver {
 
   void _ajouter(Map<String, Object?> evenement) {
     evenement.removeWhere((_, valeur) => valeur == null);
+    // Visible dans « adb logcat » en debug et profile (mesures sur téléphone), jamais en release
+    if (!kReleaseMode) debugPrint('[Mesure] $evenement');
     if (_enAttente.length >= maxEnAttente) _enAttente.removeAt(0);
     _enAttente.add(evenement);
     _minuterie ??= Timer.periodic(intervalleEnvoi, (_) => envoyer());

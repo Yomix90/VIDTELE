@@ -36,6 +36,10 @@ android {
         debug {
             manifestPlaceholders["admobAppId"] = "ca-app-pub-3940256099942544~3347511713"
         }
+        // Build « profile » (mesures de performance sur téléphone) : identifiant AdMob de TEST
+        getByName("profile") {
+            manifestPlaceholders["admobAppId"] = "ca-app-pub-3940256099942544~3347511713"
+        }
         release {
             manifestPlaceholders["admobAppId"] = "ca-app-pub-7846348811801616~6697457552"
             // Signing with the debug keys for now, so `flutter run --release` works.
