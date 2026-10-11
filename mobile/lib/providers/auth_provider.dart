@@ -61,8 +61,19 @@ class AuthNotifier extends StateNotifier<AuthState> {
         );
         return;
       }
+    } on DioException catch (e) {
+      // Correctif : avant, TOUTE erreur effaçait la session. Un lancement sans réseau
+      // (métro, 4G faible) ou une réponse 426/5xx déconnectait donc l'utilisateur.
+      // On ne déconnecte plus que si le serveur refuse réellement le jeton (401,
+      // après échec du rafraîchissement automatique).
+      if (e.response?.statusCode != 401) {
+        state = state.copyWith(isAuthenticated: true, isLoading: false);
+        return;
+      }
     } catch (_) {
-      // Le token est expiré ou invalide
+      // Réponse illisible : on garde la session, les écrans afficheront l'erreur.
+      state = state.copyWith(isAuthenticated: true, isLoading: false);
+      return;
     }
 
     await storageService.clearAuthData();
