@@ -11,6 +11,7 @@ import '../../core/api/api_client.dart';
 import '../../core/constants/api_constants.dart';
 import '../../core/localization/app_localizations.dart';
 import '../../core/services/video_player_manager.dart';
+import '../../core/services/jetons_flux.dart';
 import '../../core/services/video_watchdog.dart';
 import '../../core/storage/storage_service.dart';
 import '../../core/theme/app_theme.dart';
@@ -292,36 +293,15 @@ class _ReelsScreenState extends ConsumerState<ReelsScreen>
 
     try {
       debugPrint('[ReelsScreen] Watchdog: tentative $attempt de réinitialisation du flux pour ${item.id} à ${resumePosition.inSeconds}s');
-      final baseUrl = await storageService.getServerUrl();
-      final accessToken = await storageService.getAccessToken();
-
-      String? streamToken = accessToken;
-      if (streamToken == null || streamToken.isEmpty) {
-        try {
-          final tokenRes = await apiClient.dio.get(
-            ApiConstants.videoStreamToken(item.id),
-          );
-          streamToken = tokenRes.data['stream_token'];
-        } catch (_) {}
-      }
-
-      final String tokenParam = (streamToken != null && streamToken.isNotEmpty)
-          ? '?token=$streamToken'
-          : '';
-      final streamUri = Uri.parse(
-        '$baseUrl${ApiConstants.videoStream(item.id)}$tokenParam',
-      );
+      // Nouveau jeton de flux à chaque reprise (celui de l'URL précédente a pu expirer)
+      final jetons = JetonsFlux.instance;
+      final streamUri = await jetons.urlFlux(item.id, renouveler: true);
 
       final oldCtrl = _controllerPool[_focusedIndex];
       oldCtrl?.pause();
       oldCtrl?.dispose();
 
-      final newCtrl = VideoPlayerController.networkUrl(
-        streamUri,
-        httpHeaders: {
-          if (accessToken != null) 'Authorization': 'Bearer $accessToken',
-        },
-      );
+      final newCtrl = VideoPlayerController.networkUrl(streamUri, httpHeaders: jetons.entetesLecteur);
 
       await newCtrl.initialize();
       newCtrl.setPlaybackSpeed(_playbackSpeed);
@@ -639,6 +619,11 @@ class _ReelsScreenState extends ConsumerState<ReelsScreen>
       ctrl?.dispose();
     }
 
+    // Jetons de flux des vidéos suivantes préparés à l'avance (aucune requête au swipe)
+    JetonsFlux.instance.precharger([
+      for (var i = currentIndex + 1; i <= currentIndex + 3 && i < items.length; i++) items[i].id,
+    ]);
+
     // 3. Initialiser les contrôleurs cibles manquants
     for (final idx in targetIndices) {
       if (!_controllerPool.containsKey(idx) && !_initializingIndices.contains(idx)) {
@@ -675,68 +660,24 @@ class _ReelsScreenState extends ConsumerState<ReelsScreen>
     final stopwatch = Stopwatch()..start();
 
     try {
-      final baseUrl = await storageService.getServerUrl();
-      final accessToken = await storageService.getAccessToken();
-
-      // OPTIMISATION TTFF: Si un token d'accès existe déjà, l'utiliser directement sans requête réseau additionnelle
-      String? streamToken = accessToken;
-      if (streamToken == null || streamToken.isEmpty) {
-        try {
-          final tokenRes = await apiClient.dio.post(
-            ApiConstants.videoStreamToken(item.id),
-          );
-          streamToken = tokenRes.data['stream_token'];
-        } catch (_) {
-          try {
-            final tokenRes = await apiClient.dio.get(
-              ApiConstants.videoStreamToken(item.id),
-            );
-            streamToken = tokenRes.data['stream_token'];
-          } catch (_) {}
-        }
-      }
-
-      // Initialisation résiliente du contrôleur (avec réessai automatique si le token expire)
-      VideoPlayerController ctrl;
+      // URL avec jeton de flux dédié à cette vidéo (plus de jeton d'accès dans l'URL) et
+      // identifiant de session stable : un appareil = un flux pour le quota du serveur.
+      final jetons = JetonsFlux.instance;
+      VideoPlayerController ctrl = VideoPlayerController.networkUrl(
+        await jetons.urlFlux(item.id),
+        httpHeaders: jetons.entetesLecteur,
+      );
+      debugPrint('[ReelsScreen] Initialisation flux index $idx (vid ${item.id})');
       try {
-        final String tokenParam = (streamToken != null && streamToken.isNotEmpty)
-            ? '?token=$streamToken'
-            : '';
-        final streamUri = Uri.parse(
-          '$baseUrl${ApiConstants.videoStream(item.id)}$tokenParam',
-        );
-        debugPrint('[ReelsScreen] Initialisation flux index $idx (vid ${item.id}) -> $streamUri');
-
-        ctrl = VideoPlayerController.networkUrl(
-          streamUri,
-          httpHeaders: {
-            if (accessToken != null && accessToken.isNotEmpty)
-              'Authorization': 'Bearer $accessToken',
-          },
-        );
         await ctrl.initialize();
       } catch (initErr) {
-        debugPrint('[ReelsScreen] Premier essai échoué pour $idx ($initErr), renouvellement du jeton de flux...');
-        try {
-          final tokenRes = await apiClient.dio.post(
-            ApiConstants.videoStreamToken(item.id),
-          );
-          streamToken = tokenRes.data['stream_token'];
-        } catch (_) {
-          try {
-            final tokenRes = await apiClient.dio.get(
-              ApiConstants.videoStreamToken(item.id),
-            );
-            streamToken = tokenRes.data['stream_token'];
-          } catch (_) {}
-        }
-        final String retryTokenParam = (streamToken != null && streamToken.isNotEmpty)
-            ? '?token=$streamToken'
-            : '';
-        final retryStreamUri = Uri.parse(
-          '$baseUrl${ApiConstants.videoStream(item.id)}$retryTokenParam',
+        debugPrint('[ReelsScreen] Premier essai échoué pour $idx ($initErr), nouveau jeton de flux...');
+        // Correctif : le contrôleur en échec n'était jamais libéré (fuite du lecteur natif)
+        await ctrl.dispose();
+        ctrl = VideoPlayerController.networkUrl(
+          await jetons.urlFlux(item.id, renouveler: true),
+          httpHeaders: jetons.entetesLecteur,
         );
-        ctrl = VideoPlayerController.networkUrl(retryStreamUri);
         await ctrl.initialize();
       }
 
