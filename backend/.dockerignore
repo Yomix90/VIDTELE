@@ -15,3 +15,9 @@ data/
 .idea/
 .vscode/
 *.log
+
+# Tests et outils de développement
+tests/
+test_*.py
+requirements-dev.txt
+pytest.ini
