@@ -585,7 +585,9 @@ async def get_home_content(
     # 6. Catégories / Genres
     cat_stmt = (
         select(Video.category, func.count(Video.id).label("count"))
-        .where(Video.is_published == True)
+        # Sans catégorie (NULL ou vide) : pas de rangée de genre. Avant correctif, une rangée
+        # « name: null » faisait échouer la validation et tout l'écran d'accueil renvoyait 500.
+        .where(Video.is_published == True, Video.category.isnot(None), Video.category != "")
         .group_by(Video.category)
         .order_by(desc("count"))
         .limit(8)
@@ -751,7 +753,7 @@ async def get_vertical_feed(
                 episode_number=ep.number if ep else v.episode_number or 1,
                 episode_title=ep.title_fr if ep else v.episode_title,
                 caption=ep.synopsis_fr if (ep and ep.synopsis_fr) else v.caption,
-                category=series.title_fr if series else v.category,
+                category=(series.title_fr if series else v.category) or "Général",  # jamais null (sinon erreur 500 du feed)
                 duration_seconds=v.duration_seconds,
                 file_size_bytes=v.file_size_bytes,
                 mime_type=v.mime_type,

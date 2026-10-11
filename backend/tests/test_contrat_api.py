@@ -252,3 +252,32 @@ def test_outil_de_forme():
     assert ecarts(a, forme({"id": 2, "titre": "y", "liste": [{"n": 3}], "nouveau": True})) == []
     assert ecarts(a, forme({"id": 2, "liste": []})) == ["$.titre: clé supprimée"]
     assert ecarts(a, forme({"id": "2", "titre": "y", "liste": []})) == ["$.id: type nombre devenu texte"]
+
+
+async def test_accueil_avec_video_sans_categorie(client, utilisateur):
+    # Avant correctif : une vidéo publiée sans catégorie => /api/home en erreur 500
+    async with AsyncSessionLocal() as db:
+        db.add(
+            Video(
+                telegram_message_id=7999,
+                title="Sans catégorie",
+                telegram_date=_maintenant(),
+                is_published=True,
+                category=None,
+            )
+        )
+        await db.commit()
+    for chemin in ("/api/home", "/api/videos/home"):
+        res = await client.get(chemin, headers=utilisateur["entetes"])
+        assert res.status_code == 200, res.text[:300]
+        assert all(g["name"] for g in res.json()["genres"])
+
+
+async def test_feed_avec_video_sans_categorie(client, utilisateur):
+    # Avant correctif : FeedItemResponse.category=None => /api/feed en erreur 500
+    async with AsyncSessionLocal() as db:
+        db.add(Video(telegram_message_id=7998, title="Sans catégorie 2", telegram_date=_maintenant(), is_published=True))
+        await db.commit()
+    for chemin in ("/api/feed", "/api/videos/feed"):
+        res = await client.get(chemin, params={"limit": 50}, headers=utilisateur["entetes"])
+        assert res.status_code == 200, res.text[:300]
