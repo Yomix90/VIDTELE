@@ -22,7 +22,18 @@ from app.core.requetes import MiddlewareContexteRequete
 from app.core.version_minimale import MiddlewareVersionMinimale
 from app.database import AsyncSessionLocal, init_db
 from app.models import InviteCode, User
-from app.routers import admin, admin_web, ads, alias, application_mobile, auth, library, sante, videos
+from app.routers import (
+    admin,
+    admin_web,
+    ads,
+    alias,
+    analytique_lecture,
+    application_mobile,
+    auth,
+    library,
+    sante,
+    videos,
+)
 from app.security import hash_password, verify_password
 from app.services.sync_service import sync_service
 from app.telegram_client import telegram_manager
@@ -237,3 +248,4 @@ app.include_router(admin_web.router)
 app.include_router(ads.router)
 app.include_router(alias.router)
 app.include_router(application_mobile.router)
+app.include_router(analytique_lecture.router)
