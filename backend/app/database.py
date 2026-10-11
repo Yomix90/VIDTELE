@@ -1,6 +1,7 @@
 """
 Configuration de la base de données asynchrone SQLAlchemy 2.0 avec SQLite (aiosqlite).
 """
+import logging
 from typing import AsyncGenerator
 from sqlalchemy.ext.asyncio import (
     AsyncSession,
@@ -9,6 +10,8 @@ from sqlalchemy.ext.asyncio import (
 )
 from sqlalchemy.orm import DeclarativeBase
 from app.config import settings
+
+logger = logging.getLogger("vidtele.base")
 
 # Création du moteur asynchrone
 # connect_args={"check_same_thread": False} requis pour SQLite en mode asynchrone
@@ -49,9 +52,24 @@ from sqlalchemy import text
 
 
 async def init_db() -> None:
-    """Initialise les tables de la base de données et applique les migrations douces si nécessaires."""
+    """
+    Prépare la base au démarrage :
+    1. schéma : migrations Alembic versionnées (voir app/core/migrations.py) ;
+    2. données de référence : genres, rangées d'accueil, compte Telegram initial.
+    """
+    from app.core.migrations import preparer_schema
+
+    await preparer_schema(mise_a_niveau_ancienne=_mise_a_niveau_ancienne)
+    await _amorcer_donnees()
+
+
+async def _mise_a_niveau_ancienne(moteur=None) -> None:
+    """
+    ANCIEN mécanisme (avant Alembic), conservé UNIQUEMENT pour amener une base existante
+    au schéma de référence 0001. Ne plus y ajouter de colonne : créer une migration Alembic.
+    """
     import app.models  # Assure le chargement de toutes les classes filles de Base
-    async with engine.begin() as conn:
+    async with (moteur or engine).begin() as conn:
         await conn.run_sync(Base.metadata.create_all)
 
         # Migrations douces pour SQLite sur la table 'videos'
@@ -70,7 +88,7 @@ async def init_db() -> None:
                 if col_name not in existing_cols:
                     await conn.execute(text(f"ALTER TABLE videos ADD COLUMN {col_name} {col_def}"))
         except Exception:
-            pass
+            logger.warning("Mise à niveau ancienne : étape ignorée", exc_info=True)
 
         # Migrations douces pour SQLite sur la table 'users'
         user_cols_to_add = [
@@ -88,7 +106,7 @@ async def init_db() -> None:
                 if col_name not in existing_user_cols:
                     await conn.execute(text(f"ALTER TABLE users ADD COLUMN {col_name} {col_def}"))
         except Exception:
-            pass
+            logger.warning("Mise à niveau ancienne : étape ignorée", exc_info=True)
 
         # Migrations douces pour 'series', 'movies', 'episodes' (titres et synopsis en anglais)
         for tbl in ["series", "movies", "episodes"]:
@@ -99,7 +117,7 @@ async def init_db() -> None:
                     if c_name not in ex_cols:
                         await conn.execute(text(f"ALTER TABLE {tbl} ADD COLUMN {c_name} {c_def}"))
             except Exception:
-                pass
+                logger.warning("Mise à niveau ancienne : étape ignorée", exc_info=True)
 
         # Migrations douces pour 'invite_codes' (multi-utilisations)
         invite_cols_to_add = [
@@ -116,40 +134,70 @@ async def init_db() -> None:
             # Synchroniser les anciens codes déjà utilisés
             await conn.execute(text("UPDATE invite_codes SET uses_count = 1 WHERE is_used = 1 AND uses_count = 0"))
         except Exception:
-            pass
+            logger.warning("Mise à niveau ancienne : étape ignorée", exc_info=True)
 
 
-        # Amorçage automatique des genres de référence si vide
+
+
+GENRES_REFERENCE = [
+    ("action", "Action", "أكشن", "bi-lightning-charge"),
+    ("drame", "Drame", "دراما", "bi-mask"),
+    ("comedie", "Comédie", "كوميديا", "bi-emoji-smile"),
+    ("policier", "Policier", "بوليسي", "bi-shield-lock"),
+    ("mystere", "Mystère", "غموض", "bi-question-circle"),
+    ("famille", "Famille", "عائلي", "bi-people"),
+    ("science-fiction", "Science-Fiction", "خيال علمي", "bi-rocket"),
+    ("animation", "Animation", "رسوم متحركة", "bi-palette"),
+]
+
+RANGEES_ACCUEIL_REFERENCE = [
+    ("hero", "À l'affiche", "مميز"),
+    ("recent", "Nouveautés", "أحدث الإضافات"),
+    ("series", "Séries populaires", "مسلسلات شائعة"),
+    ("movies", "Films récents", "أفلام حديثة"),
+]
+
+
+async def _amorcer_donnees() -> None:
+    """
+    Données de référence insérées seulement si les tables sont vides (idempotent).
+    NB : l'ancienne version utilisait « INSERT OR IGNORE » sans created_at (NOT NULL) :
+    SQLite ignorait silencieusement chaque ligne, ces tables restaient donc vides.
+    """
+    async with engine.begin() as conn:
+        # Genres de référence (utilisés par l'administration)
         try:
-            res_g = await conn.execute(text("SELECT count(*) FROM genres"))
-            if res_g.scalar_one() == 0:
-                await conn.execute(text("""
-                    INSERT OR IGNORE INTO genres (id, slug, name_fr, name_ar, icon, order_index) VALUES
-                    (1, 'action', 'Action', 'أكشن', 'bi-lightning-charge', 1),
-                    (2, 'drame', 'Drame', 'دراما', 'bi-mask', 2),
-                    (3, 'comedie', 'Comédie', 'كوميديا', 'bi-emoji-smile', 3),
-                    (4, 'policier', 'Policier', 'بوليسي', 'bi-shield-lock', 4),
-                    (5, 'mystere', 'Mystère', 'غموض', 'bi-question-circle', 5),
-                    (6, 'famille', 'Famille', 'عائلي', 'bi-people', 6),
-                    (7, 'science-fiction', 'Science-Fiction', 'خيال علمي', 'bi-rocket', 7),
-                    (8, 'animation', 'Animation', 'رسوم متحركة', 'bi-palette', 8)
-                """))
+            if (await conn.execute(text("SELECT count(*) FROM genres"))).scalar_one() == 0:
+                await conn.execute(
+                    text(
+                        "INSERT INTO genres (slug, name_fr, name_ar, icon, order_index, created_at) "
+                        "VALUES (:slug, :fr, :ar, :icon, :ordre, CURRENT_TIMESTAMP)"
+                    ),
+                    [
+                        {"slug": slug, "fr": fr, "ar": ar, "icon": icon, "ordre": i}
+                        for i, (slug, fr, ar, icon) in enumerate(GENRES_REFERENCE, start=1)
+                    ],
+                )
+                logger.info("Genres de référence créés (%d).", len(GENRES_REFERENCE))
         except Exception:
-            pass
+            logger.error("Échec de l'amorçage des genres", exc_info=True)
 
-        # Amorçage automatique des rangées d'accueil par défaut si vide
+        # Rangées d'accueil par défaut (éditeur d'accueil de l'administration)
         try:
-            res_h = await conn.execute(text("SELECT count(*) FROM home_rows"))
-            if res_h.scalar_one() == 0:
-                await conn.execute(text("""
-                    INSERT OR IGNORE INTO home_rows (id, row_type, title_fr, title_ar, order_index) VALUES
-                    (1, 'hero', 'À l''affiche', 'مميز', 1),
-                    (2, 'recent', 'Nouveautés', 'أحدث الإضافات', 2),
-                    (3, 'series', 'Séries populaires', 'مسلسلات شائعة', 3),
-                    (4, 'movies', 'Films récents', 'أفلام حديثة', 4)
-                """))
+            if (await conn.execute(text("SELECT count(*) FROM home_rows"))).scalar_one() == 0:
+                await conn.execute(
+                    text(
+                        "INSERT INTO home_rows (row_type, title_fr, title_ar, limit_items, is_active, order_index, created_at, updated_at) "
+                        "VALUES (:type, :fr, :ar, 20, 1, :ordre, CURRENT_TIMESTAMP, CURRENT_TIMESTAMP)"
+                    ),
+                    [
+                        {"type": t, "fr": fr, "ar": ar, "ordre": i}
+                        for i, (t, fr, ar) in enumerate(RANGEES_ACCUEIL_REFERENCE, start=1)
+                    ],
+                )
+                logger.info("Rangées d'accueil par défaut créées (%d).", len(RANGEES_ACCUEIL_REFERENCE))
         except Exception:
-            pass
+            logger.error("Échec de l'amorçage des rangées d'accueil", exc_info=True)
 
         # Amorçage automatique du compte Telegram configuré en .env / Dokploy si table vide
         try:
@@ -174,5 +222,5 @@ async def init_db() -> None:
                         }
                     )
         except Exception:
-            pass
+            logger.error("Échec de l'amorçage du compte Telegram", exc_info=True)
 
