@@ -9,7 +9,7 @@ import '../../models/user_model.dart';
 /// Règles métier :
 /// 1. Seuil aléatoire par cycle : entre 4 et 5 vidéos (configurable min/max).
 /// 2. Critère de vidéo regardée : lue à au moins 70 % de sa durée totale, ou finie.
-/// 3. Chaque vidéo n'est comptabilisée qu'une seule fois par cycle (Set<String>).
+/// 3. Chaque vidéo n'est comptabilisée qu'une seule fois par cycle (`Set<String>`).
 /// 4. Déblocage uniquement sur récompense confirmée (`onUserEarnedReward`).
 /// 5. Persistance locale dans `SharedPreferences` résistante aux redémarrages.
 /// 6. Exemption totale pour les comptes Administrateurs (`isAdmin`) et sans pub (`adsFree`).
