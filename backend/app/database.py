@@ -63,13 +63,16 @@ async def init_db() -> None:
     await _amorcer_donnees()
 
 
-async def _mise_a_niveau_ancienne(moteur=None) -> None:
+async def _mise_a_niveau_ancienne(tables_reference=None, moteur=None) -> None:
     """
     ANCIEN mécanisme (avant Alembic), conservé UNIQUEMENT pour amener une base existante
     au schéma de référence 0001. Ne plus y ajouter de colonne : créer une migration Alembic.
     """
     async with (moteur or engine).begin() as conn:
-        await conn.run_sync(Base.metadata.create_all)
+        # Uniquement les tables du schéma de référence 0001 : les tables plus récentes sont
+        # créées par leurs migrations Alembic (sinon « table already exists »).
+        tables = [t for t in Base.metadata.sorted_tables if tables_reference is None or t.name in tables_reference]
+        await conn.run_sync(lambda sync_conn: Base.metadata.create_all(sync_conn, tables=tables))
 
         # Migrations douces pour SQLite sur la table 'videos'
         columns_to_add = [

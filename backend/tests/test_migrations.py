@@ -23,6 +23,7 @@ from app.core.migrations import (
     REVISION_REFERENCE,
     SchemaIncompatible,
     differences_bloquantes,
+    schema_reference,
     preparer_schema,
 )
 from app.database import Base, _mise_a_niveau_ancienne
@@ -60,15 +61,19 @@ def dossier():
 async def _preparer(chemin: Path):
     moteur = create_async_engine(_url(chemin))
     try:
-        return await preparer_schema(lambda: _mise_a_niveau_ancienne(moteur), url=_url(chemin))
+        return await preparer_schema(lambda tables: _mise_a_niveau_ancienne(tables, moteur), url=_url(chemin))
     finally:
         await moteur.dispose()
 
 
 def _creer_base_ancienne(chemin: Path):
-    """Base telle qu'une ancienne version l'a laissée : create_all puis retrait d'éléments récents."""
+    """
+    Base telle qu'une ancienne version l'a laissée : tables de la référence 0001 seulement
+    (aucune table créée par une migration ultérieure), puis retrait d'éléments récents.
+    """
+    reference = set(schema_reference())
     moteur = create_engine(f"sqlite:///{chemin.as_posix()}")
-    Base.metadata.create_all(moteur)
+    Base.metadata.create_all(moteur, tables=[t for t in Base.metadata.sorted_tables if t.name in reference])
     moteur.dispose()
     with closing(sqlite3.connect(chemin)) as c:
         c.execute("ALTER TABLE users DROP COLUMN ads_free")  # ajoutée par une migration douce
@@ -158,3 +163,31 @@ async def test_donnees_de_reference_amorcees(client):
     async with AsyncSessionLocal() as db:
         assert (await db.execute(text("SELECT count(*) FROM genres"))).scalar_one() == 8
         assert (await db.execute(text("SELECT count(*) FROM home_rows"))).scalar_one() == 4
+
+
+async def test_aller_retour_des_migrations(dossier):
+    """Chaque migration après la référence doit pouvoir être annulée puis réappliquée."""
+    from alembic import command
+    from alembic.script import ScriptDirectory
+
+    from app.core.migrations import configuration_alembic
+
+    base = dossier / "aller_retour.db"
+    await _preparer(base)  # base neuve -> head
+    cfg = configuration_alembic(_url(base))
+    tete = ScriptDirectory.from_config(cfg).get_current_head()
+
+    command.downgrade(cfg, REVISION_REFERENCE)
+    assert _revision(base) == REVISION_REFERENCE
+    assert "playback_events" not in _colonnes(base)
+
+    command.upgrade(cfg, "head")
+    assert _revision(base) == tete
+    assert "playback_events" in _colonnes(base)
+
+
+def test_schema_reference_issu_de_la_migration_0001():
+    reference = schema_reference()
+    assert len(reference) == 20
+    assert "playback_events" not in reference  # créée par 0002, pas par la référence
+    assert {"id", "username", "hashed_password"} <= reference["users"]

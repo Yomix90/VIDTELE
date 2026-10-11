@@ -15,6 +15,7 @@ Les sauvegardes SQLite vont dans DATA_DIR/sauvegardes/ (les 10 plus récentes so
 import asyncio
 import logging
 import sqlite3
+import tempfile
 from contextlib import closing
 from dataclasses import dataclass
 from datetime import datetime
@@ -127,17 +128,59 @@ def differences_bloquantes(conn: Connection) -> list:
     return bloquants
 
 
+_schema_reference_cache: Optional[dict] = None
+
+
+def schema_reference() -> dict:
+    """
+    {table: {colonnes}} du schéma de référence, obtenu en appliquant la migration 0001 sur une
+    base temporaire. Toujours exact, même quand les modèles auront évolué (migrations 0002+).
+    """
+    global _schema_reference_cache
+    if _schema_reference_cache is None:
+        with tempfile.TemporaryDirectory() as dossier:
+            url = f"sqlite+aiosqlite:///{(Path(dossier) / 'reference.db').as_posix()}"
+            command.upgrade(configuration_alembic(url), REVISION_REFERENCE)
+            moteur = create_engine(_url_synchrone(url), poolclass=pool.NullPool)
+            try:
+                with moteur.connect() as conn:
+                    inspecteur = inspect(conn)
+                    _schema_reference_cache = {
+                        table: {col["name"] for col in inspecteur.get_columns(table)}
+                        for table in inspecteur.get_table_names()
+                        if table != "alembic_version"
+                    }
+            finally:
+                moteur.dispose()
+    return _schema_reference_cache
+
+
+def manques_par_rapport_a_la_reference(conn: Connection) -> list:
+    """Tables ou colonnes du schéma de référence absentes de la base (bloquant)."""
+    reference = schema_reference()
+    inspecteur = inspect(conn)
+    tables = set(inspecteur.get_table_names())
+    manques = []
+    for table, colonnes in sorted(reference.items()):
+        if table not in tables:
+            manques.append(f"table manquante : {table}")
+            continue
+        presentes = {col["name"] for col in inspecteur.get_columns(table)}
+        manques += [f"colonne manquante : {table}.{c}" for c in sorted(colonnes - presentes)]
+    return manques
+
+
 def _verifier_schema(url: str) -> list:
     moteur = create_engine(_url_synchrone(url), poolclass=pool.NullPool)
     try:
         with moteur.connect() as conn:
-            return differences_bloquantes(conn)
+            return manques_par_rapport_a_la_reference(conn)
     finally:
         moteur.dispose()
 
 
 async def preparer_schema(
-    mise_a_niveau_ancienne: Callable[[], Awaitable[None]],
+    mise_a_niveau_ancienne: Callable[[set], Awaitable[None]],
     url: Optional[str] = None,
 ) -> EtatBase:
     """Amène la base à la dernière révision. Appelée une fois au démarrage."""
@@ -152,7 +195,9 @@ async def preparer_schema(
             REVISION_REFERENCE,
         )
         await asyncio.to_thread(sauvegarder_sqlite, url, "avant-migration")
-        await mise_a_niveau_ancienne()
+        # Seules les tables de la référence 0001 : les suivantes viennent des migrations 0002+
+        tables_reference = await asyncio.to_thread(lambda: set(schema_reference()))
+        await mise_a_niveau_ancienne(tables_reference)
         bloquants = await asyncio.to_thread(_verifier_schema, url)
         if bloquants:
             raise SchemaIncompatible(
