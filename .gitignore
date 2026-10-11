@@ -32,7 +32,7 @@ mobile/android/local.properties
 **/.gradle/
 mobile/.pub-cache/
 mobile/.pub/
-mobile/*.lock
+# (pubspec.lock est versionné : builds reproductibles)
 
 # OS & IDE
 .vscode/
