@@ -11,6 +11,7 @@ import '../../core/api/api_client.dart';
 import '../../core/constants/api_constants.dart';
 import '../../core/localization/app_localizations.dart';
 import '../../core/services/video_player_manager.dart';
+import '../../core/services/mesures_lecture.dart';
 import '../../core/services/jetons_flux.dart';
 import '../../core/services/video_watchdog.dart';
 import '../../core/storage/storage_service.dart';
@@ -153,6 +154,9 @@ class _ReelsScreenState extends ConsumerState<ReelsScreen>
       // Reprise de la vidéo visible et du timer
       _startProgressSyncTimer();
       final feedState = _getFeedState();
+      if (_focusedIndex < feedState.items.length) {
+        MesuresLecture.instance.focus(feedState.items[_focusedIndex].id);
+      }
       _reconcileControllers(_focusedIndex, feedState.items);
       _watchdog?.setPlaybackDesired(true);
     }
@@ -291,6 +295,11 @@ class _ReelsScreenState extends ConsumerState<ReelsScreen>
     if (_focusedIndex >= feedState.items.length) return false;
     final item = feedState.items[_focusedIndex];
 
+    MesuresLecture.instance.reprise(
+      item.id,
+      tentative: attempt,
+      positionS: resumePosition.inMilliseconds / 1000,
+    );
     try {
       debugPrint('[ReelsScreen] Watchdog: tentative $attempt de réinitialisation du flux pour ${item.id} à ${resumePosition.inSeconds}s');
       // Nouveau jeton de flux à chaque reprise (celui de l'URL précédente a pu expirer)
@@ -352,6 +361,10 @@ class _ReelsScreenState extends ConsumerState<ReelsScreen>
 
   @override
   void onFatalError(String message) {
+    final items = _getFeedState().items;
+    if (_focusedIndex < items.length) {
+      MesuresLecture.instance.erreur(items[_focusedIndex].id, 'lecture_impossible');
+    }
     if (!mounted) return;
     ScaffoldMessenger.of(context).showSnackBar(
       SnackBar(
@@ -381,11 +394,14 @@ class _ReelsScreenState extends ConsumerState<ReelsScreen>
     if (mounted) setState(() {});
   }
 
-  void _attachWatchdog(int index, List<FeedItemModel> items) {
+  void _attachWatchdog(int index, List<FeedItemModel> items, {bool precharge = true}) {
     if (index >= items.length) return;
     final item = items[index];
     final ctrl = _controllerPool[index];
     if (ctrl == null) return;
+
+    // Mesure : temps jusqu'à la première image et blocages de la vidéo affichée
+    MesuresLecture.instance.suivre(item.id, ctrl, precharge: precharge);
 
     _watchdog?.dispose();
     _watchdog = VideoWatchdog(
@@ -657,6 +673,11 @@ class _ReelsScreenState extends ConsumerState<ReelsScreen>
 
   Future<void> _initControllerForIndex(int idx, FeedItemModel item) async {
     _initializingIndices.add(idx);
+    // Départ de la mesure seulement si la lecture est réellement demandée (l'onglet
+    // Découvrir est créé masqué au lancement : il ne faut pas compter ce temps-là)
+    if (idx == _focusedIndex && widget.isActive && _isAppActive) {
+      MesuresLecture.instance.focusSiAbsent(item.id);
+    }
     final stopwatch = Stopwatch()..start();
 
     try {
@@ -751,7 +772,8 @@ class _ReelsScreenState extends ConsumerState<ReelsScreen>
         }
         await ref.read(videoPlayerManagerProvider).play(playerId);
         final feedState = _getFeedState();
-        _attachWatchdog(_focusedIndex, feedState.items);
+        // Contrôleur créé à la demande : la vidéo n'était PAS préchargée
+        _attachWatchdog(_focusedIndex, feedState.items, precharge: false);
         _resetHideControlsTimer();
         if (mounted) setState(() {});
       }
@@ -1553,6 +1575,7 @@ class _ReelsScreenState extends ConsumerState<ReelsScreen>
               }
 
               if (newIndex < feedState.items.length) {
+                MesuresLecture.instance.focus(feedState.items[newIndex].id);
                 _reconcileControllers(newIndex, feedState.items);
 
                 // Pagination curseur pour le flux Découvrir
