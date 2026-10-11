@@ -17,7 +17,8 @@ android {
     defaultConfig {
         // Application ID pour VidTele
         applicationId = "com.vidtele.app"
-        minSdk = flutter.minSdkVersion
+        // Android 7.0 (API 24) minimum : choix validé en Phase 1 (≈ 99 % des appareils actifs)
+        minSdk = 24
         targetSdk = flutter.targetSdkVersion
         versionCode = flutter.versionCode
         versionName = flutter.versionName

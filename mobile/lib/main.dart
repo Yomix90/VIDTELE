@@ -7,6 +7,7 @@ import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:google_mobile_ads/google_mobile_ads.dart';
 
 import 'core/ads/ads_config.dart';
+import 'core/erreurs/suivi_erreurs.dart';
 import 'core/ads/consent_manager.dart';
 import 'core/ads/rewarded_ad_service.dart';
 import 'core/ads/watch_gate_controller.dart';
@@ -18,6 +19,9 @@ import 'screens/splash/splash_screen.dart';
 
 void main() async {
   WidgetsFlutterBinding.ensureInitialized();
+
+  // Capture globale des erreurs (console aujourd'hui, Crashlytics une fois Firebase configuré)
+  SuiviErreurs.installer();
 
   // Initialisations AdMob réservées aux plateformes mobiles (Android/iOS)
   if (!kIsWeb) {
